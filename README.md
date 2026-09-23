@@ -42,7 +42,7 @@ mechanism below is Claude-Code-specific.
 |---|---|
 | a registered `relay` tool | MCP tool `relay` from the server `vm-relay` in `.mcp.json` |
 | doctrine injected before each agent turn | `hooks/hooks.json` session-start hook printing `server.mjs --doctrine`, and the `vm-relay` skill |
-| `/relay-status`, `/relay-review` commands | skills `/relay-status` and `/relay-review`, backed by the operator tools `relay_status` and `relay_review` |
+| `/relay-status`, `/relay-trajectory` commands | skills `/relay-status` and `/relay-trajectory`, backed by the operator tools `relay_status` and `relay_trajectory` |
 | prompt-composed enclosure | the `vm-relay-operator` agent definition, limited to the relay tools and read-only file tools |
 | typed image blocks in a run result, with pi's `tool_result` hook keeping the error flag | MCP image content blocks in the tool result, with the MCP `isError` flag set beside them |
 | session shutdown pauses lease renewal | the same when the server's stdio closes or it is signalled: renewal pauses, the recording detaches, the VM is retained for an explicit `finish` or `release`, and the vm-service TTL is the backstop |
@@ -67,7 +67,7 @@ Or add this repository as a marketplace and install the plugin from it:
 
 Once loaded, the model sees the tools as
 `mcp__plugin_mcp-vm-relay_vm-relay__relay`, `…__relay_status` and
-`…__relay_review`. A subagent definition allows them by those names. The server
+`…__relay_trajectory`. A subagent definition allows them by those names. The server
 can also be configured directly in a project's `.mcp.json` with
 `node /path/to/mcp-vm-relay/dist/server.mjs`, in which case the tools are
 `mcp__vm-relay__relay` and so on.
@@ -79,7 +79,7 @@ pi install npm:@wezzard/mcp-vm-relay
 ```
 
 This needs `pi-mcp-adapter` installed. The tool appears as `relay`, with the
-two operator tools as `relay_status` and `relay_review`, with no host-specific
+two operator tools as `relay_status` and `relay_trajectory`, with no host-specific
 prefix.
 
 ### Use with npx
@@ -140,8 +140,9 @@ the evidence package.
 guest state, renewal state, console observation and last error, the staging
 state and evidence path, plus the project directory, the VM service origin and
 the selected environment; `{"active": false}` when nothing is owned.
-`relay_review` verifies a delivered package and opens its viewer in the local
-human-facing browser; human review remains pending.
+`relay_trajectory` verifies a delivered evidence package (every artifact, hash
+and reference) and opens its trajectory viewer in the local human-facing
+browser; human review remains pending.
 
 ## Ownership, failure and recovery
 
@@ -262,9 +263,9 @@ Default output is `relay-evidence/<unique-task>/` under the project, with
 `state/` (the guest journal, action records, receipts and snapshot PNGs),
 `host/` (reasons, submissions, transfer facts, receipts, diagnostics, image
 deliveries and lifecycle events), `extractions/` (declared files, including the
-page captures), and `manifest.json`, `summary.json`, `walkthrough.json`,
+page captures), and `manifest.json`, `summary.json`, `trajectory.json`,
 `index.html` and `OPENING.txt`. Open `index.html` directly: no server, network,
-VM or external assets are needed. Diagnostic commands appear in the walkthrough
+VM or external assets are needed. Diagnostic commands appear in the trajectory
 as command-only steps without screenshots. `finish` verifies the package before
 destroying the VM; a failed delivery removes only the derived files it created
 and retains the VM for a corrected attempt. Cleanup checks the read-only host

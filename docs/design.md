@@ -135,6 +135,6 @@ endpoints.
 ## Verification boundary
 
 Use [verification.md](verification.md) for implementation status, automated gates
-and environment-dependent evidence. A design document or historical walkthrough
+and environment-dependent evidence. A design document or historical trajectory
 is not proof that a capability is implemented. Repository privacy and public
 licensing remain owner decisions.

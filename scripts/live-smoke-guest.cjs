@@ -1,6 +1,6 @@
 // Test application recording/fixture harness; NOT shipped by mcp-vm-relay.
 const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process'),http=require('node:http');
-const root=path.resolve(__dirname,'..'),walk=path.join(root,'workspace/walkthrough');fs.mkdirSync(walk,{recursive:true});
+const root=path.resolve(__dirname,'..'),walk=path.join(root,'workspace/trajectory');fs.mkdirSync(walk,{recursive:true});
 const env=JSON.parse(fs.readFileSync(path.join(__dirname,'env.json'),'utf8'));Object.assign(process.env,env);
 function detach(cmd,args,out){const fd=fs.openSync(path.join(walk,out),'a');const child=cp.spawn(cmd,args,{detached:true,stdio:['ignore',fd,fd],env:process.env});child.unref();fs.closeSync(fd);return child.pid;}
 const op=process.argv[2];

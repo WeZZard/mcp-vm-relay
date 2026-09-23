@@ -244,7 +244,7 @@ unchanged run `because` values, structured reason-free lifecycle facts, legacy
 persisted-state recovery and no leaked `action` discriminator.
 As elsewhere in this suite, the fixture captures a constant PNG; it does not
 claim fresh visual acceptance. The previously verified VM/guest implementation
-and original application walkthroughs below remain the visual baseline.
+and original application trajectories below remain the visual baseline.
 
 `tests/provider-schema.test.ts` invokes four installed provider serializers with
 a payload-capture hook that throws before dispatch and a rejecting fetch guard:
@@ -287,7 +287,7 @@ The original portable application recordings/viewers below remain intact.
 Their dispatch-time artifacts are the source of the corrected snapshot viewers.
 Recording integrity, execution success and human review are separate; human
 review remains pending. Requirement-by-requirement audit gaps are closed by
-these regressions and the two passing OS walkthroughs.
+these regressions and the two passing OS trajectories.
 
 ## Real installed inventories — both OS lines
 
@@ -399,7 +399,7 @@ The revised readiness loop has not yet been exercised in a new VM.
 | No video, physical targets, CDP, local execution or spawn API | no such extension surface; service restricted to loopback host | schema enumeration; package rejects video claims; service remote-target tests |
 | Default evidence + declared outputs, full workspace opt-in | transfer inventory + immutable extraction versions | declared/undeclared extraction, full-workspace and source mutation tests |
 | Original source and host checksums, safe paths | transfer two-sided inventory; package checks capture-time hashes before fresh manifest | transfer corruption/traversal/symlink; package bidirectional/provenance/tampering tests |
-| Verified portable package and viewer | SDK manifest/walkthrough/verifier + script-free offline viewer | package roundtrip, escaping, stable links, immutable originals and semantic revalidation tests |
+| Verified portable package and viewer | SDK manifest/trajectory/verifier + script-free offline viewer | package roundtrip, escaping, stable links, immutable originals and semantic revalidation tests |
 | Separate delivery/completeness/execution/human review | DeliveryResult and viewer labels | refusal/incomplete/uncertain package tests; human review always pending |
 | One relay tool with eight actions, status/review commands, discovery/reload | `src/index.ts`, `src/tool.ts`, `src/schema.ts`, discovery shim | extension/provider tests + real pi RPC smoke (schema and prompt snippet checked after reload) |
 | Bounded agent-facing outputs | 50 KiB/2000 lines with private full-result file | extension byte/line limit tests |
@@ -408,7 +408,7 @@ The revised readiness loop has not yet been exercised in a new VM.
 
 Use the documented `snap-deliver.ts` composition path, not
 `SshTransport.finish()`. The adapter first validates original capture SHA-256
-and byte count, then calls `buildManifest`, `buildWalkthrough`, and
+and byte count, then calls `buildManifest`, `buildTrajectory`, and
 `verifyPackage`. It does not change relay-driver.
 
 An incomplete coalesced pair remains classified as captured snapshot evidence.

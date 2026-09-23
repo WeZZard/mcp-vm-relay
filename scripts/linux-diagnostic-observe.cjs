@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Read-only application observer. Independent root pixels; no browser/CDP attachment.
 const fs=require('fs'),cp=require('child_process'),path=require('path'),crypto=require('crypto');
-const root=path.resolve(__dirname,'..'),walk=path.join(root,'workspace/walkthrough'),label=process.argv[2];
+const root=path.resolve(__dirname,'..'),walk=path.join(root,'workspace/trajectory'),label=process.argv[2];
 if(!/^[a-z0-9-]+$/.test(label))throw Error('Invalid label');
 Object.assign(process.env,JSON.parse(fs.readFileSync(path.join(root,'support/env.json'),'utf8')));
 const observations={label,startedUtcMs:Date.now(),env:Object.fromEntries(['DISPLAY','XAUTHORITY','DBUS_SESSION_BUS_ADDRESS'].map(k=>[k,process.env[k]])),commands:[],processes:[],captures:[]};

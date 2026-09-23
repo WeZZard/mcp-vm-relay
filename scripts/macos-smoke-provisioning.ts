@@ -2,7 +2,7 @@
 import {posix as path} from 'node:path';
 export const INSTALL_TEST_APP = `const fs=require('fs'),p=require('path');const root=process.argv[1],app='/Applications/RelayClock.app';fs.mkdirSync(app+'/Contents/MacOS',{recursive:true});fs.copyFileSync(root+'/support/RelayClock',app+'/Contents/MacOS/RelayClock');fs.copyFileSync(root+'/support/Info.plist',app+'/Contents/Info.plist');fs.chmodSync(app+'/Contents/MacOS/RelayClock',493);console.log('installed');`;
 export const WRITE_FIXTURE = `const fs=require('fs');fs.writeFileSync(process.argv[1]+'/workspace/fixture.html',process.argv[2]);console.log('fixture-written');`;
-export const FREEZE_CLOCK_LOG = `const fs=require('fs');const p=process.argv[1]+'/workspace/walkthrough/clock.jsonl';fs.copyFileSync(p,p+'.final');fs.renameSync(p+'.final',p);console.log('clock-log-frozen');`;
+export const FREEZE_CLOCK_LOG = `const fs=require('fs');const p=process.argv[1]+'/workspace/trajectory/clock.jsonl';fs.copyFileSync(p,p+'.final');fs.renameSync(p+'.final',p);console.log('clock-log-frozen');`;
 export type Provisioning = {kind:'mkdir-owned'|'install-test-app'|'write-fixture'|'freeze-clock-log';root:string};
 export function isProvisioningCommand(argv:string[],policy:Provisioning|undefined):boolean {
  if(!policy||!/^\/var\/tmp\/[a-zA-Z0-9-]+$/.test(policy.root)||!policy.root.includes('-mcp-vm-relay-'))return false;
