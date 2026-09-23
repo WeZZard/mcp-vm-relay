@@ -4,3 +4,5 @@ node_modules/
 relay-evidence/
 test-evidence/
 .claude/
+# CI checks vm-service out here to build vmctl for the parity test.
+.ci/

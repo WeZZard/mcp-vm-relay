@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           repository: WeZZard/vm-service
-          path: ../vm-service
+          path: .ci/vm-service
 
       - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
         with:
@@ -28,10 +28,10 @@ jobs:
 
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          workspaces: ../vm-service/rust
+          workspaces: .ci/vm-service/rust
 
       - name: Build vmctl
-        working-directory: ../vm-service/rust
+        working-directory: .ci/vm-service/rust
         run: cargo build --release -p vmctl
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -47,4 +47,4 @@ jobs:
       - name: Build, typecheck, and test
         run: npm run check
         env:
-          VMCTL: ${{ github.workspace }}/../vm-service/rust/target/release/vmctl
+          VMCTL: ${{ github.workspace }}/.ci/vm-service/rust/target/release/vmctl
