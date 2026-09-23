@@ -29297,7 +29297,7 @@ async function relayCall(host, raw, options = {}) {
 
 // src/server.ts
 var SERVER_NAME = "vm-relay";
-var SERVER_VERSION = true ? "0.3.0" : JSON.parse(readFileSync(fileURLToPath2(new URL("../package.json", import.meta.url)), "utf8")).version;
+var SERVER_VERSION = true ? "0.3.1" : JSON.parse(readFileSync(fileURLToPath2(new URL("../package.json", import.meta.url)), "utf8")).version;
 var STATUS_TOOL = "relay_status";
 var REVIEW_TOOL = "relay_review";
 var PLUGIN_TOOL_PREFIX = "mcp__plugin_mcp-vm-relay_vm-relay__";
