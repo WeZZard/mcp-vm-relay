@@ -57,7 +57,7 @@
 - The relay desktop image at `../AnyDict/relay-evidence/relay-discord-synthetic-visual-33743b2d/state/snapshots/session-0mu9edxx6270r45qb/a000035-20260920T055211.018Z-after-execution-0mu9efslfo8jhq5py.png` appears black.
 - The browser-page image at `../AnyDict/relay-evidence/relay-discord-synthetic-visual-33743b2d/extractions/discord-visual-output/5d09dd26-9e54-4d10-8e39-dd42fab34b0b/case-a/session/shots/0000-initial.png` shows the rendered synthetic community fixture.
 - This verifies the reported disagreement in retained artifacts, not its root cause. The two capture paths do not prove what a human would see in the VM console.
-- The disagreement remains a separate visual-verification blocker. No Discord collection, successful walkthrough, or capture repair is claimed.
+- The disagreement remains a separate visual-verification blocker. No Discord collection, successful trajectory, or capture repair is claimed.
 
 ## Automated checks
 

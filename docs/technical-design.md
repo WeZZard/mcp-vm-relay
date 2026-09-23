@@ -82,7 +82,7 @@ installed and operated.
 
 Register exactly one model tool, `relay`, through one `pi.registerTool` call.
 A required `action` selects one of thirteen operations; no legacy `relay_*` aliases or extra
-search tool are allowed. Keep `/relay-status` and `/relay-review <pkg>`.
+search tool are allowed. Keep `/relay-status` and `/relay-trajectory <pkg>`.
 
 Only `action` is universally required. Each branch is closed: fields not listed
 for that action are invalid. `run.reason` is a required nonblank string of at most
@@ -549,7 +549,7 @@ session. Video belongs to application-level Walkthrough code, not this extension
 
 ### 6.2 Package construction and review
 
-Use explicit `buildManifest` / `buildWalkthrough` / `verifyPackage` construction.
+Use explicit `buildManifest` / `buildTrajectory` / `verifyPackage` construction.
 The SDK's older automatic `finish()` packaging did not classify snapshots in its
 manifest/attachments, so it is not the chosen path. The proven example is
 `packages/host-sdk/examples/snap-deliver.ts`; [src/package.ts](../src/package.ts) imports
@@ -679,7 +679,7 @@ rewrite of relay-driver or a new prerequisite.
    reject undeclared fields rather than silently accepting incompatible calls.
 6. Rebuild committed runtime bundles and verify native Pi Git installation.
 7. Report feature and environment-dependent acceptance separately from historical
-   VM walkthroughs.
+   VM trajectories.
 
 - [The 2026-09-16 implementation plan](../.plans/2026-09-16-10-51-agent-recovery-and-image-readiness.md) governs the recovery, image-readiness, catalog-layout, timeout, and probe revision. The earlier discovery rollout above is not a replacement for that plan.
 - Activating `relay` exposes all actions. Any future action-level permission policy must be explicit, not assumed from tool-name filtering.

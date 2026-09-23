@@ -110,7 +110,7 @@ An application composes the enclosure by prompting a subagent, which then uses
 
 Exactly one model-callable tool, `relay`, is registered. No legacy `relay_*` aliases
 or extra search tool are introduced. Slash commands remain `/relay-status` and
-`/relay-review <package-directory>`.
+`/relay-trajectory <package-directory>`.
 
 **Action contract:**
 
@@ -130,7 +130,7 @@ or extra search tool are introduced. Slash commands remain `/relay-status` and
 | `finish` | Deliver verified evidence and close the enclosure | Not allowed |
 | `release` | Abandon safely without claiming successful completion | Not allowed |
 
-- Section 6.8 describes live viewing through these actions. `/relay-review` remains an evidence-review command, not a live console. Console actions do not accept screenshot metadata or create screenshot evidence.
+- Section 6.8 describes live viewing through these actions. `/relay-trajectory` remains an evidence-review command, not a live console. Console actions do not accept screenshot metadata or create screenshot evidence.
 
 ### 6.2 Application discovery
 
@@ -339,7 +339,7 @@ The tool does not invent a default wait or silently substitute stability detecti
 - Operating guidance is not confused with software inventory or proof of
   verification.
 - Real Pi registration/startup/reload tests verify discoverability, schema and
-  action presentation. Historical execution walkthroughs do not prove new search UX.
+  action presentation. Historical execution trajectories do not prove new search UX.
 
 - An agent can recover from a failed operation in the same VM without automatic release or a permanent failure flag blocking later calls.
 - A timeout result identifies the effective limit and does not imply VM destruction.
