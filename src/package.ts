@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { lstat, readFile, readdir, mkdir, writeFile, rm } from "node:fs/promises";
 import { dirname, join, resolve, parse } from "node:path";
-import { buildManifest, buildWalkthrough, verifyPackage, type PackageManifest, type ReviewStep, type SnapshotArtifact } from "@wezzard/relay-driver-host-sdk";
+import { buildManifest, buildTrajectory, verifyPackage, type PackageManifest, type ReviewStep, type SnapshotArtifact } from "@wezzard/relay-driver-host-sdk";
 
 export interface DeliverPackageOptions {
   packageId: string;
@@ -26,7 +26,10 @@ type Analysis = {
   completeness: DeliveryResult["snapshots"];
   execution: DeliveryResult["execution"];
 };
-const generated = new Set(["manifest.json", "summary.json", "walkthrough.json", "index.html", "OPENING.txt", "journal/session-events.jsonl"]);
+const generated = new Set(["manifest.json", "summary.json", "trajectory.json", "index.html", "OPENING.txt", "journal/session-events.jsonl"]);
+// Packages built before the trajectory rename wrote `walkthrough.json` instead of `trajectory.json`.
+// Accept that legacy name when verifying so older delivered evidence packages still validate.
+const legacyTrajectoryFile = "walkthrough.json";
 const hash = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
 const json = (value: unknown) => JSON.stringify(value, null, 2) + "\n";
 function object(value: unknown, label: string): Obj {
@@ -313,8 +316,8 @@ function result(root: string, a: Analysis): DeliveryResult {
 async function buildReview(root: string, a: Analysis) {
   // SDK appends refusal-only steps even when explicit steps were provided.
   // Pass a copy, then retain our complete, unique action/refusal step list.
-  const walkthrough = await buildWalkthrough(root, { steps: [...a.steps], execution: a.execution });
-  return { ...walkthrough, steps: a.steps, outcomes: { ...walkthrough.outcomes, recording: a.completeness } };
+  const trajectory = await buildTrajectory(root, { steps: [...a.steps], execution: a.execution });
+  return { ...trajectory, steps: a.steps, outcomes: { ...trajectory.outcomes, recording: a.completeness } };
 }
 const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 function viewer(options: DeliverPackageOptions, a: Analysis): string {
@@ -340,7 +343,7 @@ export async function deliverPackage(rootDir: string, options: DeliverPackageOpt
     created.push(path);
   };
   try {
-  // buildWalkthrough's SDK layout requires this journal path. Keep its original too.
+  // buildTrajectory's SDK layout requires this journal path. Keep its original too.
   await save("journal/session-events.jsonl", await readFile(join(root, "state/journal/events.jsonl")));
   await save("summary.json", json(summary(options, a)));
   await save("index.html", viewer(options, a));
@@ -353,7 +356,7 @@ export async function deliverPackage(rootDir: string, options: DeliverPackageOpt
       records: all.filter(p => p !== "manifest.json" && !snapshotPaths.has(p) && !p.startsWith("extractions/")).map(p => ({ absolutePath: join(root, p), packagePath: p })) });
   };
   await save("manifest.json", json(await build()));
-  await save("walkthrough.json", json(await buildReview(root, a)));
+  await save("trajectory.json", json(await buildReview(root, a)));
   await writeFile(join(root, "manifest.json"), json(await build()));
   return await verifyDeliveredPackage(root);
   } catch (error) {
@@ -382,7 +385,11 @@ export async function verifyDeliveredPackage(rootDir: string): Promise<DeliveryR
     if (bytes.length !== artifact.bytes || hash(bytes) !== artifact.sha256) throw new Error(`artifact integrity mismatch: ${path}`);
   }
   for (const path of files) if (path !== "manifest.json" && !seen.has(path)) throw new Error(`unmanifested artifact: ${path}`);
-  for (const required of generated) if (required !== "manifest.json" && !seen.has(required)) throw new Error(`missing required package output: ${required}`);
+  for (const required of generated) {
+    if (required === "manifest.json") continue;
+    // A legacy package (pre-trajectory rename) satisfies this requirement with walkthrough.json instead.
+    if (required === "trajectory.json" ? !seen.has(required) && !seen.has(legacyTrajectoryFile) : !seen.has(required)) throw new Error(`missing required package output: ${required}`);
+  }
   const options = { packageId: manifest.packageId, sessionId: manifest.sessionId, taskId: manifest.taskId };
   const a = await analyze(root, options, files);
   const expectedAttachments = files.filter(p => p.startsWith("extractions/")).sort();
@@ -393,10 +400,12 @@ export async function verifyDeliveredPackage(rootDir: string): Promise<DeliveryR
     const actual = actualSnapshots.find(s => s.path === sn.path);
     if (!actual || actual.actionId !== sn.actionId || actual.groupId !== sn.groupId || actual.provenance !== "dispatch-captured" || !sameRef(actual, sn)) throw new Error(`snapshot provenance mismatch: ${sn.path}`);
   }
-  if (!(await readFile(join(root, "state/journal/events.jsonl"))).equals(await readFile(join(root, "journal/session-events.jsonl")))) throw new Error("walkthrough journal differs from original");
+  if (!(await readFile(join(root, "state/journal/events.jsonl"))).equals(await readFile(join(root, "journal/session-events.jsonl")))) throw new Error("trajectory journal differs from original");
   if (await readFile(join(root, "summary.json"), "utf8") !== json(summary(options, a))) throw new Error("summary disagrees with original evidence");
   if (await readFile(join(root, "index.html"), "utf8") !== viewer(options, a)) throw new Error("viewer disagrees with original evidence");
-  if (await readFile(join(root, "walkthrough.json"), "utf8") !== json(await buildReview(root, a))) throw new Error("walkthrough disagrees with original evidence");
+  // A legacy package (pre-trajectory rename) still carries walkthrough.json; read whichever this package actually has.
+  const trajectoryFile = !files.includes("trajectory.json") && files.includes(legacyTrajectoryFile) ? legacyTrajectoryFile : "trajectory.json";
+  if (await readFile(join(root, trajectoryFile), "utf8") !== json(await buildReview(root, a))) throw new Error("trajectory disagrees with original evidence");
   const acceptance = await verifyPackage(manifest, root);
   // SDK rejects half group pairs categorically. Preserve them as captured snapshots,
   // accepting only this precisely identified incompleteness (never an integrity error).
