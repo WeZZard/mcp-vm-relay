@@ -4,11 +4,10 @@
  * Everything the relay does lives in mcp-vm-relay's host-agnostic core (the
  * manager, the vm-service client, the registry, the strict contract, the
  * action dispatch and the bounded result rendering). This file binds that
- * core to MCP over standard input and output: one `relay` tool with the
- * relay's thirteen actions, plus two operator tools that stand in for pi's
- * `/relay-status` and `/relay-trajectory` commands. The Claude Code plugin in
- * this repository starts this server and carries the relay's working rules
- * as a skill, an agent definition and a session-start hook.
+ * core to MCP over standard input and output: nineteen `relay_*` tools, each
+ * with its own schema, title and annotations, plus two MCP prompts (`status`
+ * and `trajectory`) for the user commands. The server relies on MCP alone:
+ * there is no skill, no hook and no agent-runtime-specific delivery path.
  */
 import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
@@ -19,10 +18,10 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { RelayManager, Registry, doctrine, relayCall, relayJsonSchema, relayToolDescription, relayToolName, selectedEnvironment, verifyDeliveredPackage, type RelayCallResult } from './core.js';
+import { CallToolRequestSchema, GetPromptRequestSchema, ListPromptsRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import { RelayManager, Registry, instructions, relayCall, relayToolInput, relayToolInputSchema, relayTools, selectedEnvironment, verifyDeliveredPackage, type RelayCallResult, type RelayToolAnnotations } from './core.js';
 
-export const SERVER_NAME = 'vm-relay';
+export const SERVER_NAME = 'relay';
 /** The build injects this from package.json (esbuild define); under tsx it falls back to reading the file directly. */
 declare const __MCP_VM_RELAY_VERSION__: string;
 export const SERVER_VERSION = typeof __MCP_VM_RELAY_VERSION__ !== 'undefined' ? __MCP_VM_RELAY_VERSION__
@@ -30,7 +29,7 @@ export const SERVER_VERSION = typeof __MCP_VM_RELAY_VERSION__ !== 'undefined' ? 
 export const STATUS_TOOL = 'relay_status';
 export const TRAJECTORY_TOOL = 'relay_trajectory';
 /** How the plugin's MCP server names its tools once Claude Code scopes them. */
-export const PLUGIN_TOOL_PREFIX = 'mcp__plugin_mcp-vm-relay_vm-relay__';
+export const PLUGIN_TOOL_PREFIX = 'mcp__plugin_mcp-vm-relay_relay__';
 
 const message = (error: unknown): string => error instanceof Error ? error.message : String(error);
 const text = (value: string, isError = false) => ({ content: [{ type: 'text' as const, text: value }], isError });
@@ -39,26 +38,34 @@ export function relayContent(result: RelayCallResult) {
   return { content: [{ type: 'text' as const, text: result.text }, ...(result.image ? [{ type: 'image' as const, data: result.image.data, mimeType: result.image.mimeType }] : [])], isError: result.isError };
 }
 
-/**
- * The relay contract is a root object with a root-level anyOf holding the
- * strict per-action branches. The Anthropic API drops a root anyOf, so the
- * projected object is offered here and every call is still checked against
- * the strict branches before dispatch (relayCall validates first).
- */
-export function relayInputSchema(): Record<string, unknown> {
-  const { anyOf: _, ...schema } = relayJsonSchema();
-  return schema;
-}
-
 /** The project directory: the plugin passes Claude Code's; an unexpanded placeholder or nothing means the server's own working directory. */
 export function projectDirectory(env: NodeJS.ProcessEnv = process.env, cwd = process.cwd()): string {
   const given = env.MCP_VM_RELAY_PROJECT;
   return given && !given.includes('${') ? resolve(given) : cwd;
 }
 
-/** What the session-start hook prints: the relay's working rules, plus the names this runtime gives the tools. */
-export function doctrineText(): string {
-  return `${doctrine}\nIn Claude Code the relay tool is ${PLUGIN_TOOL_PREFIX}${relayToolName} (or mcp__${SERVER_NAME}__${relayToolName} when the server is configured directly); ${STATUS_TOOL} and ${TRAJECTORY_TOOL} are operator tools for the /relay-status and /relay-trajectory skills.`;
+const readOnlyStatus: RelayToolAnnotations = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
+const trajectoryAnnotations: RelayToolAnnotations = { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false };
+const statusToolDefinition = {
+  name: STATUS_TOOL,
+  title: 'Show relay status',
+  description: 'Show this session\'s owned VM lease (backend binding, guest state, renewal, console observation, last error), staging state and evidence path, plus the project directory, the VM service origin and the selected environment in use; active:false when nothing is owned. Read-only; it does not touch the VM.',
+  inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  annotations: readOnlyStatus,
+};
+const trajectoryToolDefinition = {
+  name: TRAJECTORY_TOOL,
+  title: 'Open the trajectory viewer',
+  description: 'Verify a delivered relay evidence package (every artifact, hash and reference) and open its trajectory viewer in the local browser. Human review remains pending.',
+  inputSchema: { type: 'object', properties: { directory: { type: 'string', description: 'The package directory, absolute or relative to the project.' } }, required: ['directory'], additionalProperties: false },
+  annotations: trajectoryAnnotations,
+};
+/** Every MCP tool this server offers, for `tools/list` and `--schema`. */
+function allToolDefinitions() {
+  return [
+    ...relayTools.map(tool => ({ name: tool.name, title: tool.title, description: tool.description, inputSchema: relayToolInputSchema(tool), annotations: tool.annotations })),
+    statusToolDefinition, trajectoryToolDefinition,
+  ];
 }
 
 export interface RelayServerOptions { sessionId?: string; project?: string; open?: (url: string) => Promise<void>; manager?: () => RelayManager }
@@ -84,23 +91,18 @@ export function createRelayServer(options: RelayServerOptions = {}) {
     }
     return manager;
   });
-  const server = new Server({ name: SERVER_NAME, version: SERVER_VERSION }, { capabilities: { tools: {} }, instructions: doctrineText() });
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: [
-      { name: relayToolName, description: relayToolDescription, inputSchema: relayInputSchema() },
-      { name: STATUS_TOOL, description: 'Show this session\'s owned VM lease (backend binding, guest state, renewal, console observation, last error), staging state and evidence path, plus the project directory, the VM service origin and the selected environment in use; active:false when nothing is owned. Read-only; it does not touch the VM.', inputSchema: { type: 'object', properties: {}, additionalProperties: false } },
-      { name: TRAJECTORY_TOOL, description: 'Verify a delivered relay evidence package (every artifact, hash and reference) and open its trajectory viewer in the local browser. Human review remains pending.', inputSchema: { type: 'object', properties: { directory: { type: 'string', description: 'The package directory, absolute or relative to the project.' } }, required: ['directory'], additionalProperties: false } },
-    ],
-  }));
+  /** The same data relay_status reports and the `status` prompt reads, read-only. */
+  const statusPayload = () => {
+    const environment = selectedEnvironment();
+    const service = environment?.profile.vmServiceUrl ?? process.env.MCP_VM_RELAY_URL ?? 'http://localhost:6240';
+    return { ...(manager ? manager.status() : { active: false }), project, service, environment: environment?.identity };
+  };
+  const server = new Server({ name: SERVER_NAME, version: SERVER_VERSION }, { capabilities: { tools: {}, prompts: {} }, instructions });
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: allToolDefinitions() }));
   server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     const { name, arguments: args } = request.params;
     try {
-      if (name === relayToolName) return relayContent(await relayCall(get, args ?? {}, { signal: extra.signal, toolCallId: String(extra.requestId) }));
-      if (name === STATUS_TOOL) {
-        const environment = selectedEnvironment();
-        const service = environment?.profile.vmServiceUrl ?? process.env.MCP_VM_RELAY_URL ?? 'http://localhost:6240';
-        return text(JSON.stringify({ ...(manager ? manager.status() : { active: false }), project, service, environment: environment?.identity }, null, 2));
-      }
+      if (name === STATUS_TOOL) return text(JSON.stringify(statusPayload(), null, 2));
       if (name === TRAJECTORY_TOOL) {
         const directory = (args as { directory?: unknown } | undefined)?.directory;
         if (typeof directory !== 'string' || !directory.trim()) throw new Error('directory is required');
@@ -110,8 +112,36 @@ export function createRelayServer(options: RelayServerOptions = {}) {
         await (options.open ?? openInBrowser)(pathToFileURL(join(root, 'index.html')).href);
         return text(`Opened verified package: ${root}. Human review remains pending.`);
       }
+      if (relayTools.some(tool => tool.name === name)) return relayContent(await relayCall(get, relayToolInput(name, (args ?? {}) as Record<string, unknown>), { signal: extra.signal, toolCallId: String(extra.requestId) }));
       throw new Error(`Unknown tool: ${name}`);
     } catch (error) { return text(message(error), true); }
+  });
+  server.setRequestHandler(ListPromptsRequestSchema, async () => ({
+    prompts: [
+      { name: 'status', title: 'Relay status', description: 'Report this session\'s owned VM lease exactly as the relay_status tool sees it. Read-only.' },
+      {
+        name: 'trajectory', title: 'Relay trajectory', description: 'Ask the assistant to verify a delivered relay evidence package and open its trajectory viewer; human review remains pending.',
+        arguments: [{ name: 'directory', description: 'The package directory, absolute or relative to the project.', required: true }],
+      },
+    ],
+  }));
+  server.setRequestHandler(GetPromptRequestSchema, async request => {
+    const { name, arguments: args } = request.params;
+    if (name === 'status') {
+      return {
+        description: 'This session\'s owned VM lease, read-only.',
+        messages: [{ role: 'user' as const, content: { type: 'text' as const, text: `Report this exactly as it is, without acting on it:\n${JSON.stringify(statusPayload(), null, 2)}` } }],
+      };
+    }
+    if (name === 'trajectory') {
+      const directory = args?.directory;
+      if (typeof directory !== 'string' || !directory.trim()) throw new Error('directory is required');
+      return {
+        description: 'Verify and open a delivered relay evidence package.',
+        messages: [{ role: 'user' as const, content: { type: 'text' as const, text: `Call ${TRAJECTORY_TOOL} with directory "${directory}" and report its answer as given. Opening the viewer does not mean the work was approved: human review remains pending until the user says otherwise.` } }],
+      };
+    }
+    throw new Error(`Unknown prompt: ${name}`);
   });
   // Ending the session pauses lease renewal and detaches the recording; the VM
   // is retained for an explicit finish or release, and the backend TTL is the
@@ -121,9 +151,9 @@ export function createRelayServer(options: RelayServerOptions = {}) {
 }
 
 async function main(args: string[]): Promise<void> {
-  if (args.includes('--doctrine')) { process.stdout.write(`${doctrineText()}\n`); return; }
-  if (args.includes('--schema')) { process.stdout.write(`${JSON.stringify(relayInputSchema(), null, 2)}\n`); return; }
-  if (args.length) throw new Error('Usage: server.mjs [--doctrine | --schema]; with no argument the MCP server speaks on stdin/stdout');
+  if (args.includes('--instructions')) { process.stdout.write(`${instructions}\n`); return; }
+  if (args.includes('--schema')) { process.stdout.write(`${JSON.stringify(allToolDefinitions(), null, 2)}\n`); return; }
+  if (args.length) throw new Error('Usage: server.mjs [--instructions | --schema]; with no argument the MCP server speaks on stdin/stdout');
   const relay = createRelayServer();
   let closing: Promise<void> | undefined;
   const shutdown = (reason: string, code: number) => closing ??= (async () => {

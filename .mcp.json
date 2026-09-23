@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "vm-relay": {
+    "relay": {
       "type": "stdio",
       "command": "node",
       "args": ["${CLAUDE_PLUGIN_ROOT}/dist/server.mjs"],
