@@ -4,11 +4,15 @@ The Model Context Protocol front end of the VM relay, packaged as a Claude Code
 plugin and as a pi package. [pi-vm-relay](https://github.com/WeZZard/pi-vm-relay),
 which gave pi a native `relay` tool directly, is retired; mcp-vm-relay replaces
 it for both Claude Code and pi, the latter loaded through `pi-mcp-adapter`. It
-offers one `relay` tool: recorded, snapshot-evidenced **interruptive**
-computer-use and browser-use in a fresh, dedicated VM. The agent judges
-interruption; non-disruptive work stays with the agent's local tools. Nothing
-here executes local computer-use, spawns subagents, targets physical machines,
-records video, or attaches to existing browsers.
+relies on MCP alone: nineteen `relay_*` tools, each with its own schema, title
+and annotations, the server's `instructions`, and two MCP prompts (`status` and
+`trajectory`) for the user commands — there is no skill, no hook and no
+agent-runtime-specific delivery path. Together they offer recorded,
+snapshot-evidenced **interruptive** computer-use and browser-use in a fresh,
+dedicated VM. The agent judges interruption; non-disruptive work stays with the
+agent's local tools. Nothing here executes local computer-use, spawns
+subagents, targets physical machines, records video, or attaches to existing
+browsers.
 
 ## How it is built
 
@@ -32,21 +36,21 @@ code, the recorded-execution and evidence substrate, is bundled with hashes and
 provenance in `dist/build-info.json`. Consumers load `dist/`; no build, SDK
 checkout or network fetch happens at install time.
 
-The Claude Code plugin provides what pi-vm-relay's native extension hooks used
-to provide in pi. pi itself now reaches this same server as an MCP tool
-through `pi-mcp-adapter` (see "Use with pi" below), so the `relay` tool's
-identity and contract are shared; only the doctrine/skill/hook delivery
-mechanism below is Claude-Code-specific.
+The Claude Code plugin and pi both reach this same server as plain MCP: pi
+through `pi-mcp-adapter` (see "Use with pi" below), Claude Code by starting it
+directly. Every tool's identity, schema and contract are shared; the plugin
+adds nothing Claude-Code-specific beyond the marketplace packaging and the
+`vm-relay-operator` agent definition.
 
-| In pi-vm-relay (retired, native pi extension) | Here (Claude Code plugin) |
+| In pi-vm-relay (retired, native pi extension) | Here (MCP server) |
 |---|---|
-| a registered `relay` tool | MCP tool `relay` from the server `vm-relay` in `.mcp.json` |
-| doctrine injected before each agent turn | `hooks/hooks.json` session-start hook printing `server.mjs --doctrine`, and the `vm-relay` skill |
-| `/relay-status`, `/relay-trajectory` commands | skills `/relay-status` and `/relay-trajectory`, backed by the operator tools `relay_status` and `relay_trajectory` |
-| prompt-composed enclosure | the `vm-relay-operator` agent definition, limited to the relay tools and read-only file tools |
+| a registered `relay` tool with thirteen actions | nineteen `relay_*` MCP tools from the server `relay`, each with its own schema, title and annotations |
+| doctrine injected before each agent turn | the server's MCP `instructions`, plus a compact version in the `relay_probe` and `relay_acquire` descriptions for clients that do not surface `instructions` |
+| `/relay-status`, `/relay-trajectory` commands | MCP prompts `status` and `trajectory`, which read the same data as `relay_status` and ask the assistant to call `relay_trajectory` |
+| prompt-composed enclosure | the `vm-relay-operator` agent definition (Claude Code only), limited to the relay's tools and read-only file tools |
 | typed image blocks in a run result, with pi's `tool_result` hook keeping the error flag | MCP image content blocks in the tool result, with the MCP `isError` flag set beside them |
-| session shutdown pauses lease renewal | the same when the server's stdio closes or it is signalled: renewal pauses, the recording detaches, the VM is retained for an explicit `finish` or `release`, and the vm-service TTL is the backstop |
-| the settled agent pauses renewal | none: MCP has no such hook, so the skill and agent say "finish or release before you return" |
+| session shutdown pauses lease renewal | the same when the server's stdio closes or it is signalled: renewal pauses, the recording detaches, the VM is retained for an explicit `relay_finish` or `relay_release`, and the vm-service TTL is the backstop |
+| the settled agent pauses renewal | none: MCP has no such hook, so the instructions and each run tool's description say "finish or release before you return" |
 
 ## Install
 
@@ -65,12 +69,14 @@ Or add this repository as a marketplace and install the plugin from it:
 /plugin install mcp-vm-relay@wezzard
 ```
 
-Once loaded, the model sees the tools as
-`mcp__plugin_mcp-vm-relay_vm-relay__relay`, `…__relay_status` and
-`…__relay_trajectory`. A subagent definition allows them by those names. The server
-can also be configured directly in a project's `.mcp.json` with
-`node /path/to/mcp-vm-relay/dist/server.mjs`, in which case the tools are
-`mcp__vm-relay__relay` and so on.
+Once loaded, the model sees the nineteen tools as
+`mcp__plugin_mcp-vm-relay_relay__relay_search`,
+`mcp__plugin_mcp-vm-relay_relay__relay_probe`, and so on through
+`mcp__plugin_mcp-vm-relay_relay__relay_trajectory` (see "The tools" below for
+the full table). The `vm-relay-operator` agent definition allows them by those
+names. The server can also be configured directly in a project's `.mcp.json`
+with `node /path/to/mcp-vm-relay/dist/server.mjs`, in which case the tools are
+`mcp__relay__relay_search` and so on.
 
 ### Use with pi
 
@@ -78,9 +84,15 @@ can also be configured directly in a project's `.mcp.json` with
 pi install npm:@wezzard/mcp-vm-relay
 ```
 
-This needs `pi-mcp-adapter` installed. The tool appears as `relay`, with the
-two operator tools as `relay_status` and `relay_trajectory`, with no host-specific
-prefix.
+This needs `pi-mcp-adapter` installed. The tools appear as `relay_search`,
+`relay_probe`, and so on through `relay_trajectory`, with no host-specific
+prefix (`pi-mcp.json` sets `toolPrefix: "none"`). The two prompts are exposed
+as pi slash commands named after pi's normalized server key: `pi-mcp-adapter`
+prefixes the package name and server name together
+(`wezzard_mcp-vm-relay__relay`, from `package-mcp-loader.ts`'s
+`formatPackageName`/`formatServerName`), so the commands are
+`/mcp__wezzard_mcp-vm-relay__relay__status` and
+`/mcp__wezzard_mcp-vm-relay__relay__trajectory`.
 
 ### Use with npx
 
@@ -105,44 +117,56 @@ guest preparation; see `docs/console.md` here.
 
 ## The tools
 
-`relay` takes one required `action`. `run` and `console-open` accept and
-require a `reason`; the other actions reject it and record structured lifecycle
-facts. The contract, the evidence and the snapshot rules follow pi-vm-relay's
-design. One difference in what the model is shown: the relay contract is a root
-object with a root-level `anyOf` of strict per-action branches, and the
-Anthropic API drops a root `anyOf`, so this server offers the projected object
-and enforces the strict branches on every call before dispatch.
+Each tool's `inputSchema` is a plain object with no root `anyOf`/`oneOf`/`allOf`
+and no `action` field, derived directly from the strict per-action contract in
+`src/schema.ts` (nested unions inside a property, such as `relay_image`'s
+`target`, are unaffected). A call is mapped back to that contract's shape and
+dispatched exactly as the retired single `relay` tool was, so behaviour,
+results, image blocks and `isError` semantics are unchanged from before this
+split. The five run tools additionally share `reason`, `step`, `snapshots` and
+`timeoutMs`; each fixes its own `kind` rather than accepting one.
 
-| `action` | Purpose |
-|---|---|
-| `search` | Find installed applications from image inventories by name and optional OS. |
-| `probe` | Default `scope: "host"` reports host facts, service availability and owned state. `scope: "guest"` checks the Node and CuaDriver executables on the owned guest without claiming capture or browser readiness. |
-| `acquisition-capabilities` | Read versioned acquisition options (VNC backends) without allocation or ownership recovery. |
-| `acquire` | Register the task, acquire a fresh VM and start its heartbeat; declare outputs before work. Optional `vnc` prepares sharing without opening a viewer. |
-| `console-resolve` | Resolve non-secret console status for the owned lease and environment. |
-| `console-open` | Open explicitly user-requested viewing on the service host, with `console_id`, `attempt_id`, `userRequested: true`, `reason` and `expected`. |
-| `console-cancel` | Cancel the identified viewing attempt without releasing the VM. |
-| `stage` | Push and hash-check the runtime, support files, an opt-in workspace and the optional browser. Failed staging can be retried; a staged runtime accepts corrected executable paths; `resetRecording: true` archives the recording and starts a new one on the same VM. |
-| `run` | One recorded exec, script, code, CUA or browser operation with optional `timeoutMs`. `exec` with `diagnostic: true` records command diagnosis or repair without screenshot evidence, including before staging. |
-| `image` | Retrieve one saved display image, declared application image or immutable image reference without input, capture, directory export or acquisition. |
-| `extract` | Pull only declared files or directories with source and host checksum verification. |
-| `finish` | Extract declared outputs, deliver and verify the snapshot package, destroy the VM and unregister. |
-| `release` | Retain available evidence and abandon or destroy the VM. |
+| Tool | Title | Replaces (`action`, `kind`) | Purpose |
+|---|---|---|---|
+| `relay_search` | Search installed applications | `search` | Find installed applications from image inventories by name and optional OS. |
+| `relay_probe` | Probe host and guest readiness | `probe` | Default `scope: "host"` reports host facts, service availability and owned state. `scope: "guest"` checks the Node and CuaDriver executables on the owned guest without claiming capture or browser readiness. |
+| `relay_acquisition_capabilities` | Read acquisition capabilities | `acquisition-capabilities` | Read versioned acquisition options (VNC backends) without allocation or ownership recovery. |
+| `relay_acquire` | Acquire a VM | `acquire` | Register the task, acquire a fresh VM and start its heartbeat; declare outputs before work. Optional `vnc` prepares sharing without opening a viewer. |
+| `relay_stage` | Stage the guest runtime | `stage` | Push and hash-check the runtime, support files, an opt-in workspace and the optional browser. Failed staging can be retried; a staged runtime accepts corrected executable paths; `resetRecording: true` archives the recording and starts a new one on the same VM. |
+| `relay_exec` | Run a guest command | `run`, `exec` | One recorded guest command. `diagnostic: true` records command diagnosis or repair without screenshot evidence, including before staging. |
+| `relay_script` | Run a guest script | `run`, `script` | One recorded guest script file (`localPath`, `language`). |
+| `relay_code` | Run guest code | `run`, `code` | One recorded inline guest code snippet (`code`, `language`). |
+| `relay_cua` | Run a CUA driver call | `run`, `cua` | One recorded CUA driver call (`tool`, optional `args`). |
+| `relay_browser` | Send a browser event | `run`, `browser` | One recorded browser event (`navigate`/`click`/`type`/`press`/`read`/`snapshot`) to the guest Playwright page `relay_stage` enabled. |
+| `relay_image` | Retrieve a saved image | `image` | Retrieve one saved display image, declared application image or immutable image reference without input, capture, directory export or acquisition. |
+| `relay_extract` | Extract declared outputs | `extract` | Pull only declared files or directories with source and host checksum verification. |
+| `relay_finish` | Finish and deliver evidence | `finish` | Extract declared outputs, deliver and verify the snapshot package, destroy the VM and unregister. |
+| `relay_release` | Release the VM | `release` | Retain available evidence and abandon or destroy the VM. |
+| `relay_console_resolve` | Resolve console status | `console-resolve` | Resolve non-secret console status for the owned lease and environment. |
+| `relay_console_open` | Open console viewing | `console-open` | Open explicitly user-requested viewing on the service host, with `console_id`, `attempt_id`, `userRequested: true`, `reason` and `expected`. |
+| `relay_console_cancel` | Cancel console viewing | `console-cancel` | Cancel the identified viewing attempt without releasing the VM. |
+| `relay_status` | Show relay status | (unchanged) | This session's owned lease: backend binding, guest state, renewal state, console observation, last error, staging state and evidence path, plus the project directory, the VM service origin and the selected environment; `{"active": false}` when nothing is owned. |
+| `relay_trajectory` | Open the trajectory viewer | (unchanged) | Verify a delivered evidence package (every artifact, hash and reference) and open its trajectory viewer in the local human-facing browser; human review remains pending. |
 
-A `run` result carries the execution identity and outcome, the guest's bounded
-standard output and error, for a browser event the parsed browser answer (the
-settle facts, the landing or snapshot capture, or the text a `read` returned),
-and, when the snapshot plan captured the after phase and delivery succeeded,
-the saved after-image as an MCP image content block. The full receipt stays in
-the evidence package.
+`readOnlyHint`/`idempotentHint` are true for `relay_search`, `relay_probe`,
+`relay_acquisition_capabilities`, `relay_console_resolve`, `relay_image` and
+`relay_status`; `destructiveHint` is true only for `relay_finish` and
+`relay_release`, which destroy the VM; `openWorldHint` is true only for the
+five run tools, whose guest code may reach the network.
 
-`relay_status` returns this session's owned lease with its backend binding,
-guest state, renewal state, console observation and last error, the staging
-state and evidence path, plus the project directory, the VM service origin and
-the selected environment; `{"active": false}` when nothing is owned.
-`relay_trajectory` verifies a delivered evidence package (every artifact, hash
-and reference) and opens its trajectory viewer in the local human-facing
-browser; human review remains pending.
+A run tool's result carries the execution identity and outcome, the guest's
+bounded standard output and error, for a `relay_browser` event the parsed
+browser answer (the settle facts, the landing or snapshot capture, or the text
+a `read` returned), and, when the snapshot plan captured the after phase and
+delivery succeeded, the saved after-image as an MCP image content block. The
+full receipt stays in the evidence package.
+
+## Prompts
+
+| Prompt | Arguments | Purpose |
+|---|---|---|
+| `status` | none | Reads the same data as `relay_status` and returns it as a user message, asking the assistant to report it as is. Read-only. |
+| `trajectory` | `directory` (required) | Returns a user message asking the assistant to call `relay_trajectory` with that directory and report the answer, noting that human review remains pending. Does not open anything itself. |
 
 ## Ownership, failure and recovery
 
@@ -151,16 +175,16 @@ browser; human review remains pending.
 - Use `finish` to deliver evidence and release, or `release` to abandon explicitly. A failed delivery retains the VM; a release failure retains ownership until destruction is verified.
 - When the session ends (the server's stdio closes or it is signalled), lease renewal pauses and the recording detaches; the VM is not destroyed. The backend TTL and grace period handle abandoned leases. Status reports the last confirmed expiration time.
 - A restarted server with the same `MCP_VM_RELAY_SESSION` reconciles its durable ownership and reattaches the recording session without replaying prior work. Context compaction does not reset VM state; `probe` reports the owned state without relying on earlier messages.
-- `run.timeoutMs` defaults to 120,000 ms and accepts integers up to 3,600,000 ms. It bounds command execution, not the snapshot delay or the lease lifetime. A timeout reports confirmed termination or uncertainty and keeps the VM available.
-- `run` with `kind: "exec"` and `diagnostic: true` records command diagnosis or repair without screenshots, for explicitly requested diagnosis when capture is unavailable. Before staging it runs through vm-service in the guest's default directory; after staging in the recording workspace. It cannot join a snapshot group and is not visual verification.
-- After diagnosing damaged recording state, `stage` with `resetRecording: true` archives the old recording and starts a new recording session in the same VM. An existing receiver lock refuses the reset until its operation is reconciled. Prior evidence paths remain in the owned status.
+- A run tool's `timeoutMs` defaults to 120,000 ms and accepts integers up to 3,600,000 ms. It bounds command execution, not the snapshot delay or the lease lifetime. A timeout reports confirmed termination or uncertainty and keeps the VM available.
+- `relay_exec` with `diagnostic: true` records command diagnosis or repair without screenshots, for explicitly requested diagnosis when capture is unavailable. Before staging it runs through vm-service in the guest's default directory; after staging in the recording workspace. It cannot join a snapshot group and is not visual verification.
+- After diagnosing damaged recording state, `relay_stage` with `resetRecording: true` archives the old recording and starts a new recording session in the same VM. An existing receiver lock refuses the reset until its operation is reconciled. Prior evidence paths remain in the owned status.
 
 ## Browser events and page captures
 
-Enable `browser: {}` in `stage` for a persistent fresh **guest** Playwright
+Enable `browser: {}` in `relay_stage` for a persistent fresh **guest** Playwright
 page; the workspace must have Playwright available, or supply an absolute guest
-`browser.playwrightModule` path. A `run` with `kind: "browser"` sends one event:
-`navigate`, `click`, `type`, `press`, `read`, or `snapshot`. The guest-owned
+`browser.playwrightModule` path. `relay_browser` sends one event: `navigate`,
+`click`, `type`, `press`, `read`, or `snapshot`. The guest-owned
 server keeps the same page across calls, so the after-snapshot shows the live
 result. It uses Playwright-managed bundled Chromium, never host Chrome or CDP.
 Each event carries the run's `timeoutMs` as its own deadline; an event that
@@ -197,7 +221,7 @@ tied to the page's own state:
 
 ## Saved images
 
-A normal `run` returns its saved after-image as a typed image block whenever the
+A run tool returns its saved after-image as a typed image block whenever the
 snapshot plan captures that phase: a standalone event or a text group's last
 event. A first or intermediate group event and a diagnostic command do not
 invent an image. Execution and image delivery are independent outcomes: a
@@ -206,14 +230,14 @@ turn a failed command into a successful one. Either failure sets the MCP
 `isError` flag while the content, image included, is kept. The delivery
 identity (`imageDelivery`) leads the result text so it survives truncation.
 
-If inline delivery fails, `image` retrieves the same saved image through one
-closed selector; it never repeats input, creates a capture, exports the
+If inline delivery fails, `relay_image` retrieves the same saved image through
+one closed selector; it never repeats input, creates a capture, exports the
 consumer directory or acquires a VM:
 
 ```json
-{"action":"image","target":{"source":"display","sessionId":"<recording-session>","executionId":"<saved-execution>","phase":"after"}}
-{"action":"image","target":{"source":"application","name":"browser-captures","path":"c000001-…-landing-navigate.png"}}
-{"action":"image","target":{"source":"reference","imageId":"image-<64 lowercase hex digits>"}}
+{"target":{"source":"display","sessionId":"<recording-session>","executionId":"<saved-execution>","phase":"after"}}
+{"target":{"source":"application","name":"browser-captures","path":"c000001-…-landing-navigate.png"}}
+{"target":{"source":"reference","imageId":"image-<64 lowercase hex digits>"}}
 ```
 
 - Display selection needs `before` or `after`; a phase the plan did not request returns `not-requested`. Application selection needs an acquisition-time declaration: a directory declaration takes one relative file path, a file declaration omits `path`. A reference resolves to the same original bytes or an explicit failure.
@@ -224,14 +248,15 @@ consumer directory or acquires a VM:
 
 ## Live console viewing
 
-Acquisition never opens a viewer. `acquisition-capabilities` reads the
-backend's VNC options; `acquire` with `vnc: true` checks OS availability and
-requires a ready console and lease identity in the response. `console-open` is
-permitted only following an explicit user request, requires `userRequested:
-true`, `console_id`, `attempt_id`, `reason` and `expected`, and opens on the
-declared service host, not on a remote client. `console-resolve` refreshes the
-non-secret observation; `console-cancel` closes managed viewing resources and
-never releases the VM. Console status `ready` is guest preflight, not launch
+Acquisition never opens a viewer. `relay_acquisition_capabilities` reads the
+backend's VNC options; `relay_acquire` with `vnc: true` checks OS availability
+and requires a ready console and lease identity in the response.
+`relay_console_open` is permitted only following an explicit user request,
+requires `userRequested: true`, `console_id`, `attempt_id`, `reason` and
+`expected`, and opens on the declared service host, not on a remote client.
+`relay_console_resolve` refreshes the non-secret observation;
+`relay_console_cancel` closes managed viewing resources and never releases the
+VM. Console status `ready` is guest preflight, not launch
 success; transport connection, authentication, displayed pixels and human
 confirmation are separate observations that console actions never establish.
 On macOS the human must choose Standard sharing of the existing console, not a
@@ -308,7 +333,7 @@ npm run test:e2e
 ```
 
 This runs `claude --print` with the plugin loaded from this checkout
-(`--plugin-dir`), the model limited to the relay tools, and the server pointed
+(`--plugin-dir`), the model limited to the relay's tools, and the server pointed
 at a loopback stand-in for vm-service (`tests/e2e/fixture-service.ts`), which
 keeps leases as records, runs the relay's own Node and transfer commands
 locally, and fakes the desktop capture driver. Five cases run, each a separate

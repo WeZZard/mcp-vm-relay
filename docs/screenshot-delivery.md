@@ -3,7 +3,7 @@
 ## 1. Status and scope
 
 - The user approved implementation after the original documentation proposal on 2026-09-21. This document now describes the implemented and automated-tested worktree contract, not a deployed or live-accepted capability.
-- The merged tool exposes thirteen actions: `search`, `probe`, `acquire`, `stage`, `run`, `image`, `extract`, `finish`, `release`, `acquisition-capabilities`, `console-resolve`, `console-open`, and `console-cancel`. The selectors and limits below are implemented. The installed plugin and consumer integrations were not modified; an existing installed session must not be assumed to expose this revision.
+- At the time of this design the relay was one tool with thirteen actions: `search`, `probe`, `acquire`, `stage`, `run`, `image`, `extract`, `finish`, `release`, `acquisition-capabilities`, `console-resolve`, `console-open`, and `console-cancel`. Each action is now its own `relay_*` MCP tool (the `image` action described here is `relay_image`); the selectors and limits below are unchanged by that split. The installed plugin and consumer integrations were not modified; an existing installed session must not be assumed to expose this revision.
 - This document owns the screenshot-delivery contract. The [investigation and implementation plan](../.plans/2026-09-21-screenshot-delivery.md) retains the diagnosis, source provenance, original proposal, and pending work. The [verification report](verification.md#screenshot-delivery-investigation-2026-09-21) records measured evidence separately.
 - Relay owns display-image delivery, authorized single-image retrieval, identity, transfer, and failure recovery. Application integration remains outside this design's implementation scope.
 - Human live viewing is a separate capability. A viewer window cannot replace an image delivered to the operating agent, and neither capability implies human review.
@@ -76,16 +76,16 @@ sequenceDiagram
 - Pi turns thrown execution errors into text-only results. For image-bearing failures, Relay returns the structured result and uses a narrowly scoped `tool_result` handler to set `isError` while preserving content. Returning an arbitrary `isError` field from `execute` is not a supported substitute.
 - Invalid requests are rejected before effects. Real Pi SDK 0.85.1 tests verify that final text, images, and native error flags survive the extension hook, execution events, session persistence, and next-turn context. Legacy failed results without `imageDelivery` retain their throwing behavior.
 
-## 5. Implemented single-image retrieval action
+## 5. Implemented single-image retrieval tool
 
 - Verified single-file materialization uses the existing controlled transfer channel with image-specific integrity, size, deadline, and retry checks. It introduces no unrestricted guest-read endpoint or new backend communication channel.
-- The closed `image` action retrieves one saved image. `extract` remains dedicated to declared archive delivery rather than image presentation.
-- The action rejects `reason` because it performs no recorded input. It selects exactly one target through the following closed branches. Replace illustrative identifiers with actual returned identities; reference IDs are `image-` followed by 64 lowercase hexadecimal digits.
+- The closed `relay_image` tool retrieves one saved image. `relay_extract` remains dedicated to declared archive delivery rather than image presentation.
+- The tool rejects `reason` because it performs no recorded input. It selects exactly one target through the following closed branches. Replace illustrative identifiers with actual returned identities; reference IDs are `image-` followed by 64 lowercase hexadecimal digits.
 
 ### 5.1 Display selection
 
 ```json
-{"action":"image","target":{"source":"display","sessionId":"<recording-session>","executionId":"<saved-execution>","phase":"after"}}
+relay_image {"target":{"source":"display","sessionId":"<recording-session>","executionId":"<saved-execution>","phase":"after"}}
 ```
 
 - The required phase is `before` or `after`. The selector resolves recorded captures belonging to the owned enclosure and accepts no guest path, VM name, backend URL, or caller-supplied owner identity.
@@ -94,7 +94,7 @@ sequenceDiagram
 ### 5.2 Application selection
 
 ```json
-{"action":"image","target":{"source":"application","name":"<declared-extraction>","path":"shots/0000-initial.png"}}
+relay_image {"target":{"source":"application","name":"<declared-extraction>","path":"shots/0000-initial.png"}}
 ```
 
 - The name must match an acquisition-time extraction declaration. A directory declaration requires a nonempty relative path to one regular image file. A file declaration omits `path`.
@@ -104,7 +104,7 @@ sequenceDiagram
 ### 5.3 Reference recovery
 
 ```json
-{"action":"image","target":{"source":"reference","imageId":"<returned-image-reference>"}}
+relay_image {"target":{"source":"reference","imageId":"<returned-image-reference>"}}
 ```
 
 - A reference resolves to the same original bytes or an explicit integrity or availability failure. It cannot silently select a newer file at the same path.

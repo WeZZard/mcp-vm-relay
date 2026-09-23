@@ -15,22 +15,24 @@
 - Configuration is loaded at service startup and is disabled by default. Discovery reports that snapshot, not a live image test. Acquisition with `vnc: true` checks the actual guest; it is not permission to modify images or silently install prerequisites.
 - [Backend installation](../../vm-service/docs/vnc-installation.md), [guest preparation](../../vm-service/docs/guest-console-provisioning.md), and [live acceptance](../../vm-service/docs/vnc-acceptance.md) own the detailed platform procedures. These sibling-checkout links require vm-service alongside this repository.
 
-## Relay actions
+## Relay tools
 
-- `acquisition-capabilities` takes no other fields. It reads the versioned backend options without initializing or recovering ownership, allocating a VM, or opening a viewer.
-- `acquire` accepts optional boolean `vnc`. Omission retains the old wire request; explicit `false` is forwarded. `true` checks OS availability before allocation and requires a ready console and lease identity in the acquisition response. It never opens a viewer.
-- `console-resolve` takes no other fields. The manager derives the VM and lease identity from durable ownership, reconciles the selected backend, and resolves the console without opening it.
-- `console-open` requires `console_id`, `attempt_id`, `userRequested: true`, `reason`, and `expected`. The agent may call it only for an applicable explicit user request. The boolean is a declaration, not independently verified user authorization.
-- `console-cancel` requires `console_id` and `attempt_id`. It cancels managed viewing resources without releasing the VM, changing lease-renewal policy, or ending guest work.
-- Console actions reject screenshot metadata, executable paths, connection URLs, VM selectors, and environment overrides. They do not produce screenshot evidence. Existing `run` admission and snapshot rules remain unchanged.
-- Opening retains `reason` and `expected` as local intent annotations. They are not screenshot, authentication, pixel, or human-confirmation evidence. Other new actions reject `reason`.
+- `relay_acquisition_capabilities` takes no fields. It reads the versioned backend options without initializing or recovering ownership, allocating a VM, or opening a viewer.
+- `relay_acquire` accepts optional boolean `vnc`. Omission retains the old wire request; explicit `false` is forwarded. `true` checks OS availability before allocation and requires a ready console and lease identity in the acquisition response. It never opens a viewer.
+- `relay_console_resolve` takes no fields. The manager derives the VM and lease identity from durable ownership, reconciles the selected backend, and resolves the console without opening it.
+- `relay_console_open` requires `console_id`, `attempt_id`, `userRequested: true`, `reason`, and `expected`. The agent may call it only for an applicable explicit user request. The boolean is a declaration, not independently verified user authorization.
+- `relay_console_cancel` requires `console_id` and `attempt_id`. It cancels managed viewing resources without releasing the VM, changing lease-renewal policy, or ending guest work.
+- These tools reject screenshot metadata, executable paths, connection URLs, VM selectors, and environment overrides. They do not produce screenshot evidence. Existing run-tool admission and snapshot rules remain unchanged.
+- Opening retains `reason` and `expected` as local intent annotations. They are not screenshot, authentication, pixel, or human-confirmation evidence. The other tools here take no `reason`.
+
+Each line below is one tool's call arguments (the tool's own name already carries what used to be its `action`):
 
 ```json
-{"action":"acquisition-capabilities"}
-{"action":"acquire","task":"watch-task","image":"IMAGE_FROM_DISCOVERY","extractions":[],"vnc":true}
-{"action":"console-resolve"}
-{"action":"console-open","console_id":"CONSOLE_FROM_RESOLVE","attempt_id":"watch-1","userRequested":true,"reason":"The user explicitly asked to watch this task.","expected":"The standard viewer opens on the service host; authentication may still require the user."}
-{"action":"console-cancel","console_id":"CONSOLE_FROM_RESOLVE","attempt_id":"watch-1"}
+relay_acquisition_capabilities {}
+relay_acquire {"task":"watch-task","image":"IMAGE_FROM_DISCOVERY","extractions":[],"vnc":true}
+relay_console_resolve {}
+relay_console_open {"console_id":"CONSOLE_FROM_RESOLVE","attempt_id":"watch-1","userRequested":true,"reason":"The user explicitly asked to watch this task.","expected":"The standard viewer opens on the service host; authentication may still require the user."}
+relay_console_cancel {"console_id":"CONSOLE_FROM_RESOLVE","attempt_id":"watch-1"}
 ```
 
 ## Backend API expectations
