@@ -17469,7 +17469,7 @@ var Relay = class _Relay {
     return this.store;
   }
   /**
-   * Start a new walkthrough session. The session identity is durably saved
+   * Start a new trajectory session. The session identity is durably saved
    * before any connection attempt so a startup failure after acquiring
    * remote resources remains discoverable (D14).
    */
@@ -17711,10 +17711,10 @@ var Session = class {
 // node_modules/@wezzard/relay-driver-host-sdk/dist/src/index.js
 init_evidence_package();
 
-// node_modules/@wezzard/relay-driver-host-sdk/dist/src/walkthrough.js
+// node_modules/@wezzard/relay-driver-host-sdk/dist/src/trajectory.js
 import { readFile as readFile3, readdir as readdir2 } from "node:fs/promises";
 import { join as join5 } from "node:path";
-async function buildWalkthrough(packageDir, options = {}) {
+async function buildTrajectory(packageDir, options = {}) {
   const manifest = JSON.parse(await readFile3(join5(packageDir, "manifest.json"), "utf8"));
   const journalLines = (await readFile3(join5(packageDir, "journal", "session-events.jsonl"), "utf8")).split("\n").filter(Boolean).map((l) => JSON.parse(l));
   const completionByAction = /* @__PURE__ */ new Map();
@@ -18959,7 +18959,8 @@ var VmTransport = class {
 import { createHash as createHash4 } from "node:crypto";
 import { lstat as lstat4, readFile as readFile7, readdir as readdir4, mkdir as mkdir5, writeFile as writeFile3, rm as rm2 } from "node:fs/promises";
 import { dirname as dirname6, join as join10, resolve as resolve6, parse as parse4 } from "node:path";
-var generated = /* @__PURE__ */ new Set(["manifest.json", "summary.json", "walkthrough.json", "index.html", "OPENING.txt", "journal/session-events.jsonl"]);
+var generated = /* @__PURE__ */ new Set(["manifest.json", "summary.json", "trajectory.json", "index.html", "OPENING.txt", "journal/session-events.jsonl"]);
+var legacyTrajectoryFile = "walkthrough.json";
 var hash2 = (bytes) => createHash4("sha256").update(bytes).digest("hex");
 var json = (value) => JSON.stringify(value, null, 2) + "\n";
 function object3(value, label) {
@@ -19254,8 +19255,8 @@ function result(root, a) {
   return { manifestPath: join10(root, "manifest.json"), deliveryVerified: true, snapshots: a.completeness, execution: a.execution, humanReview: "pending", findings: a.findings };
 }
 async function buildReview(root, a) {
-  const walkthrough = await buildWalkthrough(root, { steps: [...a.steps], execution: a.execution });
-  return { ...walkthrough, steps: a.steps, outcomes: { ...walkthrough.outcomes, recording: a.completeness } };
+  const trajectory = await buildTrajectory(root, { steps: [...a.steps], execution: a.execution });
+  return { ...trajectory, steps: a.steps, outcomes: { ...trajectory.outcomes, recording: a.completeness } };
 }
 var escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 function viewer(options, a) {
@@ -19298,7 +19299,7 @@ async function deliverPackage(rootDir, options) {
       });
     };
     await save("manifest.json", json(await build()));
-    await save("walkthrough.json", json(await buildReview(root, a)));
+    await save("trajectory.json", json(await buildReview(root, a)));
     await writeFile3(join10(root, "manifest.json"), json(await build()));
     return await verifyDeliveredPackage(root);
   } catch (error2) {
@@ -19323,7 +19324,10 @@ async function verifyDeliveredPackage(rootDir) {
     if (bytes.length !== artifact.bytes || hash2(bytes) !== artifact.sha256) throw new Error(`artifact integrity mismatch: ${path}`);
   }
   for (const path of files) if (path !== "manifest.json" && !seen.has(path)) throw new Error(`unmanifested artifact: ${path}`);
-  for (const required2 of generated) if (required2 !== "manifest.json" && !seen.has(required2)) throw new Error(`missing required package output: ${required2}`);
+  for (const required2 of generated) {
+    if (required2 === "manifest.json") continue;
+    if (required2 === "trajectory.json" ? !seen.has(required2) && !seen.has(legacyTrajectoryFile) : !seen.has(required2)) throw new Error(`missing required package output: ${required2}`);
+  }
   const options = { packageId: manifest.packageId, sessionId: manifest.sessionId, taskId: manifest.taskId };
   const a = await analyze(root, options, files);
   const expectedAttachments = files.filter((p) => p.startsWith("extractions/")).sort();
@@ -19334,10 +19338,11 @@ async function verifyDeliveredPackage(rootDir) {
     const actual = actualSnapshots.find((s) => s.path === sn.path);
     if (!actual || actual.actionId !== sn.actionId || actual.groupId !== sn.groupId || actual.provenance !== "dispatch-captured" || !sameRef(actual, sn)) throw new Error(`snapshot provenance mismatch: ${sn.path}`);
   }
-  if (!(await readFile7(join10(root, "state/journal/events.jsonl"))).equals(await readFile7(join10(root, "journal/session-events.jsonl")))) throw new Error("walkthrough journal differs from original");
+  if (!(await readFile7(join10(root, "state/journal/events.jsonl"))).equals(await readFile7(join10(root, "journal/session-events.jsonl")))) throw new Error("trajectory journal differs from original");
   if (await readFile7(join10(root, "summary.json"), "utf8") !== json(summary(options, a))) throw new Error("summary disagrees with original evidence");
   if (await readFile7(join10(root, "index.html"), "utf8") !== viewer(options, a)) throw new Error("viewer disagrees with original evidence");
-  if (await readFile7(join10(root, "walkthrough.json"), "utf8") !== json(await buildReview(root, a))) throw new Error("walkthrough disagrees with original evidence");
+  const trajectoryFile = !files.includes("trajectory.json") && files.includes(legacyTrajectoryFile) ? legacyTrajectoryFile : "trajectory.json";
+  if (await readFile7(join10(root, trajectoryFile), "utf8") !== json(await buildReview(root, a))) throw new Error("trajectory disagrees with original evidence");
   const acceptance = await verifyPackage(manifest, root);
   const errors = acceptance.findings.filter((f) => f.code !== "ok" && !(f.code === "state-inconsistent" && [...a.incompleteGroups].some((g) => f.detail === `group ${g} does not carry exactly one before/after pair`)));
   if (errors.length) throw new Error(`package verification failed: ${errors.map((e) => e.detail).join("; ")}`);
@@ -29299,7 +29304,7 @@ async function relayCall(host, raw, options = {}) {
 var SERVER_NAME = "vm-relay";
 var SERVER_VERSION = true ? "0.3.1" : JSON.parse(readFileSync(fileURLToPath2(new URL("../package.json", import.meta.url)), "utf8")).version;
 var STATUS_TOOL = "relay_status";
-var REVIEW_TOOL = "relay_review";
+var TRAJECTORY_TOOL = "relay_trajectory";
 var PLUGIN_TOOL_PREFIX = "mcp__plugin_mcp-vm-relay_vm-relay__";
 var message = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var text3 = (value, isError = false) => ({ content: [{ type: "text", text: value }], isError });
@@ -29316,7 +29321,7 @@ function projectDirectory(env = process.env, cwd = process.cwd()) {
 }
 function doctrineText() {
   return `${doctrine}
-In Claude Code the relay tool is ${PLUGIN_TOOL_PREFIX}${relayToolName} (or mcp__${SERVER_NAME}__${relayToolName} when the server is configured directly); ${STATUS_TOOL} and ${REVIEW_TOOL} are operator tools for the /relay-status and /relay-review skills.`;
+In Claude Code the relay tool is ${PLUGIN_TOOL_PREFIX}${relayToolName} (or mcp__${SERVER_NAME}__${relayToolName} when the server is configured directly); ${STATUS_TOOL} and ${TRAJECTORY_TOOL} are operator tools for the /relay-status and /relay-trajectory skills.`;
 }
 async function openInBrowser(url) {
   const run = promisify(execFile);
@@ -29339,7 +29344,7 @@ function createRelayServer(options = {}) {
     tools: [
       { name: relayToolName, description: relayToolDescription, inputSchema: relayInputSchema() },
       { name: STATUS_TOOL, description: "Show this session's owned VM lease (backend binding, guest state, renewal, console observation, last error), staging state and evidence path, plus the project directory, the VM service origin and the selected environment in use; active:false when nothing is owned. Read-only; it does not touch the VM.", inputSchema: { type: "object", properties: {}, additionalProperties: false } },
-      { name: REVIEW_TOOL, description: "Verify a delivered relay evidence package (all artifacts, hashes and references) and open its viewer in the local human-facing browser. Human review remains pending.", inputSchema: { type: "object", properties: { directory: { type: "string", description: "The package directory, absolute or relative to the project." } }, required: ["directory"], additionalProperties: false } }
+      { name: TRAJECTORY_TOOL, description: "Verify a delivered relay evidence package (every artifact, hash and reference) and open its trajectory viewer in the local browser. Human review remains pending.", inputSchema: { type: "object", properties: { directory: { type: "string", description: "The package directory, absolute or relative to the project." } }, required: ["directory"], additionalProperties: false } }
     ]
   }));
   server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
@@ -29351,7 +29356,7 @@ function createRelayServer(options = {}) {
         const service = environment?.profile.vmServiceUrl ?? process.env.MCP_VM_RELAY_URL ?? "http://localhost:6240";
         return text3(JSON.stringify({ ...manager ? manager.status() : { active: false }, project, service, environment: environment?.identity }, null, 2));
       }
-      if (name === REVIEW_TOOL) {
+      if (name === TRAJECTORY_TOOL) {
         const directory2 = args?.directory;
         if (typeof directory2 !== "string" || !directory2.trim()) throw new Error("directory is required");
         const root = resolve10(project, directory2.trim());
@@ -29419,10 +29424,10 @@ if (process.argv[1] && await realpath2(process.argv[1]).catch(() => "") === awai
 }
 export {
   PLUGIN_TOOL_PREFIX,
-  REVIEW_TOOL,
   SERVER_NAME,
   SERVER_VERSION,
   STATUS_TOOL,
+  TRAJECTORY_TOOL,
   createRelayServer,
   doctrineText,
   projectDirectory,
