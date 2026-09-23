@@ -1,0 +1,21 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+// Strict YAML parsers (pi's among them) reject a plain scalar containing ": ",
+// and pi then drops the whole skill. Such values must be quoted.
+const files = [
+  ...readdirSync('skills').map(name => join('skills', name, 'SKILL.md')),
+  ...readdirSync('agents').filter(name => name.endsWith('.md')).map(name => join('agents', name)),
+];
+for (const file of files) {
+  test(`${file} frontmatter values are valid plain or quoted YAML scalars`, () => {
+    const [, frontmatter] = readFileSync(file, 'utf8').split(/^---$/m);
+    for (const line of frontmatter.trim().split('\n')) {
+      const value = line.slice(line.indexOf(':') + 1).trim();
+      if (value.startsWith('"') || value.startsWith("'")) continue;
+      assert.ok(!value.includes(': ') && !value.endsWith(':'), `${file}: quote the value of "${line.split(':')[0]}"`);
+    }
+  });
+}

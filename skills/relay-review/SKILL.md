@@ -1,6 +1,6 @@
 ---
 name: relay-review
-description: Verify a delivered relay evidence package and open its viewer in the local browser. Usage: /relay-review <package directory>
+description: "Verify a delivered relay evidence package and open its viewer in the local browser. Usage: /relay-review <package directory>"
 disable-model-invocation: true
 ---
 
