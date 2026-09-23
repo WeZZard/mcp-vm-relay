@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile, stat } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import test from 'node:test';
-import { relayCall, relayJsonSchema, relayResultKind, relayToolDescription, relayToolName } from '../src/surface.js';
+import { relayCall, relayJsonSchema, relayResultKind, relayToolInput, relayToolInputSchema, relayTools } from '../src/surface.js';
 import { relayActions } from '../src/schema.js';
 import type { RelayManager } from '../src/manager.js';
 
@@ -44,6 +44,34 @@ test('the JSON schema names every action and carries the strict branches; symbol
   assert.deepEqual((schema.properties as any).action.enum, [...relayActions]);
   assert.equal((schema.anyOf as unknown[]).length, 17); // thirteen actions, run in five kinds
   assert.equal(Object.getOwnPropertySymbols(schema).length, 0);
+});
+
+test('the seventeen action-backed relay_* tools each derive a plain-object schema with no action, no kind and no root combinator', () => {
+  assert.equal(relayTools.length, 17);
+  assert.deepEqual(relayTools.map(t => t.name), [...new Set(relayTools.map(t => t.name))], 'tool names are unique');
+  for (const tool of relayTools) {
+    assert.match(tool.name, /^relay_[a-z_]+$/);
+    assert.ok(tool.title.length > 0, `${tool.name} has a title`);
+    assert.ok(tool.description.length > 0, `${tool.name} has a description`);
+    const schema = relayToolInputSchema(tool);
+    assert.equal(schema.type, 'object');
+    assert.equal(schema.additionalProperties, false);
+    for (const combinator of ['anyOf', 'oneOf', 'allOf']) assert.ok(!(combinator in schema), `${tool.name} has a root ${combinator}`);
+    assert.ok(!('action' in (schema.properties as object)), `${tool.name} exposes action`);
+    if (tool.kind) assert.ok(!('kind' in (schema.properties as object)), `${tool.name} exposes kind`);
+  }
+  const runTools = relayTools.filter(t => t.action === 'run');
+  assert.deepEqual(runTools.map(t => t.kind).sort(), ['browser', 'code', 'cua', 'exec', 'script']);
+  for (const t of runTools) assert.equal(t.name, `relay_${t.kind}`);
+});
+
+test('relayToolInput maps each tool name back to the action shape relayCall dispatches, e.g. relay_exec becomes action=run kind=exec', () => {
+  assert.deepEqual(relayToolInput('relay_search', { name: 'Firefox' }), { action: 'search', name: 'Firefox' });
+  assert.deepEqual(relayToolInput('relay_probe', { scope: 'guest' }), { action: 'probe', scope: 'guest' });
+  assert.deepEqual(relayToolInput('relay_exec', { argv: ['true'] }), { action: 'run', kind: 'exec', argv: ['true'] });
+  assert.deepEqual(relayToolInput('relay_browser', { browser: { action: 'read', selector: 'body' } }), { action: 'run', kind: 'browser', browser: { action: 'read', selector: 'body' } });
+  assert.deepEqual(relayToolInput('relay_finish', {}), { action: 'finish' });
+  assert.throws(() => relayToolInput('relay_dance', {}), /Unknown relay tool/);
 });
 
 function fakeManager(run: unknown, image?: unknown): RelayManager {
