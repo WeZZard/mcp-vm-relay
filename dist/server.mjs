@@ -28289,7 +28289,7 @@ async function refreshEvidenceState(incoming, destination, archiveRoot) {
 
 // src/manager.ts
 var BROWSER_CAPTURES = "browser-captures";
-var doctrine = "Use the relay tool only for interruptive computer-use/browser-use. Its required action is search, probe, acquisition-capabilities, acquire, console-resolve, console-open, console-cancel, stage, run, image, extract, finish or release; no default action. Search reads installed application inventories without allocation or recovery. Judge interruptiveness yourself using relay action=probe facts; use local tools directly for non-disruptive or headless work. A parent composes a dedicated subagent enclosure by prompt; this extension never spawns one. Declare extractions on acquire. Finish or release explicitly when done. Failed operations retain the VM for agent-directed repair. Session shutdown/settle stops lease renewal without destroying the VM; expiration is the backend safeguard. Probe reports current owned state independently of conversation history. Use probe scope=guest for read-only executable readiness and run kind=exec diagnostic=true for explicitly requested diagnosis/repair without screenshot evidence, even before staging. Run timeoutMs defaults to 120000 and is bounded by 3600000. Run and console-open require an honest reason field retained as intent, not authorization evidence. Console-open also requires expected, userRequested=true and console_id/attempt_id; it is permitted only following an explicit user request and opens on the service host, not a remote client. Acquisition with optional vnc=true only prepares sharing. Acquisition-capabilities is read-only and does not recover ownership. Console-resolve reconciles the owned lease; console-cancel never releases it. Never replay uncertain viewer launches. Console operations have no screenshots and never establish authentication, displayed pixels or human confirmation. macOS requires the human to choose Standard sharing of the existing console, not a new Log In session or High Performance display; never auto-confirm selection. Its server_enforced_view_only=false and session_binding=viewer-selection-unverified remain limitations even if transport connects. Other lifecycle actions use structured records. Each relayed event requires an agent-chosen afterIntervalMs (no default): choose e.g. 100ms for a text echo, 500ms for a dialog, or 16ms for a game frame only when those match your expected effect. These are examples, not stability detection or prescribed waits. Text coalescing is explicit first/member/last on consecutive keystrokes with a group interval on last. Run returns a typed saved after-image when captured. If unavailable, use image with the same imageId reference or display sessionId/executionId/phase, never repeat input or capture as delivery recovery. Application images require a declared extraction name and relative member path. Image retrieval never exports the consumer directory. Stop exploratory input if required images remain uninspectable after at most two explicit recovery calls within your budget. Attachment is not proof of agent inspection or human review. No video is recorded here; applications own video.";
+var instructions = "This server offers nineteen tools for one interruptive VM enclosure: relay_search, relay_probe, relay_acquisition_capabilities, relay_acquire, relay_stage, the run tools relay_exec/relay_script/relay_code/relay_cua/relay_browser, relay_image, relay_extract, relay_finish, relay_release, relay_console_resolve, relay_console_open, relay_console_cancel, relay_status and relay_trajectory. Relay only interruptive computer-use or browser-use that would otherwise take over a real desktop or browser, judged for yourself from relay_probe facts; unknown is not idle, and non-disruptive or headless work stays with local tools. One task gets one enclosure: call relay_acquire once per task, never reused for a second task. Work an enclosure in order: relay_probe, then relay_acquire, then relay_stage, then one or more run tools, then relay_image or relay_extract as needed, then relay_finish or relay_release. Always call relay_finish or relay_release explicitly before you return an answer; ending the session only pauses lease renewal, it does not destroy the VM, and the backend's own expiry is the last-resort safeguard. A refused, uncertain or nonzero operation keeps the VM so you can diagnose and submit a corrected operation; never replay input whose effect is uncertain. A tool result, an attached image or a verified evidence package, is evidence for a human reviewer, never the review itself. The relay never targets a physical or local display and offers no video or spawn API. Every tool's text result is capped at 50 KiB / 2000 lines; a larger result is retained whole in a local file the result names.";
 var RelayManager = class {
   constructor(options) {
     this.options = options;
@@ -29195,6 +29195,21 @@ var parameterObject = typebox_exports.Object({
   ...projected
 }, { ...closed2, anyOf: relayContract.anyOf, description: "Select exactly one action. Each closed branch defines allowed fields. Run requires reason and selects a kind; console-open requires reason, expected and userRequested=true. Other actions reject reason. No default action." });
 var relayParameters = typebox_exports.Unsafe(parameterObject);
+function branchFor(action, kind) {
+  const found = relayContract.anyOf.find((branch) => {
+    const properties = branch.properties;
+    if (properties.action.const !== action) return false;
+    return kind === void 0 ? properties.kind === void 0 : properties.kind?.const === kind;
+  });
+  if (!found) throw new Error(`No contract branch for action ${action}${kind ? ` kind ${kind}` : ""}`);
+  return found;
+}
+function toolInputSchema(action, kind) {
+  const raw = JSON.parse(JSON.stringify(branchFor(action, kind)));
+  const { action: _action, kind: _kind, ...properties } = raw.properties;
+  const required2 = (raw.required ?? []).filter((key) => key !== "action" && key !== "kind");
+  return { type: raw.type, properties, ...required2.length ? { required: required2 } : {}, additionalProperties: raw.additionalProperties ?? false };
+}
 function validateRelayInput(value) {
   if (!Check2(relayContract, value)) throw new Error("Invalid relay input: action is required; run and console-open require nonblank reason. Supply only the fields for the selected action and run kind.");
   if (value.action === "run") {
@@ -29210,10 +29225,142 @@ import { mkdir as mkdir10, writeFile as writeFile5 } from "node:fs/promises";
 import { join as join15 } from "node:path";
 import { tmpdir as tmpdir2 } from "node:os";
 import { randomUUID as randomUUID7 } from "node:crypto";
-var relayToolName = "relay";
-var relayToolDescription = "One VM enclosure interface. Required action; run and console-open require intent in reason. search: required application name, optional hard os linux/macos; exact, prefix, substring canonical-name/alias matching. Returns installed versions (possibly null), image keys, OS and architecture; truncated means whole installations were omitted. No allocation, boot, installation, capacity reservation or automatic image choice. Empty success is distinct from catalog errors. probe: default scope=host reports host permissions/activity, VM service availability and owned lifecycle state, not guest readiness. scope=guest checks executables on the owned guest before staging or after repair without installing software; capture/browser readiness remains unverified. Unknown is not idle. acquisition-capabilities: read-only versioned VNC options, no acquisition or ownership recovery. console-resolve: read-only status for the owned lease/environment. console-open: explicit user request only, require userRequested=true, console_id, attempt_id, reason and expected; opens on service-host only, never automatically at acquisition. console-cancel: require console_id and attempt_id; closes managed viewing resources, never releases the VM. Console actions are lifecycle operations without screenshots, not authentication/pixel/human evidence. Resolve uncertain attempts; never automatically replay open. Console status ready is guest preflight, not nested attempt success. macOS requires human Standard sharing of the existing console, not a new Log In session or High Performance display. Never auto-confirm selection; server_enforced_view_only=false and viewer-selection-unverified remain limitations even after transport connects. acquire: one fresh VM for this prompt-composed subagent, register ownership and heartbeat; require task, image and extractions (declare outputs up front, [] allowed); optional ttlHours/env/fullWorkspace/vnc (boolean, default false; prepares sharing without opening). stage: hash-check runtime and optional workspace/files/nodePath/cuaDriver/browser. Corrected setup can be retried after errors; a staged runtime accepts corrected executable paths. resetRecording=true explicitly archives existing recording evidence and starts a fresh recording on the same VM, refusing an existing receiver lock. Staging success does not prove capture readiness. Guest Node and driver must exist; support goes under support/. Linux needs native X11 and cua-driver serve --no-overlay. browser:{} enables fresh persistent guest Playwright; no download or CDP attachment. After every browser event the page is settle-waited (load, network idle, fonts, two frames; settleTimeoutMs, default 5000) and an event that changed the address gets a landing page capture; captures and their records land in workspace/browser-captures, declared as an extraction automatically. run: ONE admitted operation, require reason/kind/step/snapshots. exec needs argv; script needs localPath/language; code needs code/language; cua needs tool and optional args; browser needs one browser event: navigate, click, type, press, read, or snapshot (capture the settled page now, optional name). Do not hide multiple UI interactions in a script-level pair. Ordinary UI means real pointer/keyboard, not direct accessibility. Explicit afterIntervalMs required per event or on text group last, no defaults/stability detection. Choose semantics-appropriate waits, e.g. 100ms text, 500ms dialog, 16ms game, not prescribed values. Text groups are sender-declared consecutive first/member/last events. Failures retain the VM and allow agent-directed repair; never automatically replay uncertain input. timeoutMs defaults to 120000 and accepts integers 1..3600000 independently of snapshot delay. exec diagnostic=true explicitly records command diagnosis/repair without screenshot evidence, including before staging; do not claim visual verification. A run result carries the execution identity and outcome, the guest's bounded stdout/stderr, for a browser event the parsed browser answer (settled facts, landing or snapshot capture, read text), and the saved after-image as a typed image block when that phase was captured and delivered. image: retrieve one saved image without input, capture, directory export, or acquisition. target selects display (sessionId/executionId/phase), application (declared name and relative path for a directory), or reference (imageId). PNG/JPEG/WebP only; originals max64MiB, decoded max40M pixels; preview max2000x2000 and 4MiB base64 (PNG originals are resampled in-process; JPEG/WebP pass through only within bounds). Each image delivery has a 90s deadline and at most three eligible file-transfer attempts; recommend no more than two explicit reference recovery calls. Closed enclosures return stale-reference; delivered originals remain readable by host read. Attachment does not prove provider acceptance or inspection. extract: require names, pull only declared outputs, verify hashes and reject traversal/symlinks/changing sources. finish: extract declared outputs, deliver/verify a portable snapshot package then destroy/unregister; delivery, snapshots, execution and human review are separate. release: abandon, retain available evidence and destroy the owned VM without claiming success; safe to retry failed cleanup. Use finish or release explicitly when done. Session shutdown and agent completion pause renewal without destroying the VM; backend expiration handles abandoned leases. Inspect current owned state through probe after context compaction. Only selected-action fields are permitted; no default action. No physical/local UI targets, video API or spawn API. Text output is capped at 50 KiB / 2000 lines; larger responses are retained in a local file.";
-function relayJsonSchema() {
-  return JSON.parse(JSON.stringify(relayParameters));
+var readOnly = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
+var acts = (openWorld, destructive = false) => ({ readOnlyHint: false, destructiveHint: destructive, idempotentHint: false, openWorldHint: openWorld });
+var runShared = "Shares relay_exec's `reason`, `step`, `snapshots` and `timeoutMs` fields: one admitted operation per call, an explicit `snapshots.afterIntervalMs` chosen for this event (no default), and a result carrying the execution identity and outcome plus the saved after-image inline when the plan captured it. A refused, uncertain or nonzero result keeps the VM; never replay input whose effect is uncertain.";
+var relayTools = [
+  {
+    name: "relay_search",
+    action: "search",
+    title: "Search installed applications",
+    annotations: readOnly,
+    description: "Find an installed application in the image inventories by name, then choose an image yourself; optional before relay_acquire. Matches canonical names and aliases by exact, prefix and substring comparison, with an optional hard `os` filter (`linux`/`macos`). Returns each match's installed versions (which may be null), image keys, OS and architecture; a truncated result means whole installations were omitted, and an empty result is distinct from a catalog error. Never allocates, boots, installs, reserves capacity or chooses an image for you."
+  },
+  {
+    name: "relay_probe",
+    action: "probe",
+    title: "Probe host and guest readiness",
+    annotations: readOnly,
+    description: 'Read-only host and service facts, used to judge whether a task is interruptive and to pick an image; it reports current owned state on its own, so call it again after context compaction rather than trusting earlier messages. Default `scope: "host"` reports host permissions and activity, VM service availability, and this session\'s owned lifecycle state, not guest readiness; unknown is not idle. `scope: "guest"` (on an already-owned VM) checks only that Node and the CuaDriver executable exist on the guest, before staging or after a repair, without installing anything, and never claims capture or browser readiness. Relay only interruptive work judged from these facts; non-disruptive or headless work stays with local tools. Continue in order: relay_acquire, relay_stage, a run tool, relay_image/relay_extract, then relay_finish or relay_release, called explicitly before you return.'
+  },
+  {
+    name: "relay_acquisition_capabilities",
+    action: "acquisition-capabilities",
+    title: "Read acquisition capabilities",
+    annotations: readOnly,
+    description: "Read the backend's versioned VNC console options for the images it serves. Read-only: it neither acquires a VM nor recovers ownership of one."
+  },
+  {
+    name: "relay_acquire",
+    action: "acquire",
+    title: "Acquire a VM",
+    annotations: acts(false),
+    description: "Acquire one fresh VM for this task and start its ownership heartbeat. Requires `task` (a short slug), `image` (a key from relay_probe or relay_search) and `extractions`: every output you intend to bring home, declared before any work (`[]` is allowed; nothing is extracted automatically). Optional `ttlHours` (default 4), `env` (a credential pack, never baked into images), `fullWorkspace` (opt in to deliver the whole workspace) and `vnc` (default false; only prepares console-sharing capacity, never opens a viewer). One task per enclosure: call this once per task, not again for another task. Continue with relay_stage, a run tool, relay_image/relay_extract, then relay_finish or relay_release explicitly before you return; a failed step keeps the VM for repair rather than replaying uncertain input."
+  },
+  {
+    name: "relay_stage",
+    action: "stage",
+    title: "Stage the guest runtime",
+    annotations: acts(false),
+    description: "Push and hash-check the guest runtime, plus an optional workspace, support files and browser, onto an already-acquired VM. A failed stage can be retried with corrected paths; once staged, only corrected executable paths (`nodePath`, `cuaDriver`) may be resubmitted, and staging success does not prove capture readiness. The guest Node and CuaDriver executables must already exist; `files` land under `support/`. Linux guests need native X11 and `cua-driver serve --no-overlay`. `browser: {}` enables a fresh persistent guest Playwright page (default settle timeout 5000 ms, `settleTimeoutMs` up to 60000; `playwrightModule` overrides the guest module path), never downloads a browser or attaches over CDP, and declares the extraction `browser-captures` automatically. `resetRecording: true` explicitly archives the current recording's evidence and starts a fresh recording on the same VM, keeping prior evidence available; it refuses while an existing receiver lock is held. Use it after diagnosing damaged recording state, then stage again."
+  },
+  {
+    name: "relay_exec",
+    action: "run",
+    kind: "exec",
+    title: "Run a guest command",
+    annotations: acts(true),
+    description: "Run one admitted guest command as a single recorded operation; never hide several interactions in one call. Requires `reason` (intent, retained as evidence, never authorization), `step` (`id`, `title`, `expected` result, `inputMode`: `ordinary` for real pointer/keyboard input or `accessibility` for direct accessibility APIs), `snapshots` (an explicit `afterIntervalMs` chosen for this event's semantics, e.g. ~100 ms for a text echo, ~500 ms for a dialog, ~16 ms for a game frame; there is no default or stability detection) and `argv`. Consecutive keystrokes may be declared as an explicit text group with `snapshots.group` (`first`/`member`/`last`); the group's `last` member needs its own `afterIntervalMs`. Optional `timeoutMs` bounds only command execution (default 120000, up to 3600000), independent of the snapshot delay. A refused, uncertain or nonzero result keeps the VM for a repair operation; never replay input whose effect is uncertain. The result carries the execution identity and outcome, the guest's bounded stdout/stderr, and, when the snapshot plan captured the after phase, the saved after-image as an inline image block; inspect it before choosing the next step. Set `diagnostic: true` to record a command's diagnosis or repair without screenshot evidence, including before relay_stage; it cannot join a snapshot group and is never visual verification."
+  },
+  {
+    name: "relay_script",
+    action: "run",
+    kind: "script",
+    title: "Run a guest script",
+    annotations: acts(true),
+    description: `Run one guest script file as this call's single recorded operation. ${runShared} Requires \`localPath\` (a host file path) and \`language\` (\`javascript\`, \`typescript\` or \`python\`); it runs under the staged workspace.`
+  },
+  {
+    name: "relay_code",
+    action: "run",
+    kind: "code",
+    title: "Run guest code",
+    annotations: acts(true),
+    description: `Run inline guest code as this call's single recorded operation. ${runShared} Requires \`code\` (up to 1 MiB) and \`language\` (\`javascript\`, \`typescript\` or \`python\`).`
+  },
+  {
+    name: "relay_cua",
+    action: "run",
+    kind: "cua",
+    title: "Run a CUA driver call",
+    annotations: acts(true),
+    description: `Run one CUA driver call as this call's single recorded operation. ${runShared} Requires \`tool\` and optional \`args\`. A direct-accessibility form (\`set_value\`; \`type_text\` on macOS; or \`click\`/\`double_click\`/\`right_click\`/\`press_key\` with \`args.element_index\`) requires \`step.inputMode: "accessibility"\`; otherwise use ordinary pointer/keyboard tools for real input.`
+  },
+  {
+    name: "relay_browser",
+    action: "run",
+    kind: "browser",
+    title: "Send a browser event",
+    annotations: acts(true),
+    description: `Send one browser event (\`navigate\`, \`click\`, \`type\`, \`press\`, \`read\` or \`snapshot\`) as this call's single recorded operation, to the persistent guest Playwright page relay_stage enabled. ${runShared} After every input event the guest waits for the page to settle (load, network idle, fonts, two frames), bounded by relay_stage's \`settleTimeoutMs\` (default 5000 ms) and by this call's own deadline; the settle facts return as \`settled\`. An event that changed the address gets a landing capture of where it arrived; \`snapshot\` captures the current settled page on demand with an optional \`name\`. Captures and their console-line records land in \`workspace/browser-captures\` and come home with relay_finish. An event that misses its deadline has its browser context closed; the next event opens a fresh page, and nothing already dispatched is replayed.`
+  },
+  {
+    name: "relay_image",
+    action: "image",
+    title: "Retrieve a saved image",
+    annotations: readOnly,
+    description: "Retrieve one already-saved image; never a new capture, input or directory export, and it never acquires a VM. `target` selects a display phase (`sessionId`/`executionId`/`phase`: `before`/`after`), a declared application file (`name`, plus a relative `path` for a directory declaration), or an immutable `reference` (`imageId`). PNG, JPEG and WebP only; originals up to 64 MiB and 40,000,000 decoded pixels; the delivered preview is at most 2000x2000 px and 4 MiB of base64 (PNG originals are resampled in-process; JPEG/WebP pass through only within bounds). Each delivery has a 90-second deadline and up to three transfer attempts. If a run's inline image did not arrive, recover it here with the same `imageId` or display selector, never by repeating the input or capturing again, and stop after at most two such recovery calls if it still cannot be inspected. A closed enclosure returns `stale-reference` for a display or reference target; its delivered originals stay readable with host file tools. An attached image proves only that the block was included, not that anyone inspected or reviewed it."
+  },
+  {
+    name: "relay_extract",
+    action: "extract",
+    title: "Extract declared outputs",
+    annotations: acts(false),
+    description: "Pull one or more already-declared extraction outputs home early, by `names`. Only outputs declared on relay_acquire may be pulled; each pull verifies source and host hashes and rejects path traversal, symlinks, or a source that changed underneath it."
+  },
+  {
+    name: "relay_finish",
+    action: "finish",
+    title: "Finish and deliver evidence",
+    annotations: acts(false, true),
+    description: "Complete the task: extract every declared output, deliver and verify a portable evidence package, then destroy the VM and unregister it. The result reports delivery, snapshot completeness, execution outcome and human review as separate facts; a verified package is not a passing test, and a delivered package is not itself human approval. Call this, or relay_release, explicitly before you return, since ending the session does not do it for you. A failed delivery keeps the VM for a corrected attempt."
+  },
+  {
+    name: "relay_release",
+    action: "release",
+    title: "Release the VM",
+    annotations: acts(false, true),
+    description: "Abandon the task: destroy the owned VM and unregister it, retaining whatever evidence already exists, without claiming the task succeeded. Use this instead of relay_finish when the task is not being completed. Safe to retry if a previous release attempt failed; a failed release keeps ownership until destruction is verified."
+  },
+  {
+    name: "relay_console_resolve",
+    action: "console-resolve",
+    title: "Resolve console status",
+    annotations: readOnly,
+    description: "Refresh this session's non-secret console-viewing status for the owned lease. Read-only, and it never recovers ownership. A `ready` status means guest preflight only, not that a viewer launched: console operations carry no screenshots and never establish authentication, displayed pixels or a human's confirmation. On macOS, viewing requires the human to choose Standard sharing of the existing console, not a new Log In session or a High Performance display, and the relay never auto-confirms that choice; `server_enforced_view_only: false` and an unverified viewer selection remain limitations even once transport connects. Never replay an uncertain attempt: resolve it here, or close it with relay_console_cancel."
+  },
+  {
+    name: "relay_console_open",
+    action: "console-open",
+    title: "Open console viewing",
+    annotations: acts(false),
+    description: "Open console viewing for the owned lease, only following an explicit user request to watch. Requires `console_id` and `attempt_id` from relay_console_resolve, `userRequested: true`, `reason` (intent) and `expected` (what the human should expect to see); it opens on the declared service host, never a remote client, and is never triggered automatically by relay_acquire's `vnc` option. See relay_console_resolve for what a `ready` status does and does not prove. A failed or uncertain open keeps the attempt: resolve or cancel it rather than opening again with a new attempt."
+  },
+  {
+    name: "relay_console_cancel",
+    action: "console-cancel",
+    title: "Cancel console viewing",
+    annotations: acts(false),
+    description: "Cancel an open or uncertain console-viewing attempt by `console_id` and `attempt_id`. Closes managed viewing resources only; it never releases or destroys the VM."
+  }
+];
+function relayToolInputSchema(tool) {
+  return toolInputSchema(tool.action, tool.kind);
+}
+function relayToolInput(name, args) {
+  const tool = relayTools.find((candidate) => candidate.name === name);
+  if (!tool) throw new Error(`Unknown relay tool: ${name}`);
+  return { action: tool.action, ...tool.kind ? { kind: tool.kind } : {}, ...args };
 }
 var relayResultKind = "relay-image-result-v1";
 async function renderRelayResult(value, resultRoot = join15(tmpdir2(), "mcp-vm-relay-results")) {
@@ -29301,27 +29448,42 @@ async function relayCall(host, raw, options = {}) {
 }
 
 // src/server.ts
-var SERVER_NAME = "vm-relay";
+var SERVER_NAME = "relay";
 var SERVER_VERSION = true ? "0.4.0" : JSON.parse(readFileSync(fileURLToPath2(new URL("../package.json", import.meta.url)), "utf8")).version;
 var STATUS_TOOL = "relay_status";
 var TRAJECTORY_TOOL = "relay_trajectory";
-var PLUGIN_TOOL_PREFIX = "mcp__plugin_mcp-vm-relay_vm-relay__";
+var PLUGIN_TOOL_PREFIX = "mcp__plugin_mcp-vm-relay_relay__";
 var message = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var text3 = (value, isError = false) => ({ content: [{ type: "text", text: value }], isError });
 function relayContent(result2) {
   return { content: [{ type: "text", text: result2.text }, ...result2.image ? [{ type: "image", data: result2.image.data, mimeType: result2.image.mimeType }] : []], isError: result2.isError };
 }
-function relayInputSchema() {
-  const { anyOf: _, ...schema } = relayJsonSchema();
-  return schema;
-}
 function projectDirectory(env = process.env, cwd = process.cwd()) {
   const given = env.MCP_VM_RELAY_PROJECT;
   return given && !given.includes("${") ? resolve10(given) : cwd;
 }
-function doctrineText() {
-  return `${doctrine}
-In Claude Code the relay tool is ${PLUGIN_TOOL_PREFIX}${relayToolName} (or mcp__${SERVER_NAME}__${relayToolName} when the server is configured directly); ${STATUS_TOOL} and ${TRAJECTORY_TOOL} are operator tools for the /relay-status and /relay-trajectory skills.`;
+var readOnlyStatus = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
+var trajectoryAnnotations = { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false };
+var statusToolDefinition = {
+  name: STATUS_TOOL,
+  title: "Show relay status",
+  description: "Show this session's owned VM lease (backend binding, guest state, renewal, console observation, last error), staging state and evidence path, plus the project directory, the VM service origin and the selected environment in use; active:false when nothing is owned. Read-only; it does not touch the VM.",
+  inputSchema: { type: "object", properties: {}, additionalProperties: false },
+  annotations: readOnlyStatus
+};
+var trajectoryToolDefinition = {
+  name: TRAJECTORY_TOOL,
+  title: "Open the trajectory viewer",
+  description: "Verify a delivered relay evidence package (every artifact, hash and reference) and open its trajectory viewer in the local browser. Human review remains pending.",
+  inputSchema: { type: "object", properties: { directory: { type: "string", description: "The package directory, absolute or relative to the project." } }, required: ["directory"], additionalProperties: false },
+  annotations: trajectoryAnnotations
+};
+function allToolDefinitions() {
+  return [
+    ...relayTools.map((tool) => ({ name: tool.name, title: tool.title, description: tool.description, inputSchema: relayToolInputSchema(tool), annotations: tool.annotations })),
+    statusToolDefinition,
+    trajectoryToolDefinition
+  ];
 }
 async function openInBrowser(url) {
   const run = promisify(execFile);
@@ -29339,23 +29501,17 @@ function createRelayServer(options = {}) {
     }
     return manager;
   });
-  const server = new Server({ name: SERVER_NAME, version: SERVER_VERSION }, { capabilities: { tools: {} }, instructions: doctrineText() });
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: [
-      { name: relayToolName, description: relayToolDescription, inputSchema: relayInputSchema() },
-      { name: STATUS_TOOL, description: "Show this session's owned VM lease (backend binding, guest state, renewal, console observation, last error), staging state and evidence path, plus the project directory, the VM service origin and the selected environment in use; active:false when nothing is owned. Read-only; it does not touch the VM.", inputSchema: { type: "object", properties: {}, additionalProperties: false } },
-      { name: TRAJECTORY_TOOL, description: "Verify a delivered relay evidence package (every artifact, hash and reference) and open its trajectory viewer in the local browser. Human review remains pending.", inputSchema: { type: "object", properties: { directory: { type: "string", description: "The package directory, absolute or relative to the project." } }, required: ["directory"], additionalProperties: false } }
-    ]
-  }));
+  const statusPayload = () => {
+    const environment = selectedEnvironment();
+    const service = environment?.profile.vmServiceUrl ?? process.env.MCP_VM_RELAY_URL ?? "http://localhost:6240";
+    return { ...manager ? manager.status() : { active: false }, project, service, environment: environment?.identity };
+  };
+  const server = new Server({ name: SERVER_NAME, version: SERVER_VERSION }, { capabilities: { tools: {}, prompts: {} }, instructions });
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: allToolDefinitions() }));
   server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     const { name, arguments: args } = request.params;
     try {
-      if (name === relayToolName) return relayContent(await relayCall(get, args ?? {}, { signal: extra.signal, toolCallId: String(extra.requestId) }));
-      if (name === STATUS_TOOL) {
-        const environment = selectedEnvironment();
-        const service = environment?.profile.vmServiceUrl ?? process.env.MCP_VM_RELAY_URL ?? "http://localhost:6240";
-        return text3(JSON.stringify({ ...manager ? manager.status() : { active: false }, project, service, environment: environment?.identity }, null, 2));
-      }
+      if (name === STATUS_TOOL) return text3(JSON.stringify(statusPayload(), null, 2));
       if (name === TRAJECTORY_TOOL) {
         const directory2 = args?.directory;
         if (typeof directory2 !== "string" || !directory2.trim()) throw new Error("directory is required");
@@ -29365,10 +29521,41 @@ function createRelayServer(options = {}) {
         await (options.open ?? openInBrowser)(pathToFileURL(join16(root, "index.html")).href);
         return text3(`Opened verified package: ${root}. Human review remains pending.`);
       }
+      if (relayTools.some((tool) => tool.name === name)) return relayContent(await relayCall(get, relayToolInput(name, args ?? {}), { signal: extra.signal, toolCallId: String(extra.requestId) }));
       throw new Error(`Unknown tool: ${name}`);
     } catch (error2) {
       return text3(message(error2), true);
     }
+  });
+  server.setRequestHandler(ListPromptsRequestSchema, async () => ({
+    prompts: [
+      { name: "status", title: "Relay status", description: "Report this session's owned VM lease exactly as the relay_status tool sees it. Read-only." },
+      {
+        name: "trajectory",
+        title: "Relay trajectory",
+        description: "Ask the assistant to verify a delivered relay evidence package and open its trajectory viewer; human review remains pending.",
+        arguments: [{ name: "directory", description: "The package directory, absolute or relative to the project.", required: true }]
+      }
+    ]
+  }));
+  server.setRequestHandler(GetPromptRequestSchema, async (request) => {
+    const { name, arguments: args } = request.params;
+    if (name === "status") {
+      return {
+        description: "This session's owned VM lease, read-only.",
+        messages: [{ role: "user", content: { type: "text", text: `Report this exactly as it is, without acting on it:
+${JSON.stringify(statusPayload(), null, 2)}` } }]
+      };
+    }
+    if (name === "trajectory") {
+      const directory2 = args?.directory;
+      if (typeof directory2 !== "string" || !directory2.trim()) throw new Error("directory is required");
+      return {
+        description: "Verify and open a delivered relay evidence package.",
+        messages: [{ role: "user", content: { type: "text", text: `Call ${TRAJECTORY_TOOL} with directory "${directory2}" and report its answer as given. Opening the viewer does not mean the work was approved: human review remains pending until the user says otherwise.` } }]
+      };
+    }
+    throw new Error(`Unknown prompt: ${name}`);
   });
   const cleanup = async (reason2) => {
     try {
@@ -29380,17 +29567,17 @@ function createRelayServer(options = {}) {
   return { server, sessionId, project, cleanup, status: () => manager ? manager.status() : { active: false } };
 }
 async function main(args) {
-  if (args.includes("--doctrine")) {
-    process.stdout.write(`${doctrineText()}
+  if (args.includes("--instructions")) {
+    process.stdout.write(`${instructions}
 `);
     return;
   }
   if (args.includes("--schema")) {
-    process.stdout.write(`${JSON.stringify(relayInputSchema(), null, 2)}
+    process.stdout.write(`${JSON.stringify(allToolDefinitions(), null, 2)}
 `);
     return;
   }
-  if (args.length) throw new Error("Usage: server.mjs [--doctrine | --schema]; with no argument the MCP server speaks on stdin/stdout");
+  if (args.length) throw new Error("Usage: server.mjs [--instructions | --schema]; with no argument the MCP server speaks on stdin/stdout");
   const relay = createRelayServer();
   let closing;
   const shutdown = (reason2, code) => closing ??= (async () => {
@@ -29429,8 +29616,6 @@ export {
   STATUS_TOOL,
   TRAJECTORY_TOOL,
   createRelayServer,
-  doctrineText,
   projectDirectory,
-  relayContent,
-  relayInputSchema
+  relayContent
 };
