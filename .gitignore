@@ -1,0 +1,6 @@
+__pycache__/
+node_modules/
+# dist/ is committed: the plugin loads it without a build step.
+relay-evidence/
+test-evidence/
+.claude/

@@ -1,0 +1,69 @@
+{
+  "name": "@wezzard/mcp-vm-relay",
+  "version": "0.3.0",
+  "type": "module",
+  "description": "MCP server and Claude Code plugin for the VM relay: recorded, snapshot-evidenced computer-use and browser-use in a fresh disposable VM",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/WeZZard/mcp-vm-relay.git"
+  },
+  "homepage": "https://github.com/WeZZard/mcp-vm-relay#readme",
+  "bugs": {
+    "url": "https://github.com/WeZZard/mcp-vm-relay/issues"
+  },
+  "keywords": [
+    "pi-package",
+    "mcp",
+    "mcp-server",
+    "claude-code",
+    "computer-use",
+    "browser-use",
+    "vm"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE",
+    ".mcp.json",
+    "pi-mcp.json",
+    ".claude-plugin/",
+    "skills/",
+    "agents/",
+    "hooks/"
+  ],
+  "bin": {
+    "mcp-vm-relay": "./dist/server.mjs"
+  },
+  "pi": {
+    "mcp": "./pi-mcp.json",
+    "skills": [
+      "./skills"
+    ]
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "setup:dev": "node scripts/setup-dev.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts scripts/macos-smoke-observation.test.ts scripts/macos-smoke-release.test.ts scripts/selected-image-x11.test.ts",
+    "check": "npm run build && npm run typecheck && npm test",
+    "test:e2e": "tsx --test tests/e2e/headless.test.ts"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@types/node": "^24.0.0",
+    "@wezzard/relay-driver-core": "^0.1.0",
+    "@wezzard/relay-driver-host-sdk": "^0.1.0",
+    "@wezzard/relay-driver-remote-runtime": "^0.1.0",
+    "esbuild": "^0.25.0",
+    "tsx": "^4.20.0",
+    "typebox": "1.3.30",
+    "typescript": "^5.9.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

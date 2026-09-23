@@ -1,0 +1,31 @@
+/**
+ * The host-agnostic core of mcp-vm-relay: everything a front end needs to
+ * offer the relay to an agent, with no dependency on any agent runtime. The
+ * MCP server (`src/server.ts`) and any other runtime's binding are thin
+ * wrappers over these exports.
+ */
+export { RelayManager, doctrine, BROWSER_CAPTURES } from './manager.js';
+export type { ManagerOptions, AcquireInput, StageInput, RunInput, Extraction, ConsoleAttemptInput, ConsoleOpenInput } from './manager.js';
+export { Registry, RegistryError, resolveRegistry, validateRegistryText } from './registry.js';
+export type { RegistryRow, RegistryOptions, RegistryResolution } from './registry.js';
+export { relayContract, relayParameters, relayActions, validateRelayInput } from './schema.js';
+export type { RelayInput, RelayAction } from './schema.js';
+export { relayToolName, relayToolDescription, relayPromptSnippet, relayResultKind, actionLabel, relayJsonSchema, relayCall, renderRelayResult } from './surface.js';
+export type { RelayCallResult, RelayRendered, RelayImageContent } from './surface.js';
+export { deliverPackage, verifyDeliveredPackage } from './package.js';
+export type { DeliverPackageOptions, DeliveryResult } from './package.js';
+export { VmService, VmServiceError, AcquireIndeterminateError } from './vm-service.js';
+export type { VmLease, VmList, VmImages, VmServiceOptions, VmBackend } from './vm-service.js';
+export { probeLocal } from './probe.js';
+export { relayStateRoot } from './config.js';
+export { loadEnvironment, selectedEnvironment, environmentVariables, matchesEnvironment, canonicalPath } from './environment.js';
+export type { VmEnvironment, EnvironmentIdentity, SelectedEnvironment } from './environment.js';
+export { consoleStatus, acquisitionCapabilities } from './console.js';
+export type { ConsoleStatus, ConsoleAttemptStatus } from './console.js';
+export { ImageStore, imageCapability, imageFailure } from './images.js';
+export type { ImageTarget, ImageStatus, ImageDescriptor, ImageResult, ImageStoreOptions } from './images.js';
+export { prepareImage, IMAGE_PRESENTATION_POLICY, PresentationUnavailableError } from './image-presentation.js';
+export type { PreparedImage } from './image-presentation.js';
+export { refreshEvidenceState } from './evidence-merge.js';
+export { ImageTransferError } from './transfer.js';
+export type { ImageTransferErrorCode, ImageTransferOptions } from './transfer.js';

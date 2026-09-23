@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "vm-relay": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/dist/server.mjs"],
+      "env": { "MCP_VM_RELAY_PROJECT": "${CLAUDE_PROJECT_DIR}" }
+    }
+  }
+}

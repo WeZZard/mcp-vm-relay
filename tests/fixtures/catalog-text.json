@@ -1,0 +1,18 @@
+[
+  {"name":"empty","text":"","valid":false},
+  {"name":"plain spaces","text":"   ","valid":false},
+  {"name":"FEFF blank","text":"\ufeff","valid":false},
+  {"name":"NEL nonblank","text":"\u0085","valid":true},
+  {"name":"internal spaces","text":"My Application 2","valid":true},
+  {"name":"preserved padding","text":" \ufeffApp\u00a0 ","valid":true},
+  {"name":"NUL","text":"a\u0000b","valid":false},
+  {"name":"trailing newline","text":"App\n","valid":false},
+  {"name":"lone high surrogate","text":"\ud800","valid":false},
+  {"name":"lone low surrogate","text":"\udfff","valid":false},
+  {"name":"reversed surrogates","text":"\udfff\ud800","valid":false},
+  {"name":"supplementary","text":"\ud83d\ude80","valid":true},
+  {"name":"supplementary exact bound","text":"\ud83d\ude80","repeat":"limit","valid":true},
+  {"name":"supplementary over bound","text":"\ud83d\ude80","repeat":"over","valid":false},
+  {"name":"BMP exact bound","text":"a","repeat":"limit","valid":true},
+  {"name":"BMP over bound","text":"a","repeat":"over","valid":false}
+]

@@ -1,0 +1,451 @@
+import { spawn, execFile } from "node:child_process";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdir, open, readFile, rename, rm, stat, realpath } from "node:fs/promises";
+import { dirname, isAbsolute, join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+import type { FramedRequest, FramedResponse } from "@wezzard/relay-driver-host-sdk";
+import {
+  AdmissionEngine, AdmissionRefusedError, CaptureGate, RecordStore, SnapshotStore,
+  type ActionParams, type SnapshotCaptureFn,
+} from "@wezzard/relay-driver-remote-runtime";
+import { afterRequested, safeId, validateImageEvidence, type GuestImageEvidence, type GuestRequest, type GuestSnapshotDescriptor } from "./image-evidence.js";
+
+// The receipt contract is shared with the host image store; re-exported here for the receiver's callers.
+export { afterRequested, validateImageEvidence };
+export type { GuestImageEvidence, GuestRequest, GuestSnapshotDescriptor };
+
+export const MAX_REQUEST_BYTES = 1024 * 1024;
+export const MAX_OUTPUT_BYTES = 64 * 1024;
+const MAX_INTERVAL_MS = 300_000;
+const MAX_TIMEOUT_MS = 3_600_000;
+const MAX_SCRIPT_BYTES = 8 * 1024 * 1024;
+
+export interface DispatchResult {
+  exitStatus: { code: number | null; signal: string | null };
+  stdout?: string;
+  stderr?: string;
+  timedOut?: boolean;
+  outputTruncated?: boolean;
+  spawnError?: string;
+  terminationConfirmed?: boolean;
+  terminationDiagnostic?: string;
+}
+export interface ReceiveOptions {
+  root?: string;
+  cuaDriver?: string;
+  /** Test seam only: production always dispatches an argv with shell:false. */
+  dispatch?: (argv: readonly string[], options: { cwd?: string; env: NodeJS.ProcessEnv; timeoutMs: number }) => Promise<DispatchResult>;
+  capture?: SnapshotCaptureFn;
+}
+export type GuestResponse = FramedResponse & {
+  /** Absent only on historical receipts from receivers predating this contract. */
+  imageEvidence?: GuestImageEvidence;
+  evidenceMode?: "diagnostic";
+  timeoutMs?: number;
+  terminationConfirmed?: boolean;
+  stdout?: string;
+  stderr?: string;
+  timedOut?: boolean;
+  outputTruncated?: boolean;
+};
+interface GroupState {
+  active?: { groupId: string; sessionId: string; attemptId: string };
+  used: string[];
+}
+
+const message = (error: unknown): string => error instanceof Error ? error.message : String(error);
+const hash = (bytes: string | Buffer): string => createHash("sha256").update(bytes).digest("hex");
+const text = (value: unknown): value is string => typeof value === "string" && value.length > 0 && !value.includes("\0");
+const bounded = (value = ""): string => {
+  const bytes = Buffer.from(value);
+  if (bytes.length <= MAX_OUTPUT_BYTES) return value;
+  // Decode only complete UTF-8 characters: replacement of a cut character
+  // could otherwise exceed the byte bound by two bytes.
+  return new TextDecoder().decode(bytes.subarray(0, MAX_OUTPUT_BYTES), { stream: true });
+};
+
+/** Atomic, fsynced sidecars supplement (never replace) the substrate journal. */
+async function durableJson(path: string, data: unknown): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  const temporary = `${path}.${randomUUID()}.tmp`;
+  const file = await open(temporary, "wx", 0o600);
+  try { await file.writeFile(JSON.stringify(data)); await file.sync(); } finally { await file.close(); }
+  await rename(temporary, path);
+  const directory = await open(dirname(path), "r");
+  try { await directory.sync(); } finally { await directory.close(); }
+}
+async function optionalJson<T>(path: string): Promise<T | undefined> {
+  try { return JSON.parse(await readFile(path, "utf8")) as T; }
+  catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined; throw error; }
+}
+
+function validate(request: GuestRequest): void {
+  if (!safeId(request.executionId) || !safeId(request.sessionId) || !safeId(request.attemptId)) throw new Error("safe executionId, sessionId and attemptId are required");
+  if (typeof request.because !== "string" || !request.because.trim() || request.because.length > 16_384) throw new Error("nonblank because is required (maximum 16384 characters)");
+  if (!["exec", "script", "code"].includes(request.kind)) throw new Error("kind must be exec, script or code");
+  if (request.cwd !== undefined && (!text(request.cwd) || !isAbsolute(request.cwd))) throw new Error("cwd must be an absolute path");
+  if (request.timeoutMs !== undefined && (!Number.isInteger(request.timeoutMs) || request.timeoutMs < 1 || request.timeoutMs > MAX_TIMEOUT_MS)) throw new Error("timeoutMs must be an integer from 1 to 3600000");
+  if (request.diagnostic !== undefined && (typeof request.diagnostic !== "boolean" || request.kind !== "exec")) throw new Error("diagnostic is allowed only for exec and must be boolean");
+  if (request.step !== undefined && (!request.step || !safeId(request.step.id) || !text(request.step.title) || (request.step.expected !== undefined && typeof request.step.expected !== "string") || (request.step.inputMode !== undefined && !["ordinary", "accessibility"].includes(request.step.inputMode)))) throw new Error("invalid step metadata");
+  const snapshots = request.snapshots;
+  if (!snapshots || typeof snapshots !== "object" || Array.isArray(snapshots)) throw new Error("snapshots are required; no implicit interval");
+  const interval = (n: unknown): boolean => typeof n === "number" && Number.isFinite(n) && n >= 0 && n <= MAX_INTERVAL_MS;
+  if (snapshots.afterIntervalMs !== undefined && !interval(snapshots.afterIntervalMs)) throw new Error("invalid afterIntervalMs (0..300000 required)");
+  if (snapshots.group !== undefined) {
+    const group = snapshots.group;
+    if (!group || !safeId(group.groupId) || !["first", "member", "last"].includes(group.phase)) throw new Error("invalid coalescing group");
+    if (group.afterIntervalMs !== undefined && !interval(group.afterIntervalMs)) throw new Error("invalid group afterIntervalMs");
+    if (group.phase === "last" && !interval(group.afterIntervalMs ?? snapshots.afterIntervalMs)) throw new Error("last group member requires afterIntervalMs");
+  } else if (!interval(snapshots.afterIntervalMs)) throw new Error("afterIntervalMs is required; no default");
+  if (request.kind !== "code" && (!Array.isArray(request.argv) || request.argv.length === 0 || request.argv.length > 256 || !request.argv.every((arg, index) => typeof arg === "string" && !arg.includes("\0") && (index > 0 || arg.length > 0)))) throw new Error("argv must be a nonempty string vector without NULs (maximum 256 entries)");
+  if (request.kind !== "exec" && !["javascript", "typescript", "python"].includes(request.language ?? "")) throw new Error("script/code language is required");
+  if (request.kind === "code" && (typeof request.code !== "string" || !/^[a-f0-9]{64}$/.test(request.codeSha256 ?? ""))) throw new Error("code and its SHA-256 are required");
+  if (request.kind === "script" && (!text(request.remotePath) || !isAbsolute(request.remotePath) || !/^[a-f0-9]{64}$/.test(request.scriptSha256 ?? ""))) throw new Error("absolute remotePath and script SHA-256 are required");
+}
+
+export function groupAbsentFromProcessTable(group: number, table: string): boolean {
+  const lines = table.split('\n').map(line => line.trim()).filter(Boolean);
+  if (!lines.length) throw new Error('Empty process table cannot prove group absence');
+  const entries = lines.map(line => {
+    const match = /^(\d+)\s+(\d+)\s+(\S+)$/.exec(line);
+    if (!match || Number(match[1]) < 0 || Number(match[2]) < 1) throw new Error('Malformed process table');
+    return { group: Number(match[1]), pid: Number(match[2]) };
+  });
+  // Require our own receiver row to guard against a partial/filtered table.
+  if (!entries.some(entry => entry.pid === process.pid)) throw new Error('Process table lacks receiver identity');
+  return !entries.some(entry => entry.group === group);
+}
+
+async function darwinGroupAbsent(group: number): Promise<boolean | undefined> {
+  return new Promise(resolve => {
+    execFile('/bin/ps', ['-axo', 'pgid=,pid=,stat='], { encoding: 'utf8', timeout: 1000, maxBuffer: 1024 * 1024 }, (error, stdout) => {
+      if (error) { resolve(undefined); return; }
+      try { resolve(groupAbsentFromProcessTable(group, stdout)); }
+      catch { resolve(undefined); }
+    });
+  });
+}
+
+/** A signal is asynchronous: observe termination rather than inspecting once
+ * immediately after SIGKILL. Never equate permission errors with absence. */
+export async function confirmProcessGroupExit(pid: number, options: { timeoutMs?: number; probe?: (pid: number) => void; pause?: (ms: number) => Promise<void>; clock?: () => number; permissionObserver?: (pid: number) => Promise<boolean | undefined> } = {}): Promise<boolean | undefined> {
+  const clock = options.clock ?? (() => performance.now());
+  const pause = options.pause ?? (ms => new Promise<void>(resolve => setTimeout(resolve, ms)));
+  const probe = options.probe ?? (group => { process.kill(-group, 0); });
+  const deadline = clock() + (options.timeoutMs ?? 1000);
+  for (;;) {
+    try { probe(pid); }
+    catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === 'ESRCH') return true;
+      const observer = options.permissionObserver ?? (process.platform === 'darwin' ? darwinGroupAbsent : undefined);
+      if (code !== 'EPERM' || !observer) return undefined;
+      const absent = await observer(pid);
+      if (absent !== false) return absent;
+    }
+    const remaining = deadline - clock();
+    if (remaining <= 0) return false;
+    await pause(Math.min(25, remaining));
+  }
+}
+
+/** Killing the process group also stops scripts' children; no shell interpolation. */
+async function runArgv(argv: readonly string[], options: { cwd?: string; env: NodeJS.ProcessEnv; timeoutMs: number }, onSpawn?: (pid: number) => Promise<void>): Promise<DispatchResult> {
+  return new Promise((done) => {
+    const child = spawn(argv[0]!, argv.slice(1), { cwd: options.cwd, env: options.env, shell: false, detached: true, stdio: ["ignore", "pipe", "pipe"] });
+    const chunks: { stdout: Buffer[]; stderr: Buffer[] } = { stdout: [], stderr: [] };
+    let bytes = 0, timedOut = false, outputTruncated = false, spawnError: string | undefined;
+    const stop = (): void => {
+      if (child.pid) { try { process.kill(-child.pid, "SIGKILL"); } catch { child.kill("SIGKILL"); } }
+    };
+    const collect = (stream: "stdout" | "stderr", chunk: Buffer): void => {
+      const available = Math.max(0, MAX_OUTPUT_BYTES - bytes);
+      if (available) chunks[stream].push(chunk.subarray(0, available));
+      bytes += chunk.length;
+      if (bytes > MAX_OUTPUT_BYTES) { outputTruncated = true; stop(); }
+    };
+    // Failure to persist the process identity must prevent continued execution.
+    const identityRetained = child.pid && onSpawn ? onSpawn(child.pid).catch((error) => { spawnError = `process identity retention failed: ${message(error)}`; stop(); }) : Promise.resolve();
+    child.stdout.on("data", (c: Buffer) => collect("stdout", c));
+    child.stderr.on("data", (c: Buffer) => collect("stderr", c));
+    const timer = setTimeout(() => { timedOut = true; stop(); }, options.timeoutMs);
+    child.on("error", (error) => { spawnError = message(error); });
+    child.on("close", async (code, signal) => {
+      clearTimeout(timer);
+      await identityRetained;
+      // Descendants must not survive completion and issue unrecorded input.
+      stop();
+      let terminationConfirmed: boolean | undefined, terminationDiagnostic: string | undefined;
+      if (child.pid) terminationConfirmed = await confirmProcessGroupExit(child.pid, { probe: pid => {
+        try { process.kill(-pid, 0); }
+        catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'ESRCH') terminationDiagnostic = `process group ${pid}: ${(error as NodeJS.ErrnoException).code ?? message(error)}`;
+          throw error;
+        }
+      } });
+      else if (spawnError) terminationConfirmed = true;
+      done({ terminationConfirmed, terminationDiagnostic, exitStatus: { code, signal }, stdout: Buffer.concat(chunks.stdout).toString("utf8"), stderr: Buffer.concat(chunks.stderr).toString("utf8"), timedOut, outputTruncated, spawnError });
+    });
+  });
+}
+
+async function captureWithDriver(outFile: string, driver: string, dispatch: typeof runArgv = runArgv): Promise<void> {
+  const result = await dispatch([driver, "call", "get_desktop_state", "--json", JSON.stringify({ screenshot_out_file: outFile })], { env: process.env, timeoutMs: 60_000 });
+  if (result.exitStatus.code !== 0 || result.timedOut || result.outputTruncated || result.spawnError || result.terminationConfirmed !== true) throw new Error(`display capture unavailable: ${JSON.stringify({ exitStatus: result.exitStatus, timedOut: result.timedOut, outputTruncated: result.outputTruncated, spawnError: result.spawnError, terminationConfirmed: result.terminationConfirmed, terminationDiagnostic: result.terminationDiagnostic, stdout: result.stdout?.slice(0, 1500), stderr: result.stderr?.slice(0, 1500) })}`);
+  const value = JSON.parse(result.stdout ?? "") as { screenshot_file_path?: string };
+  if (value.screenshot_file_path !== outFile) throw new Error("display capture returned a missing or mismatched screenshot_file_path");
+}
+
+/**
+ * One file-framed request per invocation. Lock + write-ahead execution marker
+ * prevent concurrent input and replay, including process loss. An abandoned
+ * lock is reclaimed only with proof that its owner is dead or settled and
+ * its owned process groups are absent. Ambiguous operations fail without replay.
+ */
+export async function receive(input: unknown, options: ReceiveOptions = {}): Promise<GuestResponse> {
+  const request = input as GuestRequest;
+  const executionId = request && safeId(request.executionId) ? request.executionId : "unknown";
+  const evidenceMode = request?.kind === "exec" && request.diagnostic === true ? "diagnostic" as const : undefined;
+  const timeoutMs = request?.timeoutMs ?? 120_000;
+  let imageEvidence: GuestImageEvidence = { status: afterRequested(request) ? "capture-unknown" : "not-requested", snapshots: [] };
+  const response = (kind: "refused" | "uncertain", diagnostic: string): GuestResponse => ({ executionId, evidenceMode, timeoutMs, imageEvidence, outcome: { kind, diagnostic: bounded(diagnostic) } });
+  let encoded: string;
+  try { encoded = JSON.stringify(input); if (!encoded || Buffer.byteLength(encoded) > MAX_REQUEST_BYTES) return response("refused", "request exceeds maximum size or is not JSON"); }
+  catch { return response("refused", "request is not serializable JSON"); }
+  if (!request || !safeId(request.executionId) || !safeId(request.sessionId) || !safeId(request.attemptId)) return response("refused", "safe executionId, sessionId and attemptId are required");
+  const root = resolve(options.root ?? process.env.RELAY_RUNTIME_ROOT ?? "/var/tmp/relay-driver-runtime");
+  const state = join(root, "state");
+  const lock = join(root, ".receiver-lock");
+  const receiptPath = join(state, "receiver", "receipts", `${executionId}.json`);
+  const startedPath = join(state, "receiver", "started", `${executionId}.json`);
+  const groupPath = join(state, "receiver", "groups.json");
+  let store: RecordStore | undefined, ownsLock = false, keepLock = false;
+  const ownerPath = join(lock, "owner.json");
+  const operationPids: number[] = [];
+  let pendingSpawn = false;
+  const markLock = (active: boolean, settled = false): Promise<void> => durableJson(ownerPath, { pid: process.pid, executionId, active, operationPids, pendingSpawn, settled });
+  const runOwned: typeof runArgv = async (argv, dispatchOptions) => {
+    // Cover the crash window between spawn and durable process-ID retention.
+    pendingSpawn = true;
+    await markLock(true);
+    const result = await runArgv(argv, dispatchOptions, async pid => { operationPids.push(pid); pendingSpawn = false; await markLock(true); });
+    if (result.terminationConfirmed === true) pendingSpawn = false;
+    if (result.terminationConfirmed !== true) keepLock = true;
+    if (!keepLock) await markLock(false);
+    return result;
+  };
+  let reconcileGroup: ((diagnostic: string) => Promise<void>) | undefined;
+  let dispatchResult: DispatchResult | undefined;
+  const output = (): Partial<GuestResponse> => dispatchResult ? { stdout: bounded(dispatchResult.stdout), stderr: bounded(dispatchResult.stderr), timedOut: !!dispatchResult.timedOut, outputTruncated: !!dispatchResult.outputTruncated, terminationConfirmed: dispatchResult.terminationConfirmed } : {};
+  try {
+    await mkdir(root, { recursive: true });
+    // A receipt can be safely inspected even while another execution is live.
+    const receipt = await optionalJson<GuestResponse>(receiptPath);
+    if (receipt) return receipt;
+    if (await optionalJson(startedPath)) return response("uncertain", "execution was already started; it will not be replayed");
+    try { await mkdir(lock); ownsLock = true; } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      const owner = await optionalJson<{ pid: number; active: boolean; operationPids?: number[]; pendingSpawn?: boolean; settled?: boolean }>(ownerPath);
+      const absent = (pid: number | undefined, group = false): boolean => {
+        if (!Number.isInteger(pid) || !pid || pid < 1) return false;
+        try { process.kill(group ? -pid : pid, 0); return false; }
+        catch (error) { return (error as NodeJS.ErrnoException).code === "ESRCH"; }
+      };
+      if (!owner || (!absent(owner.pid) && owner.settled !== true) || (owner.active !== false && !(owner.pendingSpawn === false && Array.isArray(owner.operationPids) && owner.operationPids.length > 0 && owner.operationPids.every(pid => absent(pid, true))))) return response("uncertain", "receiver lock ownership or active operation is unconfirmed; input is not replayed");
+      try { await mkdir(join(lock, "recovery")); }
+      catch { return response("uncertain", "receiver lock reconciliation is already in progress"); }
+      if (JSON.stringify(await optionalJson(ownerPath)) !== JSON.stringify(owner)) return response("uncertain", "receiver lock changed during reconciliation");
+      await rename(lock, join(root, `.receiver-lock-retired-${randomUUID()}`));
+      try { await mkdir(lock); ownsLock = true; }
+      catch { return response("uncertain", "receiver acquired by another operation during reconciliation"); }
+    }
+    await markLock(false);
+    // Recheck after acquiring the shared lock (another invocation may just have finished).
+    const recovered = await optionalJson<GuestResponse>(receiptPath);
+    if (recovered) return recovered;
+    if (await optionalJson(startedPath)) return response("uncertain", "execution was already started; it will not be replayed");
+    store = await RecordStore.create(state);
+    // Never append onto damaged history, even a routing annotation.
+    const history = await store.journalHistory();
+    if (history.damagedTail) throw new Error("damaged journal; execution requires recording recovery without modifying prior evidence");
+    await durableJson(startedPath, { executionId, requestSha256: hash(encoded) });
+    const ids = { sessionId: request.sessionId!, attemptId: request.attemptId! };
+    // This fsynced event precedes capture and dispatch, including refusals.
+    await store.appendJournal({ kind: "annotation", annotationType: "routing-decision", ...ids, executionId, state: "pending", because: request.because, step: request.step, evidenceMode, timeoutMs }, { durable: true });
+    const gate = new CaptureGate();
+    let captureFailure: string | undefined;
+    const capture: SnapshotCaptureFn = async (out) => {
+      try {
+        pendingSpawn = true;
+        await markLock(true);
+        await (options.capture ?? ((file) => captureWithDriver(file, options.cuaDriver ?? process.env.RELAY_CUA_DRIVER ?? (process.platform === "darwin" ? "/Applications/CuaDriver.app/Contents/MacOS/cua-driver" : "cua-driver"), runOwned)))(out);
+        if (!keepLock) { pendingSpawn = false; await markLock(false); }
+        const file = await stat(out);
+        if (!file.isFile() || file.size < 1 || file.size > 64 * 1024 * 1024) throw new Error("screenshot file missing, empty or oversized");
+      } catch (error) { captureFailure = message(error); gate.reportLoss(captureFailure); throw error; }
+    };
+    const snapshots = new SnapshotStore(capture, store, state);
+    snapshots.setSeq(history.records.length + 1);
+    const engine = new AdmissionEngine(store, gate, ids, snapshots);
+    const params: ActionParams = { parentExecutionId: executionId, stepId: request.step?.id, title: request.step?.title, inputMode: request.step?.inputMode ?? "ordinary", snapshots: evidenceMode ? undefined : request.snapshots, dispatchIdentity: executionId };
+    const actionId = engine.allocateAction(params);
+    const retain = async (result: GuestResponse): Promise<GuestResponse> => {
+      // The SDK's actionSnapshots can be unset on a partial pair or journal
+      // failure. Read original saved-capture records instead; never recapture
+      // or modify substrate history to make a response look complete.
+      const retained = await store!.journalHistory();
+      const descriptors: GuestSnapshotDescriptor[] = [];
+      if (!retained.damagedTail) {
+        for (const record of retained.records) {
+          if (record.kind !== "snapshot-captured" || record.actionId !== actionId) continue;
+          const event = record as unknown as { sessionId: string; attemptId: string; group?: string; snapshot: { role: "before" | "after"; capturedAt: string; sha256: string; bytes: number; fileName: string; declaredAfterIntervalMs?: number } };
+          if (event.sessionId !== request.sessionId || event.attemptId !== request.attemptId) throw new Error("snapshot identity conflicts with request");
+          const s = event.snapshot;
+          descriptors.push({ sessionId: event.sessionId, attemptId: event.attemptId, executionId, actionId, stepId: request.step?.id, phase: s.role, capturedAt: s.capturedAt, sha256: s.sha256, bytes: s.bytes, mimeType: "image/png", declaredAfterIntervalMs: s.declaredAfterIntervalMs, fileName: s.fileName, groupId: event.group });
+        }
+      }
+      const candidate: GuestImageEvidence = {
+        status: !afterRequested(request) ? "not-requested" : descriptors.some(s => s.phase === "after") ? "available" : captureFailure ? "capture-failed" : "capture-unknown",
+        snapshots: descriptors,
+      };
+      validateImageEvidence(candidate, request);
+      imageEvidence = candidate;
+      // Match receipt JSON exactly, including omission of unknown fields.
+      result = JSON.parse(JSON.stringify({ ...result, imageEvidence, evidenceMode, timeoutMs, ...output() })) as GuestResponse;
+      if (result.outcome.kind !== "completed" || result.outcome.exitStatus.code !== 0) await reconcileGroup?.("operation failed or incomplete");
+      await store!.putExecution({ executionId, ...ids, state: result.outcome.kind === "completed" ? "recorded" : result.outcome.kind, argv: request.argv, scriptId: request.scriptId, exitStatus: result.outcome.kind === "completed" ? result.outcome.exitStatus : undefined });
+      await store!.appendJournal({ kind: "execution-completion", ...ids, executionId, state: result.outcome.kind === "completed" ? "recorded" : result.outcome.kind, response: result }, { durable: true });
+      await durableJson(receiptPath, result);
+      return result;
+    };
+    const refuse = async (diagnostic: string): Promise<GuestResponse> => {
+      gate.reportLoss(diagnostic);
+      try { await engine.callWithHandle(actionId, params, () => { throw new Error("refused dispatch must never run"); }); }
+      catch (error) { if (!(error instanceof AdmissionRefusedError)) throw error; }
+      return retain(response("refused", diagnostic));
+    };
+    try { validate(request); } catch (error) { return await refuse(message(error)); }
+    const groups = await optionalJson<GroupState>(groupPath) ?? { used: [] };
+    const group = evidenceMode ? undefined : request.snapshots!.group;
+    const abandonGroup = async (diagnostic: string): Promise<void> => {
+      if (!groups.active) return;
+      await store!.appendJournal({ kind: "annotation", annotationType: "group-incomplete", ...ids, executionId, groupId: groups.active.groupId, priorSessionId: groups.active.sessionId, priorAttemptId: groups.active.attemptId, diagnostic, state: "incomplete" }, { durable: true });
+      delete groups.active;
+      await durableJson(groupPath, groups);
+    };
+    if (evidenceMode) await abandonGroup("explicit diagnostic interrupted the visual group");
+    if (groups.active && (!group || group.groupId !== groups.active.groupId || request.sessionId !== groups.active.sessionId || request.attemptId !== groups.active.attemptId || group.phase === "first")) return await refuse("coalescing group is open; unrelated input is forbidden until its last member");
+    if (!groups.active && group && (group.phase !== "first" || groups.used.includes(group.groupId))) return await refuse("coalescing group must begin with a fresh first member; group IDs cannot be reused");
+    reconcileGroup = abandonGroup;
+    let argv: readonly string[] = request.argv ?? [];
+    try {
+      if (request.kind === "script") {
+        const info = await stat(request.remotePath!);
+        if (!info.isFile() || info.size > MAX_SCRIPT_BYTES) throw new Error("script missing or exceeds size bound");
+        if (hash(await readFile(request.remotePath!)) !== request.scriptSha256) throw new Error("script hash mismatch");
+        // Deliberately accept only [interpreter, verified-file]. Interpreter
+        // eval/module/preload options can execute unrelated bytes instead.
+        const expected = request.language === "python" ? "python3" : request.language === "typescript" ? "tsx" : "node";
+        if (argv.length !== 2 || argv[0]!.split("/").at(-1) !== expected || argv[1] !== request.remotePath) throw new Error("script argv must be [interpreter, verified remotePath]");
+        if (request.language === "javascript") argv = [process.execPath, request.remotePath!];
+      } else if (request.kind === "code") {
+        if (hash(request.code!) !== request.codeSha256) throw new Error("streamed code hash mismatch");
+        const extension = request.language === "python" ? "py" : request.language === "typescript" ? "ts" : "js";
+        const path = join(root, "streamed", `${executionId}.${extension}`);
+        await mkdir(dirname(path), { recursive: true });
+        const file = await open(path, "wx", 0o600);
+        try { await file.writeFile(request.code!); await file.sync(); } finally { await file.close(); }
+        if (hash(await readFile(path)) !== request.codeSha256) throw new Error("materialized streamed code hash mismatch");
+        argv = [request.language === "python" ? "python3" : request.language === "typescript" ? "tsx" : process.execPath, path];
+      }
+    } catch (error) { return await refuse(message(error)); }
+    await store.appendJournal({ kind: "execution-start", ...ids, executionId, state: "admitted", argv, cwd: request.cwd, step: request.step, evidenceMode, timeoutMs, scriptIdentity: request.kind === "exec" ? undefined : { sha256: request.kind === "code" ? request.codeSha256 : request.scriptSha256, language: request.language, remotePath: argv.at(-1) } }, { durable: true });
+    if (group?.phase === "first") {
+      groups.active = { groupId: group.groupId, ...ids }; groups.used.push(group.groupId);
+      await durableJson(groupPath, groups);
+    }
+    // Non-first group actions lack a before capture. Reobserve capability with
+    // an unretained probe; it is NOT another evidence pair or a group event.
+    if (group && group.phase !== "first") {
+      const probe = join(root, `.capture-probe-${executionId}.png`);
+      try { await capture(probe); } catch (error) { return await refuse(message(error)); }
+      finally { await rm(probe, { force: true }); }
+    }
+    gate.update({ ready: true, observedAtMonotonic: Date.now() });
+    let dispatched = false;
+    try {
+      const outcome = await engine.callWithHandle(actionId, params, async () => {
+        dispatched = true;
+        pendingSpawn = true;
+        await markLock(true);
+        try {
+          const dispatchOptions = { cwd: request.cwd, env: process.env, timeoutMs };
+          dispatchResult = options.dispatch
+            ? await options.dispatch(argv, dispatchOptions)
+            : await runOwned(argv, dispatchOptions);
+          return dispatchResult;
+        } finally {
+          if (dispatchResult && dispatchResult.terminationConfirmed !== false && !keepLock) { pendingSpawn = false; await markLock(false); }
+          else keepLock = true;
+        }
+      });
+      const expectedCount = !group ? 2 : group.phase === "member" ? 0 : 1;
+      if (captureFailure || engine.evidenceFailure || (!evidenceMode && engine.actionSnapshots?.length !== expectedCount)) {
+        const diagnostic = captureFailure ?? engine.evidenceFailure ?? "missing required snapshot evidence";
+        return await retain(response("uncertain", diagnostic));
+      }
+      // cua-driver can return a structured refusal with process exit zero.
+      // Preserve the actual subprocess result in the admission journal, but do
+      // not mislabel that response as successful input. Unknown driver errors
+      // are uncertain (possibly partial); only a proven pre-input refusal is
+      // classified refused. Generic exec stdout is never interpreted this way.
+      const driver = options.cuaDriver ?? process.env.RELAY_CUA_DRIVER;
+      if (request.kind === 'exec' && driver && argv[0] === driver && argv[1] === 'call' && outcome.exitStatus.code === 0) {
+        let value: any;
+        try { value = JSON.parse(outcome.stdout ?? ''); } catch { /* Non-JSON output remains a subprocess result. */ }
+        if (value && typeof value === 'object' && (value.isError === true || value.error || (typeof value.code === 'string' && value.code.length > 0))) {
+          const diagnostic = `CUA structured failure: ${JSON.stringify(value)}`;
+          return await retain({ ...response(value.code === 'desktop_escalation_required' ? 'refused' : 'uncertain', diagnostic), stdout: bounded(outcome.stdout), stderr: bounded(outcome.stderr) });
+        }
+      }
+      const result: GuestResponse = outcome.spawnError || outcome.timedOut || outcome.outputTruncated
+        ? response("uncertain", outcome.spawnError ?? (outcome.timedOut ? "execution timed out" : "execution exceeded output bound"))
+        : { executionId, outcome: { kind: "completed", exitStatus: outcome.exitStatus } };
+      if (group?.phase === "last" && result.outcome.kind === "completed" && result.outcome.exitStatus.code === 0) { delete groups.active; await durableJson(groupPath, groups); }
+      return await retain({ ...result, stdout: bounded(outcome.stdout), stderr: bounded(outcome.stderr), timedOut: !!outcome.timedOut, outputTruncated: !!outcome.outputTruncated });
+    } catch (error) {
+      // Failure applies to this execution only; later IDs recheck admission.
+      await reconcileGroup?.(message(error));
+      await store.appendJournal({ kind: "evidence-failure", ...ids, executionId, actionId, state: dispatched ? "uncertain" : "refused", diagnostic: message(error) }, { durable: true });
+      return await retain(response(dispatched ? "uncertain" : error instanceof AdmissionRefusedError ? "refused" : "uncertain", message(error)));
+    }
+  } catch (error) {
+    if (ownsLock) await reconcileGroup?.(message(error)).catch(() => {});
+    return { ...response("uncertain", `receiver error: ${message(error)}`), ...output() };
+  } finally {
+    try { await store?.close(); } catch { keepLock = true; }
+    if (ownsLock && !keepLock) await rm(lock, { recursive: true, force: true }).catch(() => {});
+    else if (ownsLock) await markLock(true, true).catch(() => {});
+  }
+}
+
+async function main(): Promise<void> {
+  let result: GuestResponse;
+  try {
+    const path = process.argv[2];
+    if (!path) throw new Error("usage: receiver REQUEST.json (file framing; stdin is not used)");
+    const file = await open(path, "r");
+    let bytes: Buffer;
+    try {
+      if ((await file.stat()).size > MAX_REQUEST_BYTES) throw new Error("request file exceeds maximum size");
+      bytes = Buffer.alloc(MAX_REQUEST_BYTES + 1);
+      let length = 0;
+      while (length < bytes.length) { const part = await file.read(bytes, length, bytes.length - length, null); if (!part.bytesRead) break; length += part.bytesRead; }
+      if (length > MAX_REQUEST_BYTES) throw new Error("request file exceeds maximum size");
+      bytes = bytes.subarray(0, length);
+    } finally { await file.close(); }
+    result = await receive(JSON.parse(bytes.toString("utf8")));
+  } catch (error) { result = { executionId: "unknown", imageEvidence: { status: "capture-unknown", snapshots: [] }, outcome: { kind: "refused", diagnostic: bounded(message(error)) } }; }
+  process.stdout.write(`${JSON.stringify(result)}\n`);
+}
+if (process.argv[1] && import.meta.url === pathToFileURL(await realpath(resolve(process.argv[1]))).href) void main();
