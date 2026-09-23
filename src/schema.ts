@@ -85,6 +85,32 @@ export type RelayInput = Static<typeof relayContract>;
 export const relayParameters = Type.Unsafe<RelayInput>(parameterObject);
 export type RelayAction = RelayInput['action'];
 export const relayActions = ['search', 'probe', 'acquire', 'stage', 'run', 'image', 'extract', 'finish', 'release', 'acquisition-capabilities', 'console-resolve', 'console-open', 'console-cancel'] as const;
+export type RunKind = 'exec' | 'script' | 'code' | 'cua' | 'browser';
+
+type Branch = (typeof relayContract)['anyOf'][number];
+function branchFor(action: RelayAction, kind?: RunKind): Branch {
+  const found = relayContract.anyOf.find(branch => {
+    const properties = branch.properties as Record<string, any>;
+    if (properties.action.const !== action) return false;
+    return kind === undefined ? properties.kind === undefined : properties.kind?.const === kind;
+  });
+  if (!found) throw new Error(`No contract branch for action ${action}${kind ? ` kind ${kind}` : ''}`);
+  return found;
+}
+
+/**
+ * One MCP tool's own input schema, addressed by action and (for a `run` tool)
+ * kind: the matching strict branch's plain-object shape with `action` (and
+ * `kind`) removed, since the tool's own identity already carries them. Always
+ * derived fresh from the strict contract above, never hand-copied, so a tool
+ * schema can never drift from the branch `relayCall` actually dispatches to.
+ */
+export function toolInputSchema(action: RelayAction, kind?: RunKind): Record<string, unknown> {
+  const raw = JSON.parse(JSON.stringify(branchFor(action, kind))) as { type: string; properties: Record<string, unknown>; required?: string[]; additionalProperties?: boolean };
+  const { action: _action, kind: _kind, ...properties } = raw.properties;
+  const required = (raw.required ?? []).filter(key => key !== 'action' && key !== 'kind');
+  return { type: raw.type, properties, ...(required.length ? { required } : {}), additionalProperties: raw.additionalProperties ?? false };
+}
 
 export function validateRelayInput(value: unknown): asserts value is RelayInput {
   if (!Check(relayContract, value)) throw new Error('Invalid relay input: action is required; run and console-open require nonblank reason. Supply only the fields for the selected action and run kind.');
