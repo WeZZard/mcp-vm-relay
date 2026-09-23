@@ -15,7 +15,7 @@ import test, { type TestContext } from 'node:test';
 import { verifyDeliveredPackage } from '../../src/package.js';
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const TOOL = /^mcp__(?:plugin_mcp-vm-relay_)?vm-relay__(relay|relay_status|relay_review)$/;
+const TOOL = /^mcp__(?:plugin_mcp-vm-relay_)?vm-relay__(relay|relay_status|relay_trajectory)$/;
 const RELAY = 'mcp__plugin_mcp-vm-relay_vm-relay__relay', STATUS = 'mcp__plugin_mcp-vm-relay_vm-relay__relay_status';
 const registryText = '# Test registry\n\n## Using VMs\n\n| Machine | OS | Task Name | Agent | Project | Start Date |\n| -- | -- | -- | -- | -- | -- |\n| foreign | linux | keep-me | another agent | /project | yesterday |\n\n## End\nUnrelated text.\n';
 const sleep = (ms: number) => new Promise(done => setTimeout(done, ms));

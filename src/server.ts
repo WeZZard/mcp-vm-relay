@@ -6,7 +6,7 @@
  * action dispatch and the bounded result rendering). This file binds that
  * core to MCP over standard input and output: one `relay` tool with the
  * relay's thirteen actions, plus two operator tools that stand in for pi's
- * `/relay-status` and `/relay-review` commands. The Claude Code plugin in
+ * `/relay-status` and `/relay-trajectory` commands. The Claude Code plugin in
  * this repository starts this server and carries the relay's working rules
  * as a skill, an agent definition and a session-start hook.
  */
@@ -28,7 +28,7 @@ declare const __MCP_VM_RELAY_VERSION__: string;
 export const SERVER_VERSION = typeof __MCP_VM_RELAY_VERSION__ !== 'undefined' ? __MCP_VM_RELAY_VERSION__
   : (JSON.parse(readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8')) as { version: string }).version;
 export const STATUS_TOOL = 'relay_status';
-export const REVIEW_TOOL = 'relay_review';
+export const TRAJECTORY_TOOL = 'relay_trajectory';
 /** How the plugin's MCP server names its tools once Claude Code scopes them. */
 export const PLUGIN_TOOL_PREFIX = 'mcp__plugin_mcp-vm-relay_vm-relay__';
 
@@ -58,7 +58,7 @@ export function projectDirectory(env: NodeJS.ProcessEnv = process.env, cwd = pro
 
 /** What the session-start hook prints: the relay's working rules, plus the names this runtime gives the tools. */
 export function doctrineText(): string {
-  return `${doctrine}\nIn Claude Code the relay tool is ${PLUGIN_TOOL_PREFIX}${relayToolName} (or mcp__${SERVER_NAME}__${relayToolName} when the server is configured directly); ${STATUS_TOOL} and ${REVIEW_TOOL} are operator tools for the /relay-status and /relay-review skills.`;
+  return `${doctrine}\nIn Claude Code the relay tool is ${PLUGIN_TOOL_PREFIX}${relayToolName} (or mcp__${SERVER_NAME}__${relayToolName} when the server is configured directly); ${STATUS_TOOL} and ${TRAJECTORY_TOOL} are operator tools for the /relay-status and /relay-trajectory skills.`;
 }
 
 export interface RelayServerOptions { sessionId?: string; project?: string; open?: (url: string) => Promise<void>; manager?: () => RelayManager }
@@ -89,7 +89,7 @@ export function createRelayServer(options: RelayServerOptions = {}) {
     tools: [
       { name: relayToolName, description: relayToolDescription, inputSchema: relayInputSchema() },
       { name: STATUS_TOOL, description: 'Show this session\'s owned VM lease (backend binding, guest state, renewal, console observation, last error), staging state and evidence path, plus the project directory, the VM service origin and the selected environment in use; active:false when nothing is owned. Read-only; it does not touch the VM.', inputSchema: { type: 'object', properties: {}, additionalProperties: false } },
-      { name: REVIEW_TOOL, description: 'Verify a delivered relay evidence package (all artifacts, hashes and references) and open its viewer in the local human-facing browser. Human review remains pending.', inputSchema: { type: 'object', properties: { directory: { type: 'string', description: 'The package directory, absolute or relative to the project.' } }, required: ['directory'], additionalProperties: false } },
+      { name: TRAJECTORY_TOOL, description: 'Verify a delivered relay evidence package (every artifact, hash and reference) and open its trajectory viewer in the local browser. Human review remains pending.', inputSchema: { type: 'object', properties: { directory: { type: 'string', description: 'The package directory, absolute or relative to the project.' } }, required: ['directory'], additionalProperties: false } },
     ],
   }));
   server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
@@ -101,7 +101,7 @@ export function createRelayServer(options: RelayServerOptions = {}) {
         const service = environment?.profile.vmServiceUrl ?? process.env.MCP_VM_RELAY_URL ?? 'http://localhost:6240';
         return text(JSON.stringify({ ...(manager ? manager.status() : { active: false }), project, service, environment: environment?.identity }, null, 2));
       }
-      if (name === REVIEW_TOOL) {
+      if (name === TRAJECTORY_TOOL) {
         const directory = (args as { directory?: unknown } | undefined)?.directory;
         if (typeof directory !== 'string' || !directory.trim()) throw new Error('directory is required');
         const root = resolve(project, directory.trim());

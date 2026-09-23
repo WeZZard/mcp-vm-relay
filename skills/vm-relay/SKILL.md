@@ -77,5 +77,5 @@ launches; resolve or cancel them.
 - `finish` reports delivery, snapshot completeness, execution outcome and human review separately. A verified package is not a passing test, and neither is human approval.
 - Text output is capped; a larger result is kept whole in a local file the result names.
 
-Use `relay_status` to see what this session owns. Use `relay_review` with a
+Use `relay_status` to see what this session owns. Use `relay_trajectory` with a
 package directory to verify it and open its viewer.

@@ -10,7 +10,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { doctrine, relayActions, relayJsonSchema, relayToolDescription } from '../src/core.js';
 import type { RelayManager } from '../src/manager.js';
-import { PLUGIN_TOOL_PREFIX, REVIEW_TOOL, STATUS_TOOL, createRelayServer, doctrineText, projectDirectory, relayContent, relayInputSchema } from '../src/server.js';
+import { PLUGIN_TOOL_PREFIX, STATUS_TOOL, TRAJECTORY_TOOL, createRelayServer, doctrineText, projectDirectory, relayContent, relayInputSchema } from '../src/server.js';
 
 const run = promisify(execFile);
 const server = resolve('dist/server.mjs');
@@ -60,7 +60,7 @@ async function fixture(t: { after(fn: () => Promise<unknown>): void }) {
 test('over stdio the server offers the relay tool with the core description, plus the two operator tools', async t => {
   const { client } = await fixture(t);
   const { tools } = await client.listTools();
-  assert.deepEqual(tools.map(tool => tool.name), ['relay', STATUS_TOOL, REVIEW_TOOL]);
+  assert.deepEqual(tools.map(tool => tool.name), ['relay', STATUS_TOOL, TRAJECTORY_TOOL]);
   assert.equal(tools[0]!.description, relayToolDescription);
   assert.deepEqual(tools[0]!.inputSchema, relayInputSchema());
   assert.deepEqual(tools[1]!.inputSchema, { type: 'object', properties: {}, additionalProperties: false });
@@ -87,14 +87,14 @@ test('a valid call that reaches an unreachable service is an error result, not a
   assert.equal(JSON.parse(status.content[0].text).active, false);
 });
 
-test('review refuses an absent or unverified package and never opens a browser for it', async t => {
+test('trajectory refuses an absent or unverified package and never opens a browser for it', async t => {
   const { client, project } = await fixture(t);
-  const missing: any = await client.callTool({ name: REVIEW_TOOL, arguments: { directory: 'no-such-package' } });
+  const missing: any = await client.callTool({ name: TRAJECTORY_TOOL, arguments: { directory: 'no-such-package' } });
   assert.equal(missing.isError, true);
   await mkdir(join(project, 'bad-package'));
-  const bad: any = await client.callTool({ name: REVIEW_TOOL, arguments: { directory: 'bad-package' } });
+  const bad: any = await client.callTool({ name: TRAJECTORY_TOOL, arguments: { directory: 'bad-package' } });
   assert.equal(bad.isError, true);
-  const blank: any = await client.callTool({ name: REVIEW_TOOL, arguments: {} });
+  const blank: any = await client.callTool({ name: TRAJECTORY_TOOL, arguments: {} });
   assert.equal(blank.isError, true); assert.match(blank.content[0].text, /directory is required/);
   const unknown: any = await client.callTool({ name: 'relay_dance', arguments: {} });
   assert.equal(unknown.isError, true);
