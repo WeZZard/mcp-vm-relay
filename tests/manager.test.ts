@@ -328,10 +328,15 @@ test('the shipped MCP server stages its shipped receiver and completes a full HT
   const client = new Client({ name: 'manager-test', version: '0' });
   await client.connect(transport);
   try {
+    // Nineteen relay_* tools replace the old single relay tool; a call's
+    // action (and, for run, kind) selects which one, and the rest of the
+    // args are its own arguments (no action/kind field on the wire).
+    const toolFor = ({ action, kind }: { action: string; kind?: string }) => `relay_${(kind ?? action).replace(/-/g, '_')}`;
     const invoke = async (args: Record<string, unknown>) => {
-      const result: any = await client.callTool({ name: 'relay', arguments: args });
+      const { action, kind, ...rest } = args as { action: string; kind?: string; [key: string]: unknown };
+      const result: any = await client.callTool({ name: toolFor({ action, kind }), arguments: rest });
       assert.equal(result.isError, false, result.content[0].text);
-      if (args.action === 'run') {
+      if (action === 'run') {
         // The saved after-image rides as a typed image block, its identity leading the text.
         const identity = JSON.parse(result.content[0].text.split('\n')[0]);
         assert.equal(identity.imageDelivery.status, 'attached', JSON.stringify(identity));

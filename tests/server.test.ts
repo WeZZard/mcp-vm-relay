@@ -8,21 +8,14 @@ import { promisify } from 'node:util';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { doctrine, relayActions, relayJsonSchema, relayToolDescription } from '../src/core.js';
+import { instructions, relayTools } from '../src/core.js';
 import type { RelayManager } from '../src/manager.js';
-import { PLUGIN_TOOL_PREFIX, STATUS_TOOL, TRAJECTORY_TOOL, createRelayServer, doctrineText, projectDirectory, relayContent, relayInputSchema } from '../src/server.js';
+import { PLUGIN_TOOL_PREFIX, STATUS_TOOL, TRAJECTORY_TOOL, createRelayServer, projectDirectory, relayContent } from '../src/server.js';
 
 const run = promisify(execFile);
 const server = resolve('dist/server.mjs');
-
-test('the offered schema is the relay contract without its root anyOf; the strict branches stay in the core', () => {
-  const offered = relayInputSchema(), strict = relayJsonSchema();
-  assert.equal('anyOf' in offered, false); assert.equal((strict.anyOf as unknown[]).length, 17);
-  assert.deepEqual(((offered.properties as any).target.anyOf as any[]).map(b => b.properties.source.const), ['display', 'application', 'reference'], 'the image selector keeps its closed branches inside the projected object');
-  assert.deepEqual((offered.properties as any).action.enum, [...relayActions]);
-  assert.deepEqual(Object.keys(offered.properties as object), Object.keys(strict.properties as object));
-  assert.equal(offered.additionalProperties, false);
-});
+const allToolNames = [...relayTools.map(tool => tool.name), STATUS_TOOL, TRAJECTORY_TOOL];
+const runTools = ['relay_exec', 'relay_script', 'relay_code', 'relay_cua', 'relay_browser'];
 
 test('the project directory comes from the plugin, unless the placeholder was never expanded', () => {
   assert.equal(projectDirectory({ MCP_VM_RELAY_PROJECT: '/tmp/project' }, '/elsewhere'), '/tmp/project');
@@ -30,13 +23,18 @@ test('the project directory comes from the plugin, unless the placeholder was ne
   assert.equal(projectDirectory({}, '/elsewhere'), '/elsewhere');
 });
 
-test('the hook prints the relay doctrine and the names this runtime gives the tools', async () => {
-  const { stdout } = await run(process.execPath, [server, '--doctrine']);
-  assert.equal(stdout, `${doctrineText()}\n`);
-  assert.ok(stdout.startsWith(doctrine));
-  assert.match(stdout, new RegExp(`${PLUGIN_TOOL_PREFIX}relay`));
+test('the CLI prints the instructions text and the full table of tool schemas', async () => {
+  const { stdout } = await run(process.execPath, [server, '--instructions']);
+  assert.equal(stdout, `${instructions}\n`);
+  assert.match(stdout, /relay_probe/);
+  assert.match(stdout, /relay_acquire/);
   const schema = JSON.parse((await run(process.execPath, [server, '--schema'])).stdout);
-  assert.deepEqual(schema, relayInputSchema());
+  assert.deepEqual(schema.map((tool: any) => tool.name).sort(), [...allToolNames].sort());
+  for (const tool of schema) {
+    assert.ok(tool.title?.length > 0, tool.name);
+    assert.ok(tool.annotations, tool.name);
+    assert.equal(tool.inputSchema.type, 'object');
+  }
   await assert.rejects(run(process.execPath, [server, '--nonsense']), /Usage/);
 });
 
@@ -57,22 +55,52 @@ async function fixture(t: { after(fn: () => Promise<unknown>): void }) {
   return { root, project, client };
 }
 
-test('over stdio the server offers the relay tool with the core description, plus the two operator tools', async t => {
+test('over stdio the server offers exactly the nineteen tools, each with a title, annotations and a plain-object schema with no root combinator', async t => {
   const { client } = await fixture(t);
   const { tools } = await client.listTools();
-  assert.deepEqual(tools.map(tool => tool.name), ['relay', STATUS_TOOL, TRAJECTORY_TOOL]);
-  assert.equal(tools[0]!.description, relayToolDescription);
-  assert.deepEqual(tools[0]!.inputSchema, relayInputSchema());
-  assert.deepEqual(tools[1]!.inputSchema, { type: 'object', properties: {}, additionalProperties: false });
+  assert.equal(tools.length, 19);
+  assert.deepEqual(tools.map(tool => tool.name).sort(), [...allToolNames].sort());
+  for (const tool of tools) {
+    assert.ok(tool.title && tool.title.length > 0, tool.name);
+    assert.ok(tool.annotations, tool.name);
+    assert.equal(tool.inputSchema.type, 'object');
+    assert.equal((tool.inputSchema as any).additionalProperties, false, tool.name);
+    for (const combinator of ['anyOf', 'oneOf', 'allOf']) assert.ok(!(combinator in tool.inputSchema), `${tool.name} has a root ${combinator}`);
+    assert.ok(!('action' in ((tool.inputSchema.properties as object) ?? {})), `${tool.name} exposes action`);
+  }
+  for (const name of ['relay_search', 'relay_probe', 'relay_acquisition_capabilities', 'relay_image', 'relay_console_resolve', STATUS_TOOL]) {
+    const annotations = tools.find(tool => tool.name === name)!.annotations!;
+    assert.equal(annotations.readOnlyHint, true, name); assert.equal(annotations.idempotentHint, true, name);
+  }
+  for (const name of ['relay_finish', 'relay_release']) assert.equal(tools.find(tool => tool.name === name)!.annotations!.destructiveHint, true, name);
+  for (const name of tools.map(tool => tool.name)) {
+    const annotations = tools.find(tool => tool.name === name)!.annotations!;
+    assert.equal(annotations.openWorldHint, runTools.includes(name), name);
+  }
+});
+
+test('each run tool maps to its own kind in the derived schema, without a kind field', async t => {
+  const { client } = await fixture(t);
+  const { tools } = await client.listTools();
+  for (const [name, argField] of [['relay_exec', 'argv'], ['relay_script', 'localPath'], ['relay_code', 'code'], ['relay_cua', 'tool'], ['relay_browser', 'browser']] as const) {
+    const tool = tools.find(t2 => t2.name === name)!;
+    const properties = tool.inputSchema.properties as Record<string, unknown>;
+    assert.ok(argField in properties, `${name} carries its own field ${argField}`);
+    assert.ok(!('kind' in properties), `${name} does not expose kind`);
+    assert.ok('reason' in properties && 'step' in properties && 'snapshots' in properties, `${name} carries the shared run fields`);
+  }
 });
 
 test('invalid input is refused by the strict contract before any manager exists; status stays inactive', async t => {
   const { client, root, project } = await fixture(t);
-  for (const args of [{ action: 'dance' }, { action: 'run', kind: 'exec', argv: ['node'] }, { action: 'probe', reason: 'no' }, {}]) {
-    const result: any = await client.callTool({ name: 'relay', arguments: args });
-    assert.equal(result.isError, true, JSON.stringify(args));
+  for (const [name, args] of [['relay_probe', { reason: 'no' }], ['relay_exec', { argv: ['node'] }], ['relay_acquire', {}]] as const) {
+    const result: any = await client.callTool({ name, arguments: args });
+    assert.equal(result.isError, true, `${name} ${JSON.stringify(args)}`);
     assert.match(result.content[0].text, /Invalid relay input/);
   }
+  const unknown: any = await client.callTool({ name: 'relay_dance', arguments: {} });
+  assert.equal(unknown.isError, true);
+  assert.match(unknown.content[0].text, /Unknown tool/);
   const status: any = await client.callTool({ name: STATUS_TOOL, arguments: {} });
   assert.equal(status.isError, false); assert.deepEqual(JSON.parse(status.content[0].text), { active: false, project, service: 'http://127.0.0.1:9' });
   await assert.rejects(stat(join(root, 'state')), { code: 'ENOENT' }); // nothing was created for refused calls
@@ -80,7 +108,7 @@ test('invalid input is refused by the strict contract before any manager exists;
 
 test('a valid call that reaches an unreachable service is an error result, not a crash', async t => {
   const { client } = await fixture(t);
-  const result: any = await client.callTool({ name: 'relay', arguments: { action: 'search', name: 'Firefox' } });
+  const result: any = await client.callTool({ name: 'relay_search', arguments: { name: 'Firefox' } });
   assert.equal(result.isError, true);
   assert.match(result.content[0].text, /vm-service \/applications: request failed/);
   const status: any = await client.callTool({ name: STATUS_TOOL, arguments: {} });
@@ -96,8 +124,29 @@ test('trajectory refuses an absent or unverified package and never opens a brows
   assert.equal(bad.isError, true);
   const blank: any = await client.callTool({ name: TRAJECTORY_TOOL, arguments: {} });
   assert.equal(blank.isError, true); assert.match(blank.content[0].text, /directory is required/);
-  const unknown: any = await client.callTool({ name: 'relay_dance', arguments: {} });
-  assert.equal(unknown.isError, true);
+});
+
+test('prompts/list offers status and trajectory; prompts/get reads the same status data and asks the assistant to call relay_trajectory', async t => {
+  const { client, project } = await fixture(t);
+  const { prompts } = await client.listPrompts();
+  assert.deepEqual(prompts.map(prompt => prompt.name).sort(), ['status', 'trajectory']);
+  assert.equal(prompts.find(prompt => prompt.name === 'status')!.arguments, undefined);
+  assert.deepEqual(prompts.find(prompt => prompt.name === 'trajectory')!.arguments, [{ name: 'directory', description: 'The package directory, absolute or relative to the project.', required: true }]);
+
+  const status = await client.getPrompt({ name: 'status', arguments: {} });
+  assert.equal(status.messages.length, 1);
+  assert.equal(status.messages[0]!.role, 'user');
+  const statusText = (status.messages[0]!.content as { text: string }).text;
+  assert.deepEqual(JSON.parse(statusText.slice(statusText.indexOf('{'))), { active: false, project, service: 'http://127.0.0.1:9' });
+
+  const trajectory = await client.getPrompt({ name: 'trajectory', arguments: { directory: 'evidence/task-1' } });
+  const trajectoryText = (trajectory.messages[0]!.content as { text: string }).text;
+  assert.match(trajectoryText, /relay_trajectory/);
+  assert.match(trajectoryText, /evidence\/task-1/);
+  assert.match(trajectoryText, /human review remains pending/i);
+
+  await assert.rejects(client.getPrompt({ name: 'trajectory', arguments: {} }), /directory is required/);
+  await assert.rejects(client.getPrompt({ name: 'no-such-prompt', arguments: {} }), /Unknown prompt/);
 });
 
 test('cancelling a relay call from the client aborts the server-side signal', async t => {
@@ -124,7 +173,7 @@ test('cancelling a relay call from the client aborts the server-side signal', as
   const controller = new AbortController();
   const step = { id: 'step', title: 'Fixture', expected: 'Completes', inputMode: 'ordinary' };
   const callPromise = client.callTool(
-    { name: 'relay', arguments: { action: 'run', reason: 'Exercise client-initiated cancellation', kind: 'exec', argv: ['node', '--version'], step, snapshots: { afterIntervalMs: 0 } } },
+    { name: 'relay_exec', arguments: { reason: 'Exercise client-initiated cancellation', argv: ['node', '--version'], step, snapshots: { afterIntervalMs: 0 } } },
     undefined,
     { signal: controller.signal },
   );
@@ -137,15 +186,15 @@ test('cancelling a relay call from the client aborts the server-side signal', as
 
 test('the plugin files name the server the tests spoke to and ship the built bundles', async () => {
   const mcp = JSON.parse(await readFile('.mcp.json', 'utf8'));
-  assert.deepEqual(Object.keys(mcp.mcpServers), ['vm-relay']);
-  assert.deepEqual(mcp.mcpServers['vm-relay'].args, ['${CLAUDE_PLUGIN_ROOT}/dist/server.mjs']);
+  assert.deepEqual(Object.keys(mcp.mcpServers), ['relay']);
+  assert.deepEqual(mcp.mcpServers['relay'].args, ['${CLAUDE_PLUGIN_ROOT}/dist/server.mjs']);
   const plugin = JSON.parse(await readFile('.claude-plugin/plugin.json', 'utf8'));
   assert.equal(plugin.name, 'mcp-vm-relay');
-  assert.equal(PLUGIN_TOOL_PREFIX, `mcp__plugin_${plugin.name}_vm-relay__`);
+  assert.equal(PLUGIN_TOOL_PREFIX, `mcp__plugin_${plugin.name}_relay__`);
   const agent = await readFile('agents/vm-relay-operator.md', 'utf8');
-  assert.match(agent, new RegExp(`tools: ${PLUGIN_TOOL_PREFIX}relay, ${PLUGIN_TOOL_PREFIX}${STATUS_TOOL}`));
-  const hooks = JSON.parse(await readFile('hooks/hooks.json', 'utf8'));
-  assert.match(hooks.hooks.SessionStart[0].hooks[0].command, /--doctrine/);
+  for (const tool of relayTools) assert.match(agent, new RegExp(`${PLUGIN_TOOL_PREFIX}${tool.name}(?![A-Za-z0-9_])`), tool.name);
+  assert.match(agent, new RegExp(`${PLUGIN_TOOL_PREFIX}${STATUS_TOOL}(?![A-Za-z0-9_])`));
+  assert.doesNotMatch(agent, new RegExp(`${PLUGIN_TOOL_PREFIX}${TRAJECTORY_TOOL}(?![A-Za-z0-9_])`));
   for (const name of ['server.mjs', 'receiver.mjs', 'browser.mjs', 'doctor.mjs', 'integrity.json', 'build-info.json', 'NOTICE.txt']) assert.ok((await stat(join('dist', name))).isFile(), name);
   const bundle = await readFile('dist/server.mjs', 'utf8');
   assert.doesNotMatch(bundle, /@earendil-works/);
