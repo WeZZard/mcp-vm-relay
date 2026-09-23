@@ -66,7 +66,7 @@ test("delivers capture-classified package; all originals, viewer, summary, and e
   assert.equal(manifest.snapshots.length, 2);
   assert.ok(manifest.snapshots.every((s: any) => s.provenance === "dispatch-captured" && s.actionId === "action-0"));
   assert.equal(manifest.attachments[0].path, "extractions/app.log");
-  for (const path of ["index.html", "summary.json", "walkthrough.json", "OPENING.txt", "state/journal/events.jsonl", "host/routing.json", "state/records/action/action-0.json"]) assert.ok(manifest.records.some((r: any) => r.path === path), path);
+  for (const path of ["index.html", "summary.json", "trajectory.json", "OPENING.txt", "state/journal/events.jsonl", "host/routing.json", "state/records/action/action-0.json"]) assert.ok(manifest.records.some((r: any) => r.path === path), path);
   assert.deepEqual(await readFile(join(root, "state/journal/events.jsonl")), original);
   assert.deepEqual(await verifyDeliveredPackage(root), delivered);
   const html = await readFile(join(root, "index.html"), "utf8");
@@ -75,13 +75,25 @@ test("delivers capture-classified package; all originals, viewer, summary, and e
   assert.doesNotMatch(html, /<script|https?:\/\/|fetch\(/);
 });
 
+test("verification accepts a legacy package that carries walkthrough.json instead of trajectory.json", async t => {
+  const { root } = await fixture(t);
+  const delivered = await deliverPackage(root, options);
+  const bytes = await readFile(join(root, "trajectory.json"));
+  await rm(join(root, "trajectory.json"));
+  await save(root, "walkthrough.json", bytes);
+  const manifest = JSON.parse(await readFile(join(root, "manifest.json"), "utf8"));
+  manifest.records.find((r: any) => r.path === "trajectory.json").path = "walkthrough.json";
+  await save(root, "manifest.json", manifest);
+  assert.deepEqual(await verifyDeliveredPackage(root), delivered);
+});
+
 test('pre-stage diagnostic repair is visible as command-only evidence without fabricated screenshots', async t => {
   const { root } = await fixture(t);
   await save(root, 'host/diagnostics/repair.request.json', { executionId: 'repair', evidenceMode: 'diagnostic', because: 'Repair capture service', argv: ['repair'], step: { title: 'Repair capture', expected: 'Capture works' } });
   await save(root, 'host/diagnostics/repair.receipt.json', { executionId: 'repair', evidenceMode: 'diagnostic', outcome: { kind: 'completed', exitStatus: { code: 0, signal: null } }, stdout: 'repaired', timeoutMs: 120000 });
   const result = await deliverPackage(root, options);
   assert.equal(result.deliveryVerified, true); assert.equal(result.snapshots, 'incomplete');
-  const walk = JSON.parse(await readFile(join(root, 'walkthrough.json'), 'utf8'));
+  const walk = JSON.parse(await readFile(join(root, 'trajectory.json'), 'utf8'));
   const step = walk.steps.find((s: any) => s.inputMode === 'diagnostic');
   assert.equal(step.title, 'Repair capture'); assert.match(step.observed, /No screenshot evidence/); assert.equal(step.snapshots, undefined);
   assert.equal((await verifyDeliveredPackage(root)).deliveryVerified, true);
@@ -91,9 +103,9 @@ test("group members each review the shared causal pair", async t => {
   const { root } = await fixture(t, "group");
   const result = await deliverPackage(root, options);
   assert.equal(result.execution, "passed");
-  const walkthrough = JSON.parse(await readFile(join(root, "walkthrough.json"), "utf8"));
-  assert.equal(walkthrough.steps.length, 3);
-  for (const step of walkthrough.steps) {
+  const trajectory = JSON.parse(await readFile(join(root, "trajectory.json"), "utf8"));
+  assert.equal(trajectory.steps.length, 3);
+  for (const step of trajectory.steps) {
     assert.equal(step.snapshots.groupId, "typing");
     assert.ok(step.snapshots.before.endsWith("a0-before.png"));
     assert.ok(step.snapshots.after.endsWith("a2-after.png"));
@@ -115,8 +127,8 @@ test("refusal-only and nonzero-exit evidence is never reported as passed", async
     const result = await deliverPackage(root, options);
     assert.equal(result.execution, "failed");
     assert.equal(result.deliveryVerified, true);
-    const walkthrough = JSON.parse(await readFile(join(root, "walkthrough.json"), "utf8"));
-    assert.equal(walkthrough.steps.length, 1, "refusal-only action is not duplicated by the SDK");
+    const trajectory = JSON.parse(await readFile(join(root, "trajectory.json"), "utf8"));
+    assert.equal(trajectory.steps.length, 1, "refusal-only action is not duplicated by the SDK");
   }
 });
 
@@ -244,9 +256,9 @@ test("guest receiver's real SDK journal and action records deliver end-to-end wi
   const result = await deliverPackage(root, options);
   assert.equal(result.deliveryVerified, true);
   assert.equal(result.execution, "passed");
-  const walkthrough = JSON.parse(await readFile(join(root, "walkthrough.json"), "utf8"));
-  assert.equal(walkthrough.steps[0].because, "Avoid interrupting the active display");
-  assert.equal(walkthrough.steps[0].expected, "Saved");
+  const trajectory = JSON.parse(await readFile(join(root, "trajectory.json"), "utf8"));
+  assert.equal(trajectory.steps[0].because, "Avoid interrupting the active display");
+  assert.equal(trajectory.steps[0].expected, "Saved");
 });
 
 async function originalBytes(root: string, prefix = ""): Promise<Map<string, Buffer>> {
@@ -285,12 +297,12 @@ for (const scenario of ["driver-refused", "driver-uncertain", "transport-uncerta
     const result = await deliverPackage(root, options);
     assert.equal(result.execution, expected === "refused" ? "failed" : "uncertain");
     assert.equal(result.snapshots, "complete");
-    const walkthrough = JSON.parse(await readFile(join(root, "walkthrough.json"), "utf8"));
-    assert.equal(walkthrough.steps.length, 1);
-    assert.equal(walkthrough.steps[0].execution, expected);
-    assert.match(walkthrough.steps[0].observed, /Authoritative receipt outcomes:/);
-    assert.match(walkthrough.steps[0].observed, /Original subprocess\/action evidence \(not an authoritative input-success verdict\):/);
-    assert.ok(walkthrough.steps[0].observed.includes(JSON.stringify(completion.toolOutcome)));
+    const trajectory = JSON.parse(await readFile(join(root, "trajectory.json"), "utf8"));
+    assert.equal(trajectory.steps.length, 1);
+    assert.equal(trajectory.steps[0].execution, expected);
+    assert.match(trajectory.steps[0].observed, /Authoritative receipt outcomes:/);
+    assert.match(trajectory.steps[0].observed, /Original subprocess\/action evidence \(not an authoritative input-success verdict\):/);
+    assert.ok(trajectory.steps[0].observed.includes(JSON.stringify(completion.toolOutcome)));
     const html = await readFile(join(root, "index.html"), "utf8");
     assert.match(html, new RegExp(`Click Save — ${expected}`));
     assert.match(html, new RegExp(`Execution: ${expected} · State:`));
@@ -313,16 +325,16 @@ test("each authoritative receipt source is scoped by execution or action, never 
       } else await save(f.root, `${location}/verdict.json`, receipt);
       const result = await deliverPackage(f.root, options);
       assert.equal(result.execution, "failed");
-      const walkthrough = JSON.parse(await readFile(join(f.root, "walkthrough.json"), "utf8"));
-      assert.equal(walkthrough.steps[0].execution, "refused", `${location}, ${identity}`);
+      const trajectory = JSON.parse(await readFile(join(f.root, "trajectory.json"), "utf8"));
+      assert.equal(trajectory.steps[0].execution, "refused", `${location}, ${identity}`);
     }
   }
   const f = await fixture(t);
   await save(f.root, "host/receipts/unrelated.json", { executionId: "unrelated", stepId: "step-0", outcome: { kind: "refused", diagnostic: "another execution" } });
   assert.equal((await deliverPackage(f.root, options)).execution, "failed");
-  const walkthrough = JSON.parse(await readFile(join(f.root, "walkthrough.json"), "utf8"));
-  assert.equal(walkthrough.steps[0].execution, "completed");
-  assert.doesNotMatch(walkthrough.steps[0].observed, /another execution/);
+  const trajectory = JSON.parse(await readFile(join(f.root, "trajectory.json"), "utf8"));
+  assert.equal(trajectory.steps[0].execution, "completed");
+  assert.doesNotMatch(trajectory.steps[0].observed, /another execution/);
 });
 
 test("receipt conflicts prefer known refusal/failure and successful receipts never repair action evidence", async t => {
@@ -331,7 +343,7 @@ test("receipt conflicts prefer known refusal/failure and successful receipts nev
     await save(f.root, "host/receipts/uncertain.json", { executionId: "execution-1", outcome: { kind: "uncertain", diagnostic: "transport lost" } });
     await save(f.root, "state/receiver/receipts/verdict.json", { executionId: "execution-1", outcome: kind === "refused" ? { kind, diagnostic: "input refused" } : { kind: "completed", exitStatus: { code: 9, signal: null } } });
     assert.equal((await deliverPackage(f.root, options)).execution, "failed");
-    assert.equal(JSON.parse(await readFile(join(f.root, "walkthrough.json"), "utf8")).steps[0].execution, kind);
+    assert.equal(JSON.parse(await readFile(join(f.root, "trajectory.json"), "utf8")).steps[0].execution, kind);
   }
   for (const mode of ["failed", "refused", "incomplete", "missing-completion"] as const) {
     const f = await fixture(t, mode === "missing-completion" ? "single" : mode);
@@ -341,7 +353,7 @@ test("receipt conflicts prefer known refusal/failure and successful receipts nev
     }
     await save(f.root, "host/receipts/success.json", { executionId: "execution-1", actionId: "action-0", outcome: { kind: "completed", exitStatus: { code: 0, signal: null } } });
     assert.notEqual((await deliverPackage(f.root, options)).execution, "passed");
-    assert.equal(JSON.parse(await readFile(join(f.root, "walkthrough.json"), "utf8")).steps[0].execution, mode === "missing-completion" ? "incomplete" : mode === "incomplete" ? "uncertain" : mode);
+    assert.equal(JSON.parse(await readFile(join(f.root, "trajectory.json"), "utf8")).steps[0].execution, mode === "missing-completion" ? "incomplete" : mode === "incomplete" ? "uncertain" : mode);
   }
 });
 
@@ -350,7 +362,7 @@ test("malformed receipts fail closed and cannot leave a completed review step", 
     const f = await fixture(t);
     await save(f.root, "host/receipts/verdict.json", { executionId: "execution-1", outcome });
     assert.equal((await deliverPackage(f.root, options)).execution, "uncertain");
-    assert.equal(JSON.parse(await readFile(join(f.root, "walkthrough.json"), "utf8")).steps[0].execution, "uncertain");
+    assert.equal(JSON.parse(await readFile(join(f.root, "trajectory.json"), "utf8")).steps[0].execution, "uncertain");
   }
   for (const receipt of [null, {}, { executionId: "execution-1", sessionId: "wrong" }]) {
     const f = await fixture(t);
@@ -378,13 +390,13 @@ test("repeated valid step IDs retain each real receiver execution's reason and e
   }
   const originals = await originalBytes(root);
   assert.equal((await deliverPackage(root, options)).execution, "passed");
-  const walkthrough = JSON.parse(await readFile(join(root, "walkthrough.json"), "utf8"));
-  assert.equal(walkthrough.steps.length, 2);
-  assert.equal(new Set(walkthrough.steps.map((s: any) => s.id)).size, 2);
-  assert.equal(walkthrough.steps[0].id, "repeated");
-  assert.equal(walkthrough.steps[1].id, `repeated@${walkthrough.steps[1].actionId}`);
+  const trajectory = JSON.parse(await readFile(join(root, "trajectory.json"), "utf8"));
+  assert.equal(trajectory.steps.length, 2);
+  assert.equal(new Set(trajectory.steps.map((s: any) => s.id)).size, 2);
+  assert.equal(trajectory.steps[0].id, "repeated");
+  assert.equal(trajectory.steps[1].id, `repeated@${trajectory.steps[1].actionId}`);
   const html = await readFile(join(root, "index.html"), "utf8");
-  for (const [index, step] of walkthrough.steps.entries()) {
+  for (const [index, step] of trajectory.steps.entries()) {
     const i = index + 1;
     assert.equal(step.because, `Reason${i}`);
     assert.equal(step.expected, `Expected${i}`);
@@ -407,7 +419,7 @@ test("step-only routing fallback rejects ambiguity but accepts one identity and 
     }
     await rewriteJournal(f);
     await deliverPackage(f.root, options);
-    const step = JSON.parse(await readFile(join(f.root, "walkthrough.json"), "utf8")).steps[0];
+    const step = JSON.parse(await readFile(join(f.root, "trajectory.json"), "utf8")).steps[0];
     assert.equal(step.because, ambiguous ? undefined : "Fallback reason");
     assert.equal(step.expected, ambiguous ? undefined : "Fallback expectation");
   }
