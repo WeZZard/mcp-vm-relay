@@ -24,7 +24,9 @@ test('package.json no longer ships skills or a hook, and relies on MCP alone', a
 
 test('npm pack ships no skills/ or hooks/ files', async () => {
   const { stdout } = await run('npm', ['pack', '--dry-run', '--json']);
-  const [{ files }] = JSON.parse(stdout);
+  // npm 10 prints an array of packages; npm 12 prints an object keyed by package name.
+  const parsed = JSON.parse(stdout);
+  const { files } = Array.isArray(parsed) ? parsed[0] : Object.values(parsed)[0] as { files: { path: string }[] };
   const paths = files.map((file: { path: string }) => file.path);
   assert.ok(!paths.some((path: string) => path.startsWith('skills/') || path.startsWith('hooks/')), JSON.stringify(paths));
 });
