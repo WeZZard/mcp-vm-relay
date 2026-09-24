@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { deflateSync } from 'node:zlib';
+import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { chmod, copyFile, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { tmpdir } from 'node:os';
@@ -12,7 +14,7 @@ import { RelayManager, type AcquireInput, type ManagerOptions, type RunInput } f
 import { Registry } from '../src/registry.js';
 import { VmService, type VmLease } from '../src/vm-service.js';
 import { verifyDeliveredPackage } from '../src/package.js';
-import { stopBrowser } from '../src/guest/browser.js';
+import { targetLaunches, type Target } from '../src/targets.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { relayCall } from '../src/surface.js';
@@ -57,6 +59,14 @@ const png = (() => {
     chunk('IDAT', deflateSync(Buffer.from([0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 255, 255, 0, 0, 255, 255, 128, 0, 64]))), chunk('IEND', Buffer.alloc(0))]).toString('base64');
 })();
 const bundle = fileURLToPath(new URL('../dist/receiver.mjs', import.meta.url));
+const mcpHostBundle = fileURLToPath(new URL('../dist/mcp-host.mjs', import.meta.url));
+const mcpFixture = fileURLToPath(new URL('./fixtures/mcp-fixture-server.mjs', import.meta.url));
+/** The browser targets launch SDK fixture servers; cua keeps its real launch (`<cuaDriver> mcp`), which the fake driver answers with the same fixture. */
+const fixtureLaunches = (log: string) => (context: Parameters<typeof targetLaunches>[0]) => {
+  const real = targetLaunches(context);
+  const fixture = (name: Target) => ({ command: context.node, args: [mcpFixture, name], cwd: context.workspace, env: { FIXTURE_LOG: log } });
+  return { cua: { ...real.cua, env: { FIXTURE_LOG: log } }, playwright: fixture('playwright'), 'chrome-devtools': fixture('chrome-devtools') };
+};
 const reason = 'Exercise isolated protocol fixtures, never the real desktop';
 const acquireInput = (patch: Partial<AcquireInput> = {}): AcquireInput => ({ image: 'ubuntu2404', task: 'manager-test', extractions: [], ...patch });
 const operation = (id: string, patch: Partial<RunInput> = {}): RunInput => ({ because: reason, kind: 'exec', argv: [process.execPath, '-e', 'console.log("test output")'], step: { id, title: id, expected: 'Fixture command completes', inputMode: 'ordinary' }, snapshots: { afterIntervalMs: 0 }, ...patch });
@@ -170,7 +180,8 @@ class FixtureService {
   }
   async close() {
     this.server.closeAllConnections(); await new Promise<void>((resolve, reject) => this.server.close(error => error ? reject(error) : resolve()));
-    for (const root of this.guestRoots) { try { await stopBrowser(join(root, 'browser')); } catch {} await rm(root, { recursive: true, force: true }); }
+    // Stop any guest MCP host a test left running (finish/release normally stop it).
+    for (const root of this.guestRoots) { try { execFileSync(process.execPath, [mcpHostBundle, 'stop', join(root, 'mcp')], { stdio: 'ignore', timeout: 20000 }); } catch {} await rm(root, { recursive: true, force: true }); }
   }
 }
 
@@ -178,11 +189,12 @@ async function fixture(t: TestContext, patch: Partial<ManagerOptions> = {}) {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'pi-relay-manager-')));
   const registryPath = join(root, 'AGENTS.md'); await writeFile(registryPath, registryText);
   const service = new FixtureService(root), vm = await service.start();
-  const options: ManagerOptions = { project: root, sessionId: randomUUID(), stateRoot: join(root, 'state'), outputRoot: join(root, 'packages'), registry: new Registry(registryPath), vm, runtimeBundle: bundle, heartbeatMs: 60000, verifyDestroyed: async name => !service.leases.has(name), ...patch };
+  const mcpLog = join(root, 'mcp-calls.jsonl');
+  const options: ManagerOptions = { project: root, sessionId: randomUUID(), stateRoot: join(root, 'state'), outputRoot: join(root, 'packages'), registry: new Registry(registryPath), vm, runtimeBundle: bundle, heartbeatMs: 60000, verifyDestroyed: async name => !service.leases.has(name), mcpHostBundle, targetLaunches: fixtureLaunches(mcpLog), targetPackages: { playwright: { entry: '', packages: [] }, 'chrome-devtools': { entry: '', packages: [] } }, packageCache: join(root, 'package-cache'), ...patch };
   const manager = new RelayManager(options);
   t.after(async () => { service.releaseFailures = 0; service.failHeartbeat = false; service.failGet = false; service.hideLeases = false; await manager.release(); await manager.cleanup('test teardown'); await service.close(); await rm(root, { recursive: true, force: true }); });
   const driver = join(root, 'fake-cua');
-  await writeFile(driver, `#!${process.execPath}\nconst fs=require('node:fs');if(process.argv[2]==='--version'){console.log('fixture-cua 1.0');process.exit(0);}if(process.argv[2]!=='call'||process.argv[3]!=='get_desktop_state'||process.argv[4]!=='--json')process.exit(99);const a=JSON.parse(process.argv[5]);fs.appendFileSync(${JSON.stringify(join(root, 'captures.jsonl'))},JSON.stringify(a)+'\\n');fs.writeFileSync(a.screenshot_out_file,Buffer.from('${png}','base64'));console.log(JSON.stringify({screenshot_file_path:a.screenshot_out_file}));`);
+  await writeFile(driver, `#!${process.execPath}\nconst fs=require('node:fs');if(process.argv[2]==='--version'){console.log('fixture-cua 1.0');process.exit(0);}if(process.argv[2]==='mcp'){process.argv[2]='cua';import(${JSON.stringify(mcpFixture)});return;}if(process.argv[2]!=='call'||process.argv[3]!=='get_desktop_state'||process.argv[4]!=='--json')process.exit(99);const a=JSON.parse(process.argv[5]);fs.appendFileSync(${JSON.stringify(join(root, 'captures.jsonl'))},JSON.stringify(a)+'\\n');fs.writeFileSync(a.screenshot_out_file,Buffer.from('${png}','base64'));console.log(JSON.stringify({screenshot_file_path:a.screenshot_out_file}));`);
   await chmod(driver, 0o700);
   const stage = () => manager.stage({ cuaDriver: driver, nodePath: process.execPath });
   const assertClean = async () => {
@@ -196,7 +208,8 @@ async function fixture(t: TestContext, patch: Partial<ManagerOptions> = {}) {
     assert.equal((await json(join(manager.root, 'lease.json'))).lease.vm, vm);
     assert.notEqual(await readFile(registryPath, 'utf8'), registryText);
   };
-  return { root, manager, service, options, driver, stage, assertClean, assertRetained, registryPath };
+  const mcpCalls = async () => (await readFile(mcpLog, 'utf8').catch(() => '')).trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
+  return { root, manager, service, options, driver, stage, assertClean, assertRetained, registryPath, mcpCalls };
 }
 
 test('real HTTP service, receiver and Registry: acquire → stage → exec/script/code → extraction → verified finish', { timeout: 30000 }, async t => {
@@ -797,7 +810,7 @@ test('invalid run annotation rejects before guarded admission without releasing 
   const f = await fixture(t); await f.manager.acquire(acquireInput());
   const before = f.manager.status();
   const requests = f.service.requests.length;
-  for (const because of [undefined, '', '  ', 'x'.repeat(4001), 42]) {
+  for (const because of ['', '  ', 'x'.repeat(4001), 42]) {
     await assert.rejects(f.manager.run(operation('invalid-reason', { because: because as string })), /reason must be nonblank/);
     assert.deepEqual(f.manager.status(), before);
     assert.equal(f.service.requests.length, requests);
@@ -806,11 +819,22 @@ test('invalid run annotation rejects before guarded admission without releasing 
   await f.manager.release(); await f.assertClean();
 });
 
-test('missing explicit interval is rejected before receiver transmission and can be corrected', async t => {
+test('a run without reason, step or interval derives its record and uses the default wait', async t => {
   const f = await fixture(t); await f.manager.acquire(acquireInput()); await f.stage();
-  await assert.rejects(f.manager.run(operation('no-interval', { snapshots: {} })), /Supply afterIntervalMs/);
-  assert.equal(f.service.receiverCalls, 0); await f.assertRetained();
-  assert.equal((await f.manager.run(operation('corrected-interval'))).outcome.kind, 'completed');
+  const result = await f.manager.run({ kind: 'exec', argv: [process.execPath, '-e', 'console.log("derived")'] });
+  assert.equal(result.outcome.kind, 'completed');
+  const request = await json(join(f.manager.status().output!, 'host/requests', `${result.executionId}.json`));
+  assert.equal(request.step.id, 'exec-1'); assert.match(request.step.title, /^exec node -e /);
+  assert.equal(request.step.expected, 'Exits with status 0'); assert.equal(request.step.inputMode, 'ordinary');
+  assert.deepEqual(request.snapshots, { afterIntervalMs: 500 });
+  assert.match(request.because, /^Relay exec node .*\(no reason given\)$/);
+  assert.equal(result.imageDelivery.status, 'attached', 'snapshots are automatic');
+  // A text group's last member without its own interval gets the default too; explicit values still win.
+  const group = await f.manager.run(operation('group-first', { snapshots: { group: { groupId: 'g1', phase: 'first' } } }));
+  assert.equal(group.outcome.kind, 'completed');
+  const last = await f.manager.run(operation('group-last', { snapshots: { group: { groupId: 'g1', phase: 'last' } } }));
+  assert.equal(last.outcome.kind, 'completed');
+  assert.deepEqual((await json(join(f.manager.status().output!, 'host/requests', `${last.executionId}.json`))).snapshots, { group: { groupId: 'g1', phase: 'last' }, afterIntervalMs: 500 });
   await f.manager.release(); await f.assertClean();
 });
 
@@ -835,48 +859,118 @@ for (const mode of ['symlink', 'corrupt-pull'] as const) test(`${mode} extractio
   await f.manager.release(); await f.assertClean();
 });
 
-test('manager stages a fresh persistent Playwright server and admits separate events on its live page', { timeout: 30000 }, async t => {
+test('relay_run forwards unchanged tool calls through the receiver and the guest MCP host, with automatic evidence', { timeout: 60000 }, async t => {
   const f = await fixture(t);
-  const playwright = join(f.root, 'playwright-fixture.cjs');
-  await writeFile(playwright, `module.exports={chromium:{launch:async o=>{if(o.headless!==false||o.executablePath)throw Error('incorrect launch');let value='';const fs=require('fs');const page={setDefaultTimeout(){},setDefaultNavigationTimeout(){},on(){},mainFrame(){return page},url:()=>value.split(' ')[0],title:async()=>'fixture',waitForLoadState:async()=>{},evaluate:async()=>{},screenshot:async o=>fs.writeFileSync(o.path,'PNG'+value),goto:async url=>{value=url},locator:()=>({click:async()=>{value+=' clicked'},innerText:async()=>value})};return {newContext:async()=>({newPage:async()=>page,close:async()=>{}}),close:async()=>{},on(){}}}}};`);
-  const acquired = await f.manager.acquire(acquireInput());
-  t.after(async () => { try { await stopBrowser(join(acquired.guestRoot, 'browser')); } catch {} });
-  const staged = await f.manager.stage({ nodePath: process.execPath, cuaDriver: f.driver, browser: { playwrightModule: playwright } });
-  assert.deepEqual(staged.extractions.map(item => item.name), ['browser-captures'], 'staging the browser declares the captures extraction');
-  const answers: any[] = [];
-  for (const [id, browser] of [['navigation', { action: 'navigate', url: 'https://example.test' }], ['click', { action: 'click', selector: '#button' }], ['read', { action: 'read', selector: '#result' }]] as const) {
-    const result = await f.manager.run(operation(id, { kind: 'browser', browser }));
-    assert.equal(result.outcome.kind, 'completed', JSON.stringify(result));
-    if (result.outcome.kind === 'completed') assert.equal(result.outcome.exitStatus.code, 0, JSON.stringify(result));
-    assert.equal(typeof result.stdout, 'string', 'the guest output rides along with the result');
-    answers.push((result as any).browser);
-  }
-  // The parsed browser answers: a landing capture for the navigation, a settle note without one for the click, the read text.
-  assert.equal(answers[0].settled.navigated, true); assert.equal(answers[0].landing.kind, 'landing');
-  assert.equal(answers[1].settled.navigated, false); assert.equal(answers[1].landing, null);
-  assert.equal(answers[2].text, 'https://example.test clicked');
+  const call = (raw: unknown) => relayCall(f.manager, raw);
+  const body = (text: string) => relayJson(text);
+  const acquired = await f.manager.acquire(acquireInput()); await f.stage();
+  // relay_tools: the fixture's real tools/list, pulled from the guest.
+  const listed = await call({ action: 'tools', target: 'playwright' });
+  assert.equal(listed.isError, false);
+  assert.deepEqual(JSON.parse(listed.text).tools.map((tool: { name: string }) => tool.name), ['increment', 'echo', 'picture', 'fail', 'escalate', 'crash', 'slow', 'huge']);
+  assert.deepEqual(JSON.parse((await call({ action: 'tools', target: 'playwright', tool: 'echo' })).text).tools[0].inputSchema.required, ['text']);
+  // No reason, step or interval: the record is derived and the evidence is automatic.
+  const first = await call({ action: 'run', kind: 'mcp', target: 'playwright', tool: 'increment', args: { by: 2 } });
+  assert.equal(first.isError, false, first.text);
+  assert.equal(first.imageDelivery?.status, 'attached'); assert.ok(first.image, 'the after-snapshot rides inline');
+  assert.deepEqual(first.content, [{ type: 'text', text: first.content![0].type === 'text' ? first.content![0].text : '' }]);
+  assert.match((first.content![0] as { text: string }).text, /^count=2 /, 'the tool\'s own text passes through');
+  const result = body(first.text);
+  assert.equal(result.relayOutcome, 'completed'); assert.equal(result.toolOutcome, 'completed');
+  assert.deepEqual(result.step, { id: 'playwright.increment-1', title: 'playwright.increment', expected: 'playwright.increment returns without a tool error', inputMode: 'ordinary' });
+  assert.deepEqual(result.snapshots, { afterIntervalMs: 300 });
+  const request = await json(join(f.manager.status().output!, 'host/requests', `${result.executionId}.json`));
+  assert.equal(request.because, 'Relay playwright.increment (no reason given)');
+  assert.deepEqual(request.argv.slice(2, 7), ['call', join(acquired.guestRoot, 'mcp'), 'playwright', 'increment', '{"by":2}'], 'tool and args forwarded unchanged');
+  // The same server process keeps its state: the session persists across calls.
+  const second = await call({ action: 'run', kind: 'mcp', target: 'playwright', tool: 'increment', args: { by: 3 }, reason: 'Count again', expected: 'count=5', afterIntervalMs: 0 });
+  assert.match((second.content![0] as { text: string }).text, /^count=5 /);
+  assert.equal(body(second.text).step.expected, 'count=5'); assert.deepEqual(body(second.text).snapshots, { afterIntervalMs: 0 });
+  // cua launches through the real `<cuaDriver> mcp` command; its image block is delivered inline too.
+  const picture = await call({ action: 'run', kind: 'mcp', target: 'cua', tool: 'picture' });
+  assert.equal(picture.isError, false, picture.text);
+  assert.deepEqual(picture.content!.map(block => block.type), ['text', 'image']);
+  const tool = body(picture.text);
+  assert.equal(tool.toolImages[0].status, 'attached'); assert.equal(tool.toolImages[0].image.source, 'application');
+  assert.deepEqual(tool.snapshots, { afterIntervalMs: 500 });
+  // A mismatch is refused on the host: nothing reaches the receiver, the correct schema comes back.
+  const receiverCalls = f.service.receiverCalls;
+  const mismatch = await call({ action: 'run', kind: 'mcp', target: 'playwright', tool: 'echo', args: { text: 42 } });
+  assert.equal(mismatch.isError, true);
+  assert.equal(body(mismatch.text).sent, false); assert.deepEqual(body(mismatch.text).inputSchema.required, ['text']);
+  assert.equal((await call({ action: 'run', kind: 'mcp', target: 'playwright', tool: 'nope' })).isError, true);
+  assert.equal(f.service.receiverCalls, receiverCalls, 'refused before sending anything');
+  // The target's isError: completed with a tool error; an error result; the VM is kept.
+  const failed = await call({ action: 'run', kind: 'mcp', target: 'chrome-devtools', tool: 'fail' });
+  assert.equal(failed.isError, true);
+  assert.equal(body(failed.text).relayOutcome, 'completed-with-tool-error'); assert.equal(body(failed.text).outcome.exitStatus.code, 3);
+  assert.equal((failed.content![0] as { text: string }).text, 'fixture tool error');
+  assert.equal(failed.imageDelivery?.status, 'attached', 'a failed call is still bracketed by snapshots');
+  await f.assertRetained(acquired.vm);
+  assert.deepEqual((await f.mcpCalls()).map(entry => `${entry.server}.${entry.tool}`), ['playwright.increment', 'playwright.increment', 'cua.picture', 'chrome-devtools.fail']);
+  // finish stops the host and brings the results home as the relay-run extraction.
   const output = f.manager.status().output!;
-  const receipts = await readdir(join(output, 'host/receiver-receipts'));
-  const recorded = await Promise.all(receipts.map(file => json(join(output, 'host/receiver-receipts', file))));
-  assert.ok(recorded.some(r => r.stdout.includes('https://example.test clicked')), JSON.stringify(recorded));
-  await stopBrowser(join(acquired.guestRoot, 'browser'));
-  assert.equal((await f.manager.finish()).execution, 'passed');
-  // The navigation landed a page capture; it came home as the automatically declared extraction.
-  const captureRoots = await readdir(join(output, 'extractions', 'browser-captures'));
-  assert.equal(captureRoots.length, 1);
-  const captured = (await readdir(join(output, 'extractions', 'browser-captures', captureRoots[0]!))).sort();
-  assert.equal(captured.length, 2);
-  assert.match(captured[0]!, /^c000001-\d{8}T\d{6}\.\d{3}Z-landing-navigate\.json$/);
-  assert.match(captured[1]!, /^c000001-.*-landing-navigate\.png$/);
-  assert.equal(await readFile(join(output, 'extractions', 'browser-captures', captureRoots[0]!, captured[1]!), 'utf8'), 'PNGhttps://example.test');
+  const delivered = await f.manager.finish();
+  assert.equal(delivered.deliveryVerified, true); assert.equal(delivered.execution, 'failed');
+  const root = join(output, 'extractions', 'relay-run');
+  const copy = join(root, (await readdir(root))[0]!);
+  assert.ok((await readdir(join(copy, 'playwright'))).length >= 2);
+  assert.ok((await readdir(join(copy, 'servers'))).includes('playwright.log'));
   await f.assertClean();
 });
 
-test('ordinary CUA claims reject known direct-accessibility setters before receiver dispatch', async t => {
+test('relay_run: a server crash mid-call is uncertain, keeps the VM and is never replayed', { timeout: 60000 }, async t => {
+  const f = await fixture(t);
+  const acquired = await f.manager.acquire(acquireInput()); await f.stage();
+  const crashed = await relayCall(f.manager, { action: 'run', kind: 'mcp', target: 'playwright', tool: 'crash' });
+  assert.equal(crashed.isError, true);
+  assert.equal(relayJson(crashed.text).outcome.kind, 'uncertain');
+  assert.equal(f.service.receiverCalls, 1);
+  await f.assertRetained(acquired.vm);
+  const after = await relayCall(f.manager, { action: 'run', kind: 'mcp', target: 'playwright', tool: 'increment' });
+  assert.match((after.content![0] as { text: string }).text, /^count=1 /, 'a fresh server; the crashed call was not replayed');
+  assert.deepEqual((await f.mcpCalls()).map(entry => entry.tool), ['crash', 'increment']);
+  await f.manager.release(); await f.assertClean();
+});
+
+test('relay_run stages pinned packages hash-checked and refuses a tarball that does not match its pin', { timeout: 60000 }, async t => {
+  const source = await realpath(await mkdtemp(join(tmpdir(), 'relay-package-')));
+  t.after(() => rm(source, { recursive: true, force: true }));
+  await mkdir(join(source, 'package'));
+  await writeFile(join(source, 'package', 'package.json'), JSON.stringify({ name: 'fixture-mcp', version: '1.0.0' }));
+  await writeFile(join(source, 'package', 'server.cjs'), `import(${JSON.stringify(mcpFixture)});`);
+  execFileSync('tar', ['-czf', join(source, 'fixture.tgz'), '-C', source, 'package']);
+  const bytes = await readFile(join(source, 'fixture.tgz'));
+  const pin = { name: 'fixture-mcp', version: '1.0.0', integrity: `sha512-${createHash('sha512').update(bytes).digest('base64')}` };
+  let fetched = 0;
+  const log = join(source, 'calls.jsonl');
+  const f = await fixture(t, {
+    targetPackages: { playwright: { entry: 'fixture-mcp/server.cjs', packages: [pin] }, 'chrome-devtools': { entry: '', packages: [{ ...pin, integrity: 'sha512-AAAA' }] } },
+    tarballSource: async () => { fetched++; return bytes; },
+    targetLaunches: context => ({ ...fixtureLaunches(log)(context), playwright: { command: context.node, args: [join(context.packagesRoot, 'node_modules', 'fixture-mcp', 'server.cjs'), 'playwright'], cwd: context.workspace, env: { FIXTURE_LOG: log } } }),
+  });
+  const acquired = await f.manager.acquire(acquireInput()); await f.stage();
+  const ran = await relayCall(f.manager, { action: 'run', kind: 'mcp', target: 'playwright', tool: 'increment' });
+  assert.equal(ran.isError, false, ran.text);
+  assert.equal(await readFile(join(acquired.guestRoot, 'mcp/packages/node_modules/fixture-mcp/server.cjs'), 'utf8'), `import(${JSON.stringify(mcpFixture)});`);
+  await relayCall(f.manager, { action: 'run', kind: 'mcp', target: 'playwright', tool: 'increment' });
+  assert.equal(fetched, 1, 'fetched once, then served from the verified host cache');
+  const receiverCalls = f.service.receiverCalls;
+  await assert.rejects(relayCall(f.manager, { action: 'run', kind: 'mcp', target: 'chrome-devtools', tool: 'increment' }), /does not match its pinned integrity/);
+  assert.equal(f.service.receiverCalls, receiverCalls);
+  await f.manager.release(); await f.assertClean();
+});
+
+test('probe scope=guest reports per-target availability without starting anything', async t => {
   const f = await fixture(t); await f.manager.acquire(acquireInput()); await f.stage();
-  await assert.rejects(f.manager.run(operation('ax-mislabeled', { kind: 'cua', tool: 'set_value', args: { value: 'x' } })), /directly uses accessibility/);
-  assert.equal(f.service.receiverCalls, 0); await f.assertRetained();
-  assert.equal((await f.manager.run(operation('ordinary-command'))).outcome.kind, 'completed');
+  const facts = await f.manager.probe('guest') as any;
+  assert.equal(facts.targets.cua.available, true); assert.deepEqual(facts.targets.cua.launch, [f.driver, 'mcp']);
+  assert.equal(facts.targets.playwright.server.state, 'not-started');
+  assert.deepEqual(facts.targets.playwright.pinned, ['@playwright/mcp@0.0.82', 'playwright@1.64.0-alpha-1789764292000', 'playwright-core@1.64.0-alpha-1789764292000']);
+  assert.equal(f.service.receiverCalls, 0);
+  await relayCall(f.manager, { action: 'run', kind: 'mcp', target: 'playwright', tool: 'increment' });
+  const later = await f.manager.probe('guest') as any;
+  assert.equal(later.targets.playwright.server.state, 'running');
   await f.manager.release(); await f.assertClean();
 });
 
@@ -992,7 +1086,8 @@ test('guest probe checks executable readiness read-only before stage and after p
   assert.equal(initial.checks.find(c => c.name === 'node')?.ready, true);
   assert.equal(initial.checks.find(c => c.name === 'cuaDriver')?.ready, false);
   let commands = f.service.requests.slice(before).filter(r => r.path.endsWith('/exec'));
-  assert.equal(commands.length, 2); assert.ok(commands.every(r => r.body.argv.at(-1) === '--version'));
+  assert.equal(commands.length, 3); assert.ok(commands.slice(0, 2).every(r => r.body.argv.at(-1) === '--version'));
+  assert.equal(commands[2].body.argv[1], '-e', 'the browser executable check is a read-only access test');
   assert.equal(f.service.receiverCalls, 0); assert.equal(f.manager.status().staged, false);
   await f.stage(); before = f.service.requests.length;
   const staged = await f.manager.probe('guest');
@@ -1001,7 +1096,8 @@ test('guest probe checks executable readiness read-only before stage and after p
   assert.ok(staged.checks.every(c => c.ready), JSON.stringify(staged.checks));
   await assert.rejects(readFile(join(f.root, 'captures.jsonl')), /ENOENT/);
   commands = f.service.requests.slice(before).filter(r => r.path.endsWith('/exec'));
-  assert.deepEqual(commands.map(r => r.body.argv), [[process.execPath, '--version'], [f.driver, '--version']]);
+  assert.deepEqual(commands.slice(0, 2).map(r => r.body.argv), [[process.execPath, '--version'], [f.driver, '--version']]);
+  assert.equal(commands.length, 3);
   await f.assertRetained(acquired.vm); await f.manager.release(); await f.assertClean();
 });
 

@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 
 const [root, infoFile] = process.argv.slice(2);
 if (!root || !infoFile) { process.stderr.write('usage: fixture-service.ts <root> <info-file>\n'); process.exit(2); }
-const browserBundle = fileURLToPath(new URL('../../dist/browser.mjs', import.meta.url));
+const mcpHostBundle = fileURLToPath(new URL('../../dist/mcp-host.mjs', import.meta.url));
 const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aO/8AAAAASUVORK5CYII=';
 const driver = join(root, 'fake-cua');
 await writeFile(driver, `#!${process.execPath}\nconst fs=require('node:fs');if(process.argv[2]!=='call'||process.argv[3]!=='get_desktop_state'||process.argv[4]!=='--json')process.exit(99);const a=JSON.parse(process.argv[5]);fs.writeFileSync(a.screenshot_out_file,Buffer.from('${png}','base64'));process.stdout.write(JSON.stringify({screenshot_file_path:a.screenshot_out_file}));\n`);
@@ -73,7 +73,7 @@ server.listen(0, '127.0.0.1', async () => {
 const shutdown = async () => {
   server.close();
   for (const guest of guestRoots) {
-    await new Promise<void>(done => { const child = spawn(process.execPath, [browserBundle, 'stop', join(guest, 'browser')], { stdio: 'ignore' }); child.on('close', () => done()); child.on('error', () => done()); });
+    await new Promise<void>(done => { const child = spawn(process.execPath, [mcpHostBundle, 'stop', join(guest, 'mcp')], { stdio: 'ignore' }); child.on('close', () => done()); child.on('error', () => done()); });
     await rm(guest, { recursive: true, force: true });
   }
   process.exit(0);

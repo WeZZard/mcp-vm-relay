@@ -33,9 +33,10 @@ export const PLUGIN_TOOL_PREFIX = 'mcp__plugin_mcp-vm-relay_relay__';
 
 const message = (error: unknown): string => error instanceof Error ? error.message : String(error);
 const text = (value: string, isError = false) => ({ content: [{ type: 'text' as const, text: value }], isError });
-/** A relay result as MCP content: the text, then the delivered image as its own typed block when there is one. */
+/** A relay result as MCP content: the relay's text, then (for relay_run) the target tool's own text and images, then the delivered after-snapshot as its own typed block when there is one. */
 export function relayContent(result: RelayCallResult) {
-  return { content: [{ type: 'text' as const, text: result.text }, ...(result.image ? [{ type: 'image' as const, data: result.image.data, mimeType: result.image.mimeType }] : [])], isError: result.isError };
+  const passthrough = (result.content ?? []).map(block => block.type === 'text' ? { type: 'text' as const, text: block.text } : { type: 'image' as const, data: block.data, mimeType: block.mimeType });
+  return { content: [{ type: 'text' as const, text: result.text }, ...passthrough, ...(result.image ? [{ type: 'image' as const, data: result.image.data, mimeType: result.image.mimeType }] : [])], isError: result.isError };
 }
 
 /** The project directory: the plugin passes Claude Code's; an unexpanded placeholder or nothing means the server's own working directory. */

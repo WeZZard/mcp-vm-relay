@@ -19,30 +19,68 @@ import { recordSearch } from './search-diagnostics.js';
 import { acquisitionCapabilities, consoleStatus, type ConsoleStatus } from './console.js';
 import { ImageStore, imageCapability, type ImageTarget, type ImageResult } from './images.js';
 import { refreshEvidenceState } from './evidence-merge.js';
+import { DEFAULT_AFTER_INTERVAL_MS, TARGET_PACKAGES, cachedTarball, tarballName, targetLaunches, type LaunchContext, type Target, type TargetLaunch, type TargetPackages, type TarballSource } from './targets.js';
+import { checkArguments } from './json-schema.js';
+import type { CallSummary } from './guest/mcp-host.js';
+import type { RelayImageContent } from './surface.js';
 
 export interface Extraction { path: string; name: string }
 export interface AcquireInput { task: string; image: string; extractions: Extraction[]; ttlHours?: number; fullWorkspace?: boolean; env?: string; vnc?: boolean }
 export interface ConsoleAttemptInput { console_id: string; attempt_id: string }
 export interface ConsoleOpenInput extends ConsoleAttemptInput { userRequested: true; reason: string; expected: string }
-export interface StageInput { resetRecording?: boolean; workspace?: string; files?: Array<{ local: string; path: string }>; nodePath?: string; cuaDriver?: string; browser?: { playwrightModule?: string; settleTimeoutMs?: number } }
-export interface RunInput { because: string; timeoutMs?: number; diagnostic?: boolean; kind: 'exec' | 'script' | 'code' | 'cua' | 'browser'; step: StepDescription; snapshots: SnapshotsRequest; argv?: string[]; localPath?: string; language?: 'javascript' | 'typescript' | 'python'; code?: string; tool?: string; args?: Record<string, unknown>; browser?: { action: 'navigate' | 'click' | 'type' | 'press' | 'read' | 'snapshot'; url?: string; selector?: string; text?: string; key?: string; name?: string } }
+export interface StageInput { resetRecording?: boolean; workspace?: string; files?: Array<{ local: string; path: string }>; nodePath?: string; cuaDriver?: string; browserExecutable?: string }
+/**
+ * One run. `because`, `step` and `snapshots` are optional: whatever is left
+ * out is derived from the call (see `derive`). `kind: 'mcp'` is relay_run:
+ * `target`, `tool` and `args` name one tool call on an in-guest MCP server;
+ * `expected` and `afterIntervalMs` are its record overrides.
+ */
+export interface RunInput { because?: string; timeoutMs?: number; diagnostic?: boolean; kind: 'exec' | 'script' | 'code' | 'mcp'; step?: Partial<StepDescription>; snapshots?: SnapshotsRequest; argv?: string[]; localPath?: string; language?: 'javascript' | 'typescript' | 'python'; code?: string; target?: Target; tool?: string; args?: Record<string, unknown>; expected?: string; afterIntervalMs?: number }
 interface BackendBinding { endpoint: string; tartHome: string; environmentFingerprint?: string }
 interface Enclosure {
   backend?: BackendBinding;
   purpose: string; task: string; image: string; project: string; startedAt: string;
   guestRoot: string; hostRoot: string; ttlHours: number; extractions: Extraction[]; fullWorkspace: boolean;
   lease?: VmLease; row: RegistryRow; staged: boolean; node?: string; cuaDriver?: string; sessionId?: string;
-  failed?: string; lastError?: string; released?: boolean; delivered?: DeliveryResult; acquisitionInFlight?: boolean; browser?: boolean;
-  active?: boolean; guestState?: string; expiresAt?: number; browserConfig?: StageInput['browser'];
+  failed?: string; lastError?: string; released?: boolean; delivered?: DeliveryResult; acquisitionInFlight?: boolean;
+  active?: boolean; guestState?: string; expiresAt?: number;
+  /** Guest browser for the playwright and chrome-devtools targets; default installed Google Chrome. */
+  browserExecutable?: string;
+  /** The guest MCP host was started with the current launch configuration. */
+  mcpHost?: boolean;
+  /** Targets whose pinned packages are unpacked in the guest. */
+  mcpPackages?: Target[];
+  /** Counter for derived step IDs. */
+  runSeq?: number;
   previousEvidence?: Array<{ path: string; sessionId: string; guestState?: string }>;
   pendingReset?: { id: string; from: string; fromSession: string; to: string };
   consoleObservation?: ConsoleStatus;
   consoleAttempt?: { console_id: string; attempt_id: string; status: string };
   consoleAttemptIds?: string[];
 }
-export interface ManagerOptions { sessionId: string; project: string; stateRoot?: string; outputRoot?: string; registry?: Registry; vm?: VmBackend; environment?: SelectedEnvironment; tartHome?: string; tartPath?: string; runtimeBundle?: string; heartbeatMs?: number; verifyDestroyed?: (vm: string) => Promise<boolean> }
-/** The workspace directory and extraction name that carry the guest browser's page captures home. */
-export const BROWSER_CAPTURES = 'browser-captures';
+/** A run's result: its execution identity and outcome, the after-snapshot delivery, and kind-specific facts. */
+export interface RunResult {
+  executionId: string | null;
+  outcome: { kind: 'completed'; exitStatus: { code: number | null; signal: string | null } } | { kind: 'refused' | 'uncertain'; diagnostic: string };
+  imageDelivery: Omit<ImageResult, 'content'> & { content?: ImageResult['content'] };
+  [key: string]: any;
+}
+export interface ManagerOptions {
+  sessionId: string; project: string; stateRoot?: string; outputRoot?: string; registry?: Registry; vm?: VmBackend; environment?: SelectedEnvironment; tartHome?: string; tartPath?: string; runtimeBundle?: string; heartbeatMs?: number; verifyDestroyed?: (vm: string) => Promise<boolean>;
+  /** The guest MCP host bundle; default `dist/mcp-host.mjs`. */
+  mcpHostBundle?: string;
+  /** Test seams: replace the launch commands, the pinned package closures, the tarball source or the host tarball cache. */
+  targetLaunches?: (context: LaunchContext) => Record<string, TargetLaunch>;
+  targetPackages?: Partial<Record<Exclude<Target, 'cua'>, TargetPackages>>;
+  tarballSource?: TarballSource;
+  packageCache?: string;
+}
+/** The workspace directory and extraction name that carry relay_run results home: each call's full result, the targets' images and files, and the servers' logs. */
+export const RELAY_RUN_OUTPUTS = 'relay-run';
+/** How long the guest MCP host may take to start a target server, on top of a call's own timeout. */
+export const MCP_START_ALLOWANCE_MS = 60000;
+/** At most this many of a call's own images are delivered inline; the rest stay retrievable with relay_image. */
+export const MAX_TOOL_IMAGES = 4;
 /**
  * The server's MCP `instructions`: the rules that cut across all nineteen
  * tools rather than belonging to one of them (see each tool's own
@@ -50,7 +88,7 @@ export const BROWSER_CAPTURES = 'browser-captures';
  * rules also lives in the `relay_probe` and `relay_acquire` descriptions,
  * because not every MCP client surfaces server instructions to the model.
  */
-export const instructions = 'This server offers nineteen tools for one interruptive VM enclosure: relay_search, relay_probe, relay_acquisition_capabilities, relay_acquire, relay_stage, the run tools relay_exec/relay_script/relay_code/relay_cua/relay_browser, relay_image, relay_extract, relay_finish, relay_release, relay_console_resolve, relay_console_open, relay_console_cancel, relay_status and relay_trajectory. Relay only interruptive computer-use or browser-use that would otherwise take over a real desktop or browser, judged for yourself from relay_probe facts; unknown is not idle, and non-disruptive or headless work stays with local tools. One task gets one enclosure: call relay_acquire once per task, never reused for a second task. Work an enclosure in order: relay_probe, then relay_acquire, then relay_stage, then one or more run tools, then relay_image or relay_extract as needed, then relay_finish or relay_release. Always call relay_finish or relay_release explicitly before you return an answer; ending the session only pauses lease renewal, it does not destroy the VM, and the backend\'s own expiry is the last-resort safeguard. A refused, uncertain or nonzero operation keeps the VM so you can diagnose and submit a corrected operation; never replay input whose effect is uncertain. A tool result, an attached image or a verified evidence package, is evidence for a human reviewer, never the review itself. The relay never targets a physical or local display and offers no video or spawn API. Every tool\'s text result is capped at 50 KiB / 2000 lines; a larger result is retained whole in a local file the result names.';
+export const instructions = 'This server offers nineteen tools for one interruptive VM enclosure: relay_search, relay_probe, relay_acquisition_capabilities, relay_acquire, relay_stage, relay_run, relay_tools, the command tools relay_exec/relay_script/relay_code, relay_image, relay_extract, relay_finish, relay_release, relay_console_resolve, relay_console_open, relay_console_cancel, relay_status and relay_trajectory. relay_run sends the cua-driver, Playwright MCP or Chrome DevTools MCP tool calls you already know to that server inside the VM; evidence is automatic. Relay only interruptive computer-use or browser-use that would otherwise take over a real desktop or browser, judged for yourself from relay_probe facts; unknown is not idle, and non-disruptive or headless work stays with local tools. One task gets one enclosure: call relay_acquire once per task, never reused for a second task. Work an enclosure in order: relay_probe, then relay_acquire, then relay_stage, then relay_run or the command tools, then relay_image or relay_extract as needed, then relay_finish or relay_release. Always call relay_finish or relay_release explicitly before you return an answer; ending the session only pauses lease renewal, it does not destroy the VM, and the backend\'s own expiry is the last-resort safeguard. A refused, uncertain or nonzero operation keeps the VM so you can diagnose and submit a corrected operation; never replay input whose effect is uncertain. A tool result, an attached image or a verified evidence package, is evidence for a human reviewer, never the review itself. The relay never targets a physical or local display and offers no video or spawn API. Every tool\'s text result is capped at 50 KiB / 2000 lines; a larger result is retained whole in a local file the result names.';
 
 export class RelayManager {
   readonly vm: VmBackend;
@@ -192,7 +230,8 @@ export class RelayManager {
           try { const r = await this.channel.exec(e.lease!.vm, [...argv], 10000); checks.push({ name, ...r, ready: r.code === 0 }); }
           catch (error) { checks.push({ name, ready: false, diagnostic: String(error) }); }
         }
-        const facts = { scope, observedAt: new Date().toISOString(), owned: this.status(), checks, captureVerified: false, browserVerified: false };
+        const targets = await this.targetAvailability(e, checks);
+        const facts = { scope, observedAt: new Date().toISOString(), owned: this.status(), checks, targets, captureVerified: false, browserVerified: false };
         await this.log('guest-readiness', undefined, facts); return facts;
       });
     }
@@ -301,7 +340,7 @@ export class RelayManager {
       within('/workspace', extraction.path);
       if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,100}$/.test(extraction.name) || names.has(extraction.name)) throw new Error('Extraction names must be unique safe basenames');
       if (extraction.name === 'full-workspace') throw new Error('full-workspace is a reserved extraction name');
-      if (extraction.name === BROWSER_CAPTURES && extraction.path !== BROWSER_CAPTURES) throw new Error(`${BROWSER_CAPTURES} is reserved for the guest browser's page captures at workspace/${BROWSER_CAPTURES}`);
+      if (extraction.name === RELAY_RUN_OUTPUTS && extraction.path !== RELAY_RUN_OUTPUTS) throw new Error(`${RELAY_RUN_OUTPUTS} is reserved for relay_run results at workspace/${RELAY_RUN_OUTPUTS}`);
       names.add(extraction.name);
     }
     const ttlHours = input.ttlHours ?? 4;
@@ -385,35 +424,25 @@ export class RelayManager {
     const e = this.current();
     if (e.delivered) throw new Error('Evidence already sealed; release this VM explicitly');
     if (input.resetRecording || e.pendingReset) await this.resetRecording();
-    if (e.staged && (input.workspace || input.files?.length || input.browser)) throw new Error('Runtime already staged; use diagnostic exec for repairs or stage with only corrected executable paths');
+    if (e.staged && (input.workspace || input.files?.length)) throw new Error('Runtime already staged; use diagnostic exec for repairs or stage with only corrected executable paths');
     const bundle = this.options.runtimeBundle ?? fileURLToPath(new URL('../dist/receiver.mjs', import.meta.url));
     await access(bundle);
     const node = input.nodePath ?? e.node ?? 'node';
     const transfer = new Transfer(this.channel, e.lease!.vm, node, { guestRoot: e.guestRoot, hostTempRoot: join(this.root, 'transfer-tmp'), onRetry: event => this.log('transfer-retry', undefined, event) });
     await transfer.checked([node, '--version']);
+    const launchChanged = e.mcpHost && ((input.nodePath !== undefined && input.nodePath !== e.node) || (input.cuaDriver !== undefined && input.cuaDriver !== e.cuaDriver) || (input.browserExecutable !== undefined && input.browserExecutable !== e.browserExecutable));
     e.node = node;
     e.cuaDriver = input.cuaDriver ?? e.cuaDriver ?? (e.lease!.image_kind === 'macos' ? '/Applications/CuaDriver.app/Contents/MacOS/cua-driver' : 'cua-driver');
+    if (input.browserExecutable !== undefined) e.browserExecutable = input.browserExecutable;
     await this.save();
+    // A corrected executable changes how the MCP servers launch: stop the host
+    // (and its servers) so the next relay_run starts them with the new paths.
+    if (launchChanged) await this.stopMcpHost('corrected executable paths');
     if (e.staged) { await this.session?.close(); await this.attach(); return { staged: true, workspace: join(e.guestRoot, 'workspace'), owned: this.status(), files: [], extractions: e.extractions }; }
     await transfer.checked(['/bin/mkdir', '-p', join(e.guestRoot, 'workspace'), join(e.guestRoot, 'state')]);
     const staged = [await transfer.pushFile(bundle, join(e.guestRoot, 'receiver.mjs'))];
     for (const file of input.files ?? []) staged.push(await transfer.pushFile(resolve(this.options.project, file.local), within(join(e.guestRoot, 'support'), file.path), file.local.startsWith('/') ? dirname(resolve(file.local)) : resolve(this.options.project)));
     if (input.workspace) staged.push(...await transfer.pushTree(resolve(this.options.project, input.workspace), join(e.guestRoot, 'workspace'), input.workspace.startsWith('/') ? resolve(input.workspace) : resolve(this.options.project)));
-    if (input.browser && !e.browser) {
-      const browserBundle = fileURLToPath(new URL('../dist/browser.mjs', import.meta.url));
-      staged.push(await transfer.pushFile(browserBundle, join(e.guestRoot, 'browser.mjs')));
-      // Page captures (settle-waited landing and snapshot PNGs with their records)
-      // land in the workspace and come home as a declared extraction, so the
-      // declaration is added here when the agent did not make it on acquire.
-      if (!e.extractions.some(item => item.name === BROWSER_CAPTURES)) { e.extractions.push({ path: BROWSER_CAPTURES, name: BROWSER_CAPTURES }); await this.save(); }
-      const config = { stateDir: join(e.guestRoot, 'browser'), workspace: join(e.guestRoot, 'workspace'), captureDir: join(e.guestRoot, 'workspace', BROWSER_CAPTURES), settleTimeoutMs: input.browser.settleTimeoutMs, playwrightModule: input.browser.playwrightModule };
-      const localConfig = join(e.hostRoot, 'host', 'browser-config.json');
-      await jsonFile(localConfig, config);
-      await transfer.pushFile(localConfig, join(e.guestRoot, 'browser-config.json'));
-      await transfer.checked([node, join(e.guestRoot, 'browser.mjs'), 'start', join(e.guestRoot, 'browser-config.json')], 90000);
-      e.browser = true; e.browserConfig = input.browser;
-      await this.save();
-    }
     await this.log('stage', undefined, { files: staged, extractions: e.extractions });
     const relay = Relay.open(join(e.hostRoot, 'host', 'submissions'));
     this.transport = new VmTransport(transfer, e.guestRoot, join(e.hostRoot, 'host'), e.cuaDriver);
@@ -422,9 +451,9 @@ export class RelayManager {
     e.sessionId = this.session.sessionId; e.staged = true; await this.save();
     return { staged: true, workspace: join(e.guestRoot, 'workspace'), files: staged, extractions: e.extractions, capabilities: { image: imageCapability } };
   })); }
-  run(input: RunInput, signal?: AbortSignal) { return this.serialized(() => {
-    this.reason(input.because);
-    return this.guarded(signal, async () => {
+  run(input: RunInput, signal?: AbortSignal): Promise<RunResult> { return this.serialized(() => {
+    if (input.because !== undefined) this.reason(input.because);
+    return this.guarded<RunResult>(signal, async () => {
     const e = this.current();
     const timeoutMs = input.timeoutMs ?? 120000;
     if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 3600000) throw new Error('timeoutMs must be an integer from 1 to 3600000');
@@ -432,28 +461,28 @@ export class RelayManager {
     if (e.delivered) throw new Error('Evidence already sealed; release this VM explicitly');
     if (input.diagnostic) return this.diagnostic(input, timeoutMs);
     if (e.pendingReset) throw new Error('Recording reset is pending; retry stage to reconcile it, or use diagnostic exec');
-    if (!e.staged || !this.session || !this.transport) throw new Error('Use relay action=stage before action=run, or exec diagnostic=true for setup diagnosis and repair');
-    if (!input.step?.id?.trim() || !input.step.title?.trim() || !input.step.expected?.trim()) throw new Error('step id, title and expected result are required');
-    if (!input.snapshots || typeof input.snapshots !== 'object') throw new Error('snapshots with an agent-supplied interval is required');
-    const interval = input.snapshots.group?.afterIntervalMs ?? input.snapshots.afterIntervalMs;
-    if ((!input.snapshots.group || input.snapshots.group.phase === 'last') && (!Number.isFinite(interval) || interval! < 0 || interval! > 300000)) throw new Error('Supply afterIntervalMs between 0 and 300000; no default');
-    this.transport.because = input.because;
-    this.transport.timeoutMs = timeoutMs;
-    this.transport.diagnostic = input.diagnostic ?? false;
-    const options = { step: input.step, snapshots: input.snapshots, cwd: join(e.guestRoot, 'workspace') };
+    if (!e.staged || !this.session || !this.transport) throw new Error('Use relay_stage before a run, or relay_exec diagnostic=true for setup diagnosis and repair');
+    let argv: string[] | undefined, callTimeoutMs = timeoutMs;
+    if (input.kind === 'mcp') {
+      if (!input.target || !input.tool) throw new Error('relay_run requires target and tool');
+      // Checked before anything reaches the guest receiver: a refusal here sends nothing.
+      const refusal = await this.prepareMcp(e, input.target, input.tool, input.args ?? {}, signal);
+      if (refusal) return { ...refusal, timeoutMs, evidencePath: e.hostRoot, leaseReleased: false, imageDelivery: { status: 'not-requested' as const, diagnostic: 'Nothing was sent, so no snapshot was taken.' } };
+      // The dispatch bound covers a first-use server start on top of the call itself.
+      callTimeoutMs = Math.min(timeoutMs, 3600000 - MCP_START_ALLOWANCE_MS - 15000);
+      argv = [e.node!, join(e.guestRoot, 'mcp-host.mjs'), 'call', join(e.guestRoot, 'mcp'), input.target, input.tool, JSON.stringify(input.args ?? {}), String(callTimeoutMs), String(MCP_START_ALLOWANCE_MS)];
+    }
+    const record = this.derive(e, input);
+    await this.save();
+    this.transport.because = record.because;
+    this.transport.timeoutMs = input.kind === 'mcp' ? callTimeoutMs + MCP_START_ALLOWANCE_MS + 15000 : timeoutMs;
+    this.transport.diagnostic = false;
+    const options = { step: record.step, snapshots: record.snapshots, cwd: join(e.guestRoot, 'workspace') };
     let result;
-    if (input.kind === 'exec') {
-      if (!input.argv?.length) throw new Error('exec requires argv');
-      result = await this.session.exec(input.argv, options);
-    } else if (input.kind === 'cua') {
-      if (!input.tool) throw new Error('cua requires tool');
-      const directAccessibility = input.tool === 'set_value' || (e.lease!.image_kind === 'macos' && input.tool === 'type_text') || (['click', 'double_click', 'right_click', 'press_key'].includes(input.tool) && input.args?.element_index !== undefined);
-      if (directAccessibility && input.step.inputMode !== 'accessibility') throw new Error('This CUA form directly uses accessibility APIs. Use real pixel/keyboard input for ordinary tests, or explicitly label inputMode accessibility.');
-      result = await this.session.exec([e.cuaDriver!, 'call', input.tool, '--json', JSON.stringify(input.args ?? {})], options);
-    } else if (input.kind === 'browser') {
-      if (!e.browser || !input.browser) throw new Error('Enable browser support in relay action=stage and supply a browser operation');
-      const { action: type, ...args } = input.browser;
-      result = await this.session.exec([e.node!, join(e.guestRoot, 'browser.mjs'), 'call', join(e.guestRoot, 'browser'), JSON.stringify({ type, ...args }), String(timeoutMs)], options);
+    if (input.kind === 'exec' || input.kind === 'mcp') {
+      argv ??= input.argv;
+      if (!argv?.length) throw new Error('exec requires argv');
+      result = await this.session.exec(argv, options);
     } else if (input.kind === 'script') {
       if (!input.localPath || !input.language) throw new Error('script requires localPath and language');
       await assertHostPath(input.localPath.startsWith('/') ? dirname(input.localPath) : resolve(this.options.project), resolve(this.options.project, input.localPath));
@@ -464,20 +493,199 @@ export class RelayManager {
     } else throw new Error('Unknown operation kind');
     const outcome = result.outcome;
     if (outcome.kind !== 'completed' || outcome.exitStatus.code !== 0 || outcome.exitStatus.signal) {
-      await this.log('execution-failed', input.because, result);
+      await this.log('execution-failed', record.because, result);
       await this.fail(new Error(`Execution ${result.executionId}: ${JSON.stringify(outcome)}`));
     }
     const imageDelivery = await this.imageStore().get({ source: 'display', sessionId: e.sessionId!, executionId: result.executionId, phase: 'after' }, signal);
+    const common = { step: record.step, snapshots: record.snapshots, timeoutMs, evidencePath: e.hostRoot, leaseReleased: !this.enclosure, owned: this.status(), imageDelivery };
+    if (input.kind === 'mcp') return { ...result, ...await this.mcpResult(e, input.target!, input.tool!, outcome, signal), ...common };
     // The guest's bounded output rides along in the receipt the transport filed.
-    // For a browser event the guest program's one-line JSON answer (settle facts,
-    // a landing or snapshot capture, a read's text) is parsed out for the agent.
-    let browser: unknown;
-    if (input.kind === 'browser' && typeof this.transport?.response?.stdout === 'string') {
-      try { const parsed = JSON.parse(this.transport.response.stdout.trim().split('\n').at(-1) ?? ''); if (parsed && typeof parsed === 'object' && parsed.ok === true) browser = parsed.result; } catch { /* not the browser program's answer; the raw output is still returned */ }
-    }
-    return { ...result, ...this.transport?.response, ...(browser !== undefined ? { browser } : {}), timeoutMs, evidencePath: e.hostRoot, leaseReleased: !this.enclosure, owned: this.status(), imageDelivery };
+    return { ...result, ...this.transport?.response, ...common };
     });
   }); }
+  /**
+   * The step record for a run, from the call itself: a title such as
+   * `playwright.browser_click`, an expected result, an input mode, a default
+   * after-snapshot wait and a reason. Anything the caller gave overrides it.
+   */
+  private derive(e: Enclosure, input: RunInput): { because: string; step: StepDescription; snapshots: SnapshotsRequest } {
+    const seq = e.runSeq = (e.runSeq ?? 0) + 1;
+    const stepId = (prefix: string) => `${prefix.replace(/[^A-Za-z0-9_.-]+/g, '-').replace(/^[^A-Za-z0-9]+/, '').slice(0, 100) || 'run'}-${seq}`;
+    if (input.kind === 'mcp') {
+      const title = `${input.target}.${input.tool}`.slice(0, 500);
+      const args = input.args ?? {};
+      // cua-driver forms that act through the accessibility API rather than real pointer or keyboard input.
+      const accessibility = input.target === 'cua' && (input.tool === 'set_value' || (e.lease!.image_kind === 'macos' && input.tool === 'type_text') || (['click', 'double_click', 'right_click', 'press_key'].includes(input.tool!) && args.element_index !== undefined));
+      return {
+        because: input.because ?? `Relay ${title} (no reason given)`,
+        step: { id: stepId(title), title, expected: input.expected ?? `${title} returns without a tool error`, inputMode: accessibility ? 'accessibility' : 'ordinary' },
+        snapshots: { afterIntervalMs: input.afterIntervalMs ?? DEFAULT_AFTER_INTERVAL_MS[input.target!] },
+      };
+    }
+    const title = input.step?.title ?? (input.kind === 'exec' ? `exec ${(input.argv ?? []).map((arg, index) => index === 0 ? arg.split('/').at(-1) : arg).join(' ')}` : input.kind === 'script' ? `script ${input.localPath?.split('/').at(-1) ?? ''}` : `code (${input.language ?? 'unknown'})`).slice(0, 500);
+    const snapshots: SnapshotsRequest = { ...(input.snapshots ?? {}) };
+    const group = snapshots.group;
+    if (!group ? snapshots.afterIntervalMs === undefined : group.phase === 'last' && group.afterIntervalMs === undefined && snapshots.afterIntervalMs === undefined) Object.assign(snapshots, { afterIntervalMs: DEFAULT_AFTER_INTERVAL_MS.command });
+    return {
+      because: input.because ?? `Relay ${title} (no reason given)`.slice(0, 4000),
+      step: { id: input.step?.id ?? stepId(input.kind), title: title || input.kind, expected: input.step?.expected ?? 'Exits with status 0', inputMode: input.step?.inputMode ?? 'ordinary' },
+      snapshots,
+    };
+  }
+  /** Stage what a target needs, start the guest MCP host, and check the call against the target's real tool schema. Returns a refusal when nothing may be sent. */
+  private async prepareMcp(e: Enclosure, target: Target, tool: string, args: Record<string, unknown>, signal?: AbortSignal) {
+    const transfer = this.transfer();
+    await this.ensureMcpHost(e, transfer);
+    await this.ensureTargetPackages(e, target, transfer, signal);
+    const tools = await this.toolList(e, target, transfer);
+    const refuse = async (diagnostic: string, extra: Record<string, unknown>) => {
+      await this.log('relay-run-refused', undefined, { target, tool, diagnostic, ...extra });
+      return { executionId: null, outcome: { kind: 'refused' as const, diagnostic }, relayOutcome: 'refused', sent: false, target, tool, ...extra, owned: this.status() };
+    };
+    const definition = tools.find(item => item.name === tool);
+    if (!definition) return refuse(`${target} has no tool named ${tool}; nothing was sent. Use relay_tools to see its tools.`, { tools: tools.map(item => item.name) });
+    const check = checkArguments(definition.inputSchema, args);
+    if (!check.valid) return refuse(`args do not match ${target}.${tool}'s input schema; nothing was sent`, { errors: check.errors, inputSchema: definition.inputSchema });
+    if (Buffer.byteLength(JSON.stringify(args)) > 64 * 1024) return refuse('args exceed 64 KiB; nothing was sent', {});
+    return undefined;
+  }
+  /** Map the guest MCP host's answer to the run result: the target's own text and images pass through, bounded; the full result stays in the workspace. */
+  private async mcpResult(e: Enclosure, target: Target, tool: string, outcome: { kind: string; exitStatus?: { code: number | null } }, signal?: AbortSignal) {
+    const response = this.transport?.response;
+    let summary: CallSummary | undefined;
+    try { const parsed = JSON.parse(String(response?.stdout ?? '').trim().split('\n').at(-1) ?? ''); if (parsed?.relayRun === 1) summary = parsed; } catch { /* No readable answer: the outcome says what is known. */ }
+    if (summary?.hostUnavailable) { e.mcpHost = false; this.toolLists.clear(); await this.save(); }
+    const relayOutcome = outcome.kind !== 'completed' ? outcome.kind : outcome.exitStatus?.code === 0 ? 'completed' : outcome.exitStatus?.code === 3 ? 'completed-with-tool-error' : 'completed-nonzero';
+    const passthrough: Array<{ type: 'text'; text: string } | RelayImageContent> = [];
+    const toolImages: unknown[] = [];
+    const content: unknown[] = [];
+    let lines = 0;
+    const resultFile = summary?.resultFile ? `workspace/${RELAY_RUN_OUTPUTS}/${summary.resultFile}` : undefined;
+    for (const block of summary?.content ?? []) {
+      if (typeof block.text === 'string') {
+        // The text bound is the relay's own: 50 KiB (the host already cut at 32 KiB characters) and 2000 lines in total.
+        const kept = block.text.split('\n').slice(0, Math.max(0, 2000 - lines));
+        lines += kept.length;
+        const text = kept.join('\n'), cut = block.truncated || text.length < block.text.length;
+        passthrough.push({ type: 'text', text: cut ? `${text}\n[Truncated. Full result: ${resultFile}]` : text });
+        content.push({ type: block.type, ...(block.uri ? { uri: block.uri } : {}), chars: block.text.length, ...(cut ? { truncated: true } : {}) });
+      } else if (block.type === 'image' && block.path) {
+        if (!['image/png', 'image/jpeg', 'image/webp'].includes(block.mimeType ?? '')) toolImages.push({ status: 'presentation-unavailable', path: block.path, mimeType: block.mimeType, diagnostic: 'Only PNG, JPEG and WebP images are delivered inline.' });
+        else if (toolImages.length >= MAX_TOOL_IMAGES) toolImages.push({ status: 'not-requested', path: block.path, diagnostic: `Beyond ${MAX_TOOL_IMAGES} inline images; retrieve with relay_image source=application name=${RELAY_RUN_OUTPUTS} path=${block.path}.` });
+        else {
+          const { content: image, ...delivery } = await this.imageStore().get({ source: 'application', name: RELAY_RUN_OUTPUTS, path: block.path }, signal);
+          toolImages.push({ ...delivery, path: block.path });
+          if (image) passthrough.push(image as RelayImageContent);
+        }
+        content.push({ type: 'image', path: block.path, mimeType: block.mimeType, bytes: block.bytes });
+      } else content.push(block);
+    }
+    return {
+      relayOutcome, target, tool,
+      ...(summary ? { toolOutcome: summary.outcome, sent: summary.sent, ...(summary.diagnostic ? { toolDiagnostic: summary.diagnostic } : {}), ...(summary.errors ? { errors: summary.errors } : {}), content, ...(summary.structuredContent !== undefined ? { structuredContent: summary.structuredContent } : {}), ...(summary.structuredContentOmitted ? { structuredContentOmitted: true } : {}), ...(resultFile ? { resultFile } : {}), toolImages } : { toolOutcome: 'unknown', stdout: response?.stdout, stderr: response?.stderr }),
+      ...(response?.stderr ? { stderr: response.stderr } : {}),
+      ...(response?.terminationConfirmed !== undefined ? { terminationConfirmed: response.terminationConfirmed } : {}),
+      passthrough,
+    };
+  }
+  private toolLists = new Map<string, Array<{ name: string; description?: string; inputSchema: unknown }>>();
+  /** A target's real `tools/list`, from the in-guest server, pulled home hash-checked and kept in the host evidence. */
+  private async toolList(e: Enclosure, target: Target, transfer: Transfer) {
+    const cached = this.toolLists.get(target);
+    if (cached) return cached;
+    const stateDir = join(e.guestRoot, 'mcp');
+    await transfer.checked([e.node!, join(e.guestRoot, 'mcp-host.mjs'), 'tools', stateDir, target], MCP_START_ALLOWANCE_MS * 2 + 20000);
+    const bytes = await transfer.pullFrame(join(stateDir, 'tools', `${target}.json`), join(e.hostRoot, 'host', 'mcp-tools', `${target}-${Date.now()}-${randomUUID().slice(0, 8)}.json`), e.guestRoot, e.hostRoot);
+    const parsed = JSON.parse(bytes.toString('utf8'));
+    if (parsed?.target !== target || !Array.isArray(parsed.tools)) throw new Error(`Malformed tool list from ${target}`);
+    const tools = (parsed.tools as Array<Record<string, unknown>>).filter(item => typeof item?.name === 'string' && item.inputSchema && typeof item.inputSchema === 'object')
+      .map(item => ({ name: item.name as string, ...(typeof item.description === 'string' ? { description: item.description } : {}), inputSchema: item.inputSchema }));
+    this.toolLists.set(target, tools);
+    return tools;
+  }
+  /** Push and start the guest MCP host once per launch configuration. It starts each target's server on first use. */
+  private async ensureMcpHost(e: Enclosure, transfer: Transfer) {
+    if (!e.extractions.some(item => item.name === RELAY_RUN_OUTPUTS)) { e.extractions.push({ path: RELAY_RUN_OUTPUTS, name: RELAY_RUN_OUTPUTS }); await this.save(); }
+    if (e.mcpHost) return;
+    const bundle = this.options.mcpHostBundle ?? fileURLToPath(new URL('../dist/mcp-host.mjs', import.meta.url));
+    const entry = join(e.guestRoot, 'mcp-host.mjs');
+    const staged = await transfer.pushFile(bundle, entry);
+    const context: LaunchContext = { node: e.node!, cuaDriver: e.cuaDriver!, packagesRoot: join(e.guestRoot, 'mcp', 'packages'), workspace: join(e.guestRoot, 'workspace'), outputDir: join(e.guestRoot, 'workspace', RELAY_RUN_OUTPUTS), ...(e.browserExecutable ? { browserExecutable: e.browserExecutable } : {}) };
+    const config = { stateDir: join(e.guestRoot, 'mcp'), outputDir: context.outputDir, targets: (this.options.targetLaunches ?? targetLaunches)(context), startTimeoutMs: MCP_START_ALLOWANCE_MS };
+    const local = join(e.hostRoot, 'host', 'mcp-host-config.json');
+    await jsonFile(local, config);
+    await transfer.pushFile(local, join(e.guestRoot, 'mcp-host-config.json'), e.hostRoot);
+    const answer = await transfer.checked([e.node!, entry, 'start', join(e.guestRoot, 'mcp-host-config.json')], 60000);
+    e.mcpHost = true; this.toolLists.clear(); await this.save();
+    await this.log('mcp-host-start', undefined, { bundle: staged, config, answer: answer.trim().slice(0, 2000) });
+  }
+  /** Stage a browser target's pinned packages: host-verified tarballs, pushed hash-checked, unpacked in the guest. */
+  private async ensureTargetPackages(e: Enclosure, target: Target, transfer: Transfer, signal?: AbortSignal) {
+    if (target === 'cua' || e.mcpPackages?.includes(target)) return;
+    const closure = this.options.targetPackages?.[target] ?? TARGET_PACKAGES[target];
+    const cache = this.options.packageCache ?? join(dirname(this.root), 'mcp-packages');
+    const specs: string[] = [], staged: unknown[] = [];
+    for (const pin of closure.packages) {
+      const local = await cachedTarball(cache, pin, this.options.tarballSource, signal);
+      const remote = join(e.guestRoot, 'mcp', 'tarballs', tarballName(pin));
+      staged.push({ ...pin, ...await transfer.pushFile(local.path, remote, cache) });
+      specs.push(`${pin.name}=${remote}=${local.sha256}`);
+    }
+    if (specs.length) await transfer.checked([e.node!, join(e.guestRoot, 'mcp-host.mjs'), 'install', join(e.guestRoot, 'mcp', 'packages', 'node_modules'), ...specs], 180000);
+    e.mcpPackages = [...(e.mcpPackages ?? []), target]; await this.save();
+    await this.log('mcp-target-staged', undefined, { target, packages: staged });
+  }
+  /** Stop the guest MCP host and its servers. Best effort: destroying the VM remains the final cleanup. */
+  private async stopMcpHost(reason: string) {
+    const e = this.enclosure;
+    if (!e?.mcpHost || !e.node || !e.lease) return;
+    try {
+      const result = await this.channel.exec(e.lease.vm, [e.node, join(e.guestRoot, 'mcp-host.mjs'), 'stop', join(e.guestRoot, 'mcp')], 30000);
+      await this.log('mcp-host-stop', undefined, { reason, code: result.code, output: result.stdout.slice(0, 2000) });
+    } catch (error) { await this.log('mcp-host-stop-failed', undefined, { reason, error: String(error) }).catch(() => {}); }
+    e.mcpHost = false; this.toolLists.clear(); await this.save();
+  }
+  /** relay_tools: a target's real tools (names, descriptions, input schemas), optionally one. */
+  tools(target: Target, tool?: string, signal?: AbortSignal) { return this.serialized(() => this.guarded(signal, async () => {
+    const e = this.current();
+    if (e.delivered) throw new Error('Evidence already sealed; release this VM explicitly');
+    if (!e.staged) throw new Error('Use relay_stage before relay_tools');
+    const transfer = this.transfer();
+    await this.ensureMcpHost(e, transfer);
+    await this.ensureTargetPackages(e, target, transfer, signal);
+    const tools = await this.toolList(e, target, transfer);
+    const selected = tool === undefined ? tools : tools.filter(item => item.name === tool);
+    if (tool !== undefined && !selected.length) throw new Error(`${target} has no tool named ${tool}; it has: ${tools.map(item => item.name).join(', ')}`);
+    await this.log('tools', undefined, { target, tool, count: selected.length });
+    return { target, count: selected.length, tools: selected };
+  })); }
+  /** Per-target facts for probe scope=guest, without installing or starting anything. */
+  private async targetAvailability(e: Enclosure, checks: Array<{ name: string; ready: boolean }>) {
+    const node = checks.find(check => check.name === 'node')?.ready ?? false;
+    const driver = checks.find(check => check.name === 'cuaDriver')?.ready ?? false;
+    const candidates = e.browserExecutable ? [e.browserExecutable] : e.lease!.image_kind === 'macos' ? ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'] : ['/opt/google/chrome/chrome', '/usr/bin/google-chrome', '/usr/bin/google-chrome-stable'];
+    let browser: { path: string | null; diagnostic?: string } = { path: null };
+    if (node) {
+      try { const r = await this.channel.exec(e.lease!.vm, [e.node ?? 'node', '-e', 'const fs=require("fs");console.log(JSON.stringify({path:process.argv.slice(1).find(p=>{try{fs.accessSync(p,fs.constants.X_OK);return true}catch{return false}})??null}))', ...candidates], 10000); browser = JSON.parse(r.stdout.trim().split('\n').at(-1) ?? '{}'); }
+      catch (error) { browser = { path: null, diagnostic: String(error) }; }
+    }
+    let servers: Record<string, unknown> = {};
+    if (e.mcpHost && node) {
+      try { const r = await this.channel.exec(e.lease!.vm, [e.node ?? 'node', join(e.guestRoot, 'mcp-host.mjs'), 'status', join(e.guestRoot, 'mcp')], 10000); servers = JSON.parse(r.stdout.trim().split('\n').at(-1) ?? '{}').targets ?? {}; }
+      catch (error) { servers = { diagnostic: String(error) }; }
+    }
+    const browserTarget = (target: Exclude<Target, 'cua'>) => ({
+      available: node && !!browser.path, node, browserExecutable: browser.path, browserCandidates: candidates,
+      packages: e.mcpPackages?.includes(target) ? 'staged' : 'staged from the host cache on first use', pinned: TARGET_PACKAGES[target].packages.map(pin => `${pin.name}@${pin.version}`),
+      server: servers[target] ?? { state: 'not-started' },
+    });
+    return {
+      cua: { available: driver, launch: [e.cuaDriver ?? 'cua-driver', 'mcp'], ...(e.lease!.image_kind === 'macos' ? {} : { requires: 'cua-driver serve --no-overlay running on native X11' }), server: servers.cua ?? { state: 'not-started' } },
+      playwright: browserTarget('playwright'),
+      'chrome-devtools': browserTarget('chrome-devtools'),
+      note: 'Availability means the executables exist; it never proves a browser renders on the display or that capture works.',
+    };
+  }
   private imageStore() {
     const e = this.current();
     return new ImageStore({ owner: this.options.sessionId, enclosure: e.purpose, backend: e.backend,
@@ -579,6 +787,8 @@ export class RelayManager {
   finish(signal?: AbortSignal) { return this.serialized(() => this.guarded(signal, async () => {
     const e = this.current(); await this.log('finish');
     if (!e.delivered) {
+      // Stop the MCP servers first, so their output files are complete before extraction.
+      await this.stopMcpHost('finish');
       await this.extractInternal(e.extractions.map(item => item.name));
       if (e.fullWorkspace) await this.transfer().pullVerified(join(e.guestRoot, 'workspace'), join(e.hostRoot, 'extractions', 'full-workspace', randomUUID()), e.guestRoot, e.hostRoot);
     }
@@ -593,7 +803,7 @@ export class RelayManager {
   }
   private async diagnostic(input: RunInput, timeoutMs: number) {
     const e = this.current();
-    if (!input.argv?.length || input.snapshots.group) throw new Error('Diagnostic exec requires argv and cannot join a snapshot group');
+    if (!input.argv?.length || input.snapshots?.group) throw new Error('Diagnostic exec requires argv and cannot join a snapshot group');
     const executionId = `diagnostic-${randomUUID()}`;
     const request = { executionId, at: new Date().toISOString(), evidenceMode: 'diagnostic', timeoutMs, ...input };
     await jsonFile(join(e.hostRoot, 'host', 'diagnostics', `${executionId}.request.json`), request);
@@ -612,7 +822,7 @@ export class RelayManager {
     await this.init(); this.assertBinding(); await this.assertBackend();
     try {
       await this.log('release');
-      if (this.enclosure?.staged && !this.enclosure.delivered) { await this.extractAvailable(); await this.packageInternal(); }
+      if (this.enclosure?.staged && !this.enclosure.delivered) { await this.stopMcpHost('release'); await this.extractAvailable(); await this.packageInternal(); }
     } catch (error) {
       if (this.enclosure) await jsonFile(`${this.enclosure.hostRoot}.delivery-error.json`, { error: String(error) }).catch(() => {});
     } finally { await this.releaseInternal('released'); }

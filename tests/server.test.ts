@@ -15,7 +15,7 @@ import { PLUGIN_TOOL_PREFIX, STATUS_TOOL, TRAJECTORY_TOOL, createRelayServer, pr
 const run = promisify(execFile);
 const server = resolve('dist/server.mjs');
 const allToolNames = [...relayTools.map(tool => tool.name), STATUS_TOOL, TRAJECTORY_TOOL];
-const runTools = ['relay_exec', 'relay_script', 'relay_code', 'relay_cua', 'relay_browser'];
+const runTools = ['relay_exec', 'relay_script', 'relay_code', 'relay_run'];
 
 test('the project directory comes from the plugin, unless the placeholder was never expanded', () => {
   assert.equal(projectDirectory({ MCP_VM_RELAY_PROJECT: '/tmp/project' }, '/elsewhere'), '/tmp/project');
@@ -82,18 +82,25 @@ test('over stdio the server offers exactly the nineteen tools, each with a title
 test('each run tool maps to its own kind in the derived schema, without a kind field', async t => {
   const { client } = await fixture(t);
   const { tools } = await client.listTools();
-  for (const [name, argField] of [['relay_exec', 'argv'], ['relay_script', 'localPath'], ['relay_code', 'code'], ['relay_cua', 'tool'], ['relay_browser', 'browser']] as const) {
+  for (const [name, argField] of [['relay_exec', 'argv'], ['relay_script', 'localPath'], ['relay_code', 'code']] as const) {
     const tool = tools.find(t2 => t2.name === name)!;
     const properties = tool.inputSchema.properties as Record<string, unknown>;
     assert.ok(argField in properties, `${name} carries its own field ${argField}`);
     assert.ok(!('kind' in properties), `${name} does not expose kind`);
     assert.ok('reason' in properties && 'step' in properties && 'snapshots' in properties, `${name} carries the shared run fields`);
+    assert.ok(!(tool.inputSchema.required ?? []).some(key => ['reason', 'step', 'snapshots'].includes(key)), `${name} requires no evidence field`);
   }
+  const relayRun = tools.find(t2 => t2.name === 'relay_run')!;
+  assert.deepEqual(Object.keys(relayRun.inputSchema.properties as object).sort(), ['afterIntervalMs', 'args', 'expected', 'reason', 'target', 'timeoutMs', 'tool']);
+  assert.deepEqual(relayRun.inputSchema.required, ['target', 'tool']);
+  const relayToolsTool = tools.find(t2 => t2.name === 'relay_tools')!;
+  assert.deepEqual(relayToolsTool.inputSchema.required, ['target']);
+  assert.ok(!tools.some(t2 => ['relay_cua', 'relay_browser'].includes(t2.name)));
 });
 
 test('invalid input is refused by the strict contract before any manager exists; status stays inactive', async t => {
   const { client, root, project } = await fixture(t);
-  for (const [name, args] of [['relay_probe', { reason: 'no' }], ['relay_exec', { argv: ['node'] }], ['relay_acquire', {}]] as const) {
+  for (const [name, args] of [['relay_probe', { reason: 'no' }], ['relay_exec', {}], ['relay_acquire', {}], ['relay_run', { target: 'firefox', tool: 'x' }], ['relay_tools', {}]] as const) {
     const result: any = await client.callTool({ name, arguments: args });
     assert.equal(result.isError, true, `${name} ${JSON.stringify(args)}`);
     assert.match(result.content[0].text, /Invalid relay input/);
@@ -195,7 +202,7 @@ test('the plugin files name the server the tests spoke to and ship the built bun
   for (const tool of relayTools) assert.match(agent, new RegExp(`${PLUGIN_TOOL_PREFIX}${tool.name}(?![A-Za-z0-9_])`), tool.name);
   assert.match(agent, new RegExp(`${PLUGIN_TOOL_PREFIX}${STATUS_TOOL}(?![A-Za-z0-9_])`));
   assert.doesNotMatch(agent, new RegExp(`${PLUGIN_TOOL_PREFIX}${TRAJECTORY_TOOL}(?![A-Za-z0-9_])`));
-  for (const name of ['server.mjs', 'receiver.mjs', 'browser.mjs', 'doctor.mjs', 'integrity.json', 'build-info.json', 'NOTICE.txt']) assert.ok((await stat(join('dist', name))).isFile(), name);
+  for (const name of ['server.mjs', 'receiver.mjs', 'mcp-host.mjs', 'doctor.mjs', 'integrity.json', 'build-info.json', 'NOTICE.txt']) assert.ok((await stat(join('dist', name))).isFile(), name);
   const bundle = await readFile('dist/server.mjs', 'utf8');
   assert.doesNotMatch(bundle, /@earendil-works/);
   const info = JSON.parse(await readFile('dist/build-info.json', 'utf8'));
@@ -207,4 +214,8 @@ test('an image-bearing relay result becomes MCP content: the text block, then th
   assert.deepEqual(relayContent({ text: 'identity\n{}', details: {}, isError: false, image }), { content: [{ type: 'text', text: 'identity\n{}' }, { type: 'image', data: 'AAAA', mimeType: 'image/png' }], isError: false });
   assert.deepEqual(relayContent({ text: 'failed', details: {}, isError: true, image }), { content: [{ type: 'text', text: 'failed' }, { type: 'image', data: 'AAAA', mimeType: 'image/png' }], isError: true });
   assert.deepEqual(relayContent({ text: '{}', details: {}, isError: false }), { content: [{ type: 'text', text: '{}' }], isError: false });
+  // relay_run: the target tool's own blocks sit between the relay's text and the after-snapshot.
+  const tool = { type: 'image' as const, data: 'BBBB', mimeType: 'image/jpeg' };
+  assert.deepEqual(relayContent({ text: 'relay', details: {}, isError: true, image, content: [{ type: 'text', text: 'tool text' }, tool] }).content,
+    [{ type: 'text', text: 'relay' }, { type: 'text', text: 'tool text' }, { type: 'image', data: 'BBBB', mimeType: 'image/jpeg' }, { type: 'image', data: 'AAAA', mimeType: 'image/png' }]);
 });
