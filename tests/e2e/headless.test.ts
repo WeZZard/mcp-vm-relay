@@ -15,8 +15,11 @@ import test, { type TestContext } from 'node:test';
 import { verifyDeliveredPackage } from '../../src/package.js';
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const TOOL = /^mcp__(?:plugin_mcp-vm-relay_)?vm-relay__(relay|relay_status|relay_trajectory)$/;
-const RELAY = 'mcp__plugin_mcp-vm-relay_vm-relay__relay', STATUS = 'mcp__plugin_mcp-vm-relay_vm-relay__relay_status';
+const PREFIX = 'mcp__plugin_mcp-vm-relay_relay__';
+const TOOL = /^mcp__(?:plugin_mcp-vm-relay_)?relay__relay_[a-z_]+$/;
+/** The plugin-scoped Claude Code name of one relay tool. */
+const tool = (name: string) => PREFIX + name;
+const STATUS = tool('relay_status');
 const registryText = '# Test registry\n\n## Using VMs\n\n| Machine | OS | Task Name | Agent | Project | Start Date |\n| -- | -- | -- | -- | -- | -- |\n| foreign | linux | keep-me | another agent | /project | yesterday |\n\n## End\nUnrelated text.\n';
 const sleep = (ms: number) => new Promise(done => setTimeout(done, ms));
 const hasClaude = await new Promise<boolean>(done => { const child = spawn('claude', ['--version'], { stdio: 'ignore' }); child.on('error', () => done(false)); child.on('close', code => done(code === 0)); });
@@ -45,14 +48,14 @@ async function fixture(t: TestContext) {
 function claude(project: string, prompt: string, env: Record<string, string>, maxTurns = 40): Promise<Run> {
   return new Promise((done, reject) => {
     const args = ['--print', '--plugin-dir', repo, '--model', 'sonnet', '--output-format', 'stream-json', '--verbose', '--max-turns', String(maxTurns),
-      '--settings', JSON.stringify({ env }), '--allowedTools', RELAY, STATUS];
+      '--settings', JSON.stringify({ env }), '--allowedTools', `${PREFIX}*`];
     const child: ChildProcess = spawn('claude', args, { cwd: project, env: { ...process.env, ...env }, stdio: ['pipe', 'pipe', 'pipe'] });
     let stdout = '', stderr = '';
     child.stdout!.on('data', data => { stdout += data; }); child.stderr!.on('data', data => { stderr += data; });
     child.on('error', reject);
     child.on('close', code => {
       const events = stdout.split('\n').filter(Boolean).flatMap(line => { try { return [JSON.parse(line)]; } catch { return []; } });
-      // Claude Code defers MCP tool schemas: the model first loads the relay tool
+      // Claude Code defers MCP tool schemas: the model first loads the relay tools
       // through its built-in ToolSearch. Only the relay tools' calls and their
       // results (paired by id) are what these cases judge.
       const toolUses: ToolUse[] = [], toolResults: ToolResult[] = [], names = new Map<string, string>();
@@ -89,27 +92,26 @@ test('status: the plugin loads, its tools carry the plugin-scoped names, and the
 
 test('refusal: an invalid relay call is an error result from the strict contract, reported without a crash', { skip, timeout: 300_000 }, async t => {
   const f = await fixture(t);
-  const run = await claude(f.project, `Call the relay tool exactly once with the arguments ${stepJson({ action: 'dance' })}. It will fail; that is expected. Reply with the error text you received and nothing else. Do not retry.`, f.env, 4);
+  const run = await claude(f.project, `Call the relay_run tool exactly once with the arguments ${stepJson({ target: 'firefox', tool: 'x' })}. It will fail; that is expected. Reply with the error text you received and nothing else. Do not retry.`, f.env, 4);
   assert.equal(run.code, 0, run.stderr);
-  assert.equal(run.toolUses.length, 1); assert.equal(run.toolUses[0]!.name, RELAY);
+  assert.equal(run.toolUses.length, 1); assert.equal(run.toolUses[0]!.name, tool('relay_run'));
   assert.equal(run.toolResults[0]!.isError, true);
-  assert.match(run.toolResults[0]!.text, /Invalid relay input/);
+  assert.match(run.toolResults[0]!.text, /Invalid relay input|firefox/);
   assert.deepEqual(await f.requests(), [], 'invalid input never reaches the service');
 });
 
 test('lifecycle: acquire, stage, run one exec, finish; the verified package and the artifact land in the project and the lease is released', { skip, timeout: 600_000 }, async t => {
   const f = await fixture(t);
-  const steps = [
-    { action: 'acquire', task: 'e2e-exec', image: 'ubuntu2404', extractions: [{ path: 'artifact.txt', name: 'artifact' }] },
-    { action: 'stage', nodePath: f.info.node, cuaDriver: f.info.driver },
-    { action: 'run', reason: 'End-to-end fixture run; no real desktop is touched', kind: 'exec', argv: [f.info.node, '-e', "require('fs').writeFileSync('artifact.txt','headless package')"], step: { id: 'write', title: 'Write the artifact', expected: 'artifact.txt exists in the workspace', inputMode: 'ordinary' }, snapshots: { afterIntervalMs: 0 } },
-    { action: 'finish' },
+  const steps: Array<[string, unknown]> = [
+    ['relay_acquire', { task: 'e2e-exec', image: 'ubuntu2404', extractions: [{ path: 'artifact.txt', name: 'artifact' }] }],
+    ['relay_stage', { nodePath: f.info.node, cuaDriver: f.info.driver }],
+    ['relay_exec', { reason: 'End-to-end fixture run; no real desktop is touched', argv: [f.info.node, '-e', "require('fs').writeFileSync('artifact.txt','headless package')"], step: { id: 'write', title: 'Write the artifact', expected: 'artifact.txt exists in the workspace', inputMode: 'ordinary' }, snapshots: { afterIntervalMs: 0 } }],
+    ['relay_finish', {}],
   ];
-  const prompt = `You are exercising the vm-relay plugin against a fixture service. Make exactly these four relay tool calls, in this order, one at a time, passing each JSON object as the arguments verbatim:\n${steps.map((s, i) => `${i + 1}. ${stepJson(s)}`).join('\n')}\nDo not call any other tool and do not change the arguments. When the fourth call has returned, reply with the single word DONE.`;
+  const prompt = `You are exercising the relay plugin against a fixture service. Make exactly these four tool calls, in this order, one at a time, passing each JSON object as the arguments verbatim:\n${steps.map(([name, args], i) => `${i + 1}. ${name} with ${stepJson(args)}`).join('\n')}\nDo not call any other tool and do not change the arguments. When the fourth call has returned, reply with the single word DONE.`;
   const run = await claude(f.project, prompt, f.env, 12);
   assert.equal(run.code, 0, run.stderr);
-  assert.deepEqual(run.toolUses.map(u => u.name), [RELAY, RELAY, RELAY, RELAY], JSON.stringify(run.toolUses));
-  assert.deepEqual(run.toolUses.map(u => u.input.action), ['acquire', 'stage', 'run', 'finish']);
+  assert.deepEqual(run.toolUses.map(u => u.name), steps.map(([name]) => tool(name)), JSON.stringify(run.toolUses));
   for (const result of run.toolResults) assert.equal(result.isError, false, result.text);
   const packages = (await readdir(join(f.project, 'relay-evidence'))).filter(name => name.startsWith('relay-e2e-exec-') && !name.includes('.'));
   assert.equal(packages.length, 1, 'one evidence package');
@@ -129,10 +131,10 @@ test('lifecycle: acquire, stage, run one exec, finish; the verified package and 
 
 test('abandoned lease: a session that acquires and stops without finishing keeps its VM; renewal pauses and the lease waits for an explicit release or the service TTL', { skip, timeout: 600_000 }, async t => {
   const f = await fixture(t);
-  const prompt = `This is a cleanup test. Make exactly one relay tool call with the arguments ${stepJson({ action: 'acquire', task: 'e2e-abandon', image: 'ubuntu2404', extractions: [] })}. Then reply with the single word DONE. Do not call finish, release or any other tool: the test is checking what happens when a session ends with a lease still held.`;
+  const prompt = `This is a cleanup test. Make exactly one relay_acquire tool call with the arguments ${stepJson({ task: 'e2e-abandon', image: 'ubuntu2404', extractions: [] })}. Then reply with the single word DONE. Do not call finish, release or any other tool: the test is checking what happens when a session ends with a lease still held.`;
   const run = await claude(f.project, prompt, f.env, 4);
   assert.equal(run.code, 0, run.stderr);
-  assert.deepEqual(run.toolUses.map(u => u.input.action), ['acquire'], JSON.stringify(run.toolUses));
+  assert.deepEqual(run.toolUses.map(u => u.name), [tool('relay_acquire')], JSON.stringify(run.toolUses));
   assert.equal(run.toolResults[0]!.isError, false, run.toolResults[0]!.text);
   // The session ended when claude exited; the server paused renewal and detached rather than destroying the VM.
   await sleep(2000);

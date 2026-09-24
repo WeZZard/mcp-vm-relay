@@ -1033,7 +1033,7 @@ test('staged diagnostic uses the owned workspace without capture prerequisites a
   const f = await fixture(t); const acquired = await f.manager.acquire(acquireInput()); await f.stage();
   const result = await f.manager.run(operation('staged-diagnostic', { diagnostic: true, argv: [process.execPath, '-e', 'console.log("diagnostic output")'] }));
   assert.equal(result.outcome.kind, 'completed', JSON.stringify(result));
-  assert.equal(result.evidenceMode, 'diagnostic'); assert.equal(result.stdout?.trim(), 'diagnostic output');
+  assert.equal(result.evidenceMode, 'diagnostic'); assert.equal(result.output?.trim(), 'diagnostic output'); assert.equal(result.outputStreams, 'stdout and stderr combined'); assert.equal(result.stderr, undefined, 'the combined stream is not repeated as stderr');
   assert.equal(f.service.receiverCalls, 0); assert.equal(result.leaseReleased, false);
   const request = await json(join(acquired.output!, 'host/diagnostics', `${result.executionId}.request.json`));
   assert.equal(request.diagnostic, true); assert.equal(request.timeoutMs, 120000);

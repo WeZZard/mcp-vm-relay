@@ -118,6 +118,19 @@ test("missing helper and helper exit before announcement reject within a bound",
   await lock.release();
 });
 
+test("a helper that exits at once still reports its whole reason", bounds, async t => {
+  const { dir, path } = await setup(t);
+  // A shell stand-in for Python: it ignores the -u -c arguments, writes the
+  // reason and exits. Exit can be observed before stderr is read, so the error
+  // must be built once the streams have closed.
+  const quick = join(dir, "quick-helper");
+  await writeFile(quick, "#!/bin/sh\nprintf 'Another relay manager owns this session' >&2\nexit 2\n");
+  await chmod(quick, 0o700);
+  for (let i = 0; i < 30; i++) {
+    await assert.rejects(acquireOwnerLock(path, { pythonExecutable: quick, timeoutMs: 5000 }), /before announcement: Another relay manager owns this session/);
+  }
+});
+
 async function helper(dir: string, body: string) {
   const path = join(dir, "helper.py");
   await writeFile(path, `#!/usr/bin/python3\n${body}\n`);

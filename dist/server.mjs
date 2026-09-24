@@ -20511,7 +20511,7 @@ Original subprocess/action evidence (not an authoritative input-success verdict)
       state: "diagnostic",
       because: request?.because,
       expected: request?.step?.expected,
-      observed: `No screenshot evidence. ${JSON.stringify({ outcome: receipt.outcome, stdout: receipt.stdout, stderr: receipt.stderr, timeoutMs: receipt.timeoutMs })}`
+      observed: `No screenshot evidence. ${JSON.stringify({ outcome: receipt.outcome, ...receipt.output !== void 0 ? { output: receipt.output } : { stdout: receipt.stdout, stderr: receipt.stderr }, timeoutMs: receipt.timeoutMs })}`
     });
   }
   if (events.some((e) => ["evidence-failure", "capture-status", "resource-stop"].includes(e.kind) && ["incomplete", "uncertain"].includes(e.state))) findings.push("journal records incomplete evidence or a resource stop");
@@ -20750,7 +20750,7 @@ async function acquireOwnerLock(path, options2 = {}) {
         else if (output.length >= 7) rejectReady(new OwnerLockError("Invalid owner lock helper announcement"));
       });
       child.once("error", (error2) => rejectReady(new OwnerLockError("Cannot start Python owner lock helper", { cause: error2 })));
-      child.once("exit", () => rejectReady(new OwnerLockError(`Owner lock helper exited before announcement: ${stderr || "no ready response"}`)));
+      child.once("close", () => rejectReady(new OwnerLockError(`Owner lock helper exited before announcement: ${stderr || "no ready response"}`)));
       abort = () => rejectReady(signal.reason);
       signal?.addEventListener("abort", abort, { once: true });
       if (signal?.aborted) abort();
@@ -30602,9 +30602,9 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
     try {
       const argv2 = e.staged ? ["/bin/sh", "-c", 'cd "$1" || exit; shift; exec "$@"', "relay-diagnostic", join15(e.guestRoot, "workspace"), ...input.argv] : input.argv;
       const r = await this.channel.exec(e.lease.vm, argv2, timeoutMs2);
-      result2 = { executionId, outcome: { kind: "completed", exitStatus: { code: r.code, signal: null } }, stdout: r.stdout, stderr: r.stderr };
+      result2 = { executionId, outcome: { kind: "completed", exitStatus: { code: r.code, signal: null } }, output: r.stdout, outputStreams: "stdout and stderr combined" };
     } catch (error2) {
-      result2 = { executionId, outcome: { kind: "uncertain", diagnostic: String(error2) }, stdout: "", stderr: String(error2) };
+      result2 = { executionId, outcome: { kind: "uncertain", diagnostic: String(error2) }, output: "", outputStreams: "stdout and stderr combined" };
     }
     const response = { ...result2, timeoutMs: timeoutMs2, evidenceMode: "diagnostic", screenshotEvidence: false, imageDelivery: { status: "not-requested", diagnostic: "Diagnostic execution has no screenshot evidence." }, evidencePath: e.hostRoot, leaseReleased: false, owned: this.status() };
     await jsonFile(join15(e.hostRoot, "host", "diagnostics", `${executionId}.receipt.json`), response);
@@ -30878,7 +30878,7 @@ var relayTools = [
     kind: "exec",
     title: "Run a guest command",
     annotations: acts(true),
-    description: "Run one guest command (`argv`) as one recorded operation; never hide several interactions in one call. Evidence is automatic: the relay snapshots the display before and after and records a step derived from the command. Optional `reason` (intent, never authorization), `step` (`id`, `title`, `expected`, `inputMode`) and `snapshots.afterIntervalMs` (default 500 ms) enrich or tune the record; consecutive keystrokes may form an explicit text group with `snapshots.group` (`first`/`member`/`last`). `timeoutMs` bounds execution (default 120000, up to 3600000). The result carries the outcome, bounded stdout/stderr and the after-snapshot inline. A refused, uncertain or nonzero result keeps the VM; never replay input whose effect is uncertain. `diagnostic: true` records a diagnosis or repair without snapshots, even before relay_stage; it is never visual verification."
+    description: "Run one guest command (`argv`) as one recorded operation; never hide several interactions in one call. Evidence is automatic: the relay snapshots the display before and after and records a step derived from the command. Optional `reason` (intent, never authorization), `step` (`id`, `title`, `expected`, `inputMode`) and `snapshots.afterIntervalMs` (default 500 ms) enrich or tune the record; consecutive keystrokes may form an explicit text group with `snapshots.group` (`first`/`member`/`last`). `timeoutMs` bounds execution (default 120000, up to 3600000). The result carries the outcome, bounded stdout/stderr and the after-snapshot inline. A refused, uncertain or nonzero result keeps the VM; never replay input whose effect is uncertain. `diagnostic: true` records a diagnosis or repair without snapshots, even before relay_stage; it is never visual verification, and its result has one `output` field with stdout and stderr combined."
   },
   {
     name: "relay_script",
