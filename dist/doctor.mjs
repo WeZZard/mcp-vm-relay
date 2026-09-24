@@ -735,11 +735,11 @@ async function installationReport(options = {}) {
   });
   await check("runtime-bundles", async () => {
     const integrity = JSON.parse(await readFile2(join4(assets, "integrity.json"), "utf8"));
-    for (const name of ["server.mjs", "receiver.mjs", "browser.mjs", "doctor.mjs"]) {
+    for (const name of ["server.mjs", "receiver.mjs", "mcp-host.mjs", "doctor.mjs"]) {
       const b = await readFile2(join4(assets, name));
       if (hash(b) !== integrity[name]) throw Error(`Invalid/missing shipped ${name}; reinstall the package.`);
     }
-    return "Host extension, guest receiver/browser and doctor hashes verified";
+    return "Host extension, guest receiver/MCP host and doctor hashes verified";
   });
   await check("registry", async () => {
     const registry = options.registry ?? new Registry(environment ? { managedRoot: environment.profile.relayStateDir } : {});

@@ -1203,6 +1203,19 @@ async function receive(input, options = {}) {
           return await retain({ ...response(value.code === "desktop_escalation_required" ? "refused" : "uncertain", diagnostic), stdout: bounded(outcome.stdout), stderr: bounded(outcome.stderr) });
         }
       }
+      const mcpHost = options.mcpHost ?? process.env.RELAY_MCP_HOST;
+      if (request.kind === "exec" && mcpHost && argv[1] === mcpHost && argv[2] === "call" && !outcome.spawnError && !outcome.timedOut && !outcome.outputTruncated) {
+        let summary;
+        try {
+          summary = JSON.parse((outcome.stdout ?? "").trim().split("\n").at(-1) ?? "");
+        } catch {
+        }
+        const readable = !!summary && typeof summary === "object" && summary.relayRun === 1;
+        const kept = { stdout: bounded(outcome.stdout), stderr: bounded(outcome.stderr) };
+        if (readable && summary.outcome === "not-sent") return await retain({ ...response("refused", `MCP call not sent: ${summary.diagnostic ?? "no diagnostic"}`), ...kept });
+        if (readable && summary.outcome === "uncertain") return await retain({ ...response("uncertain", `MCP call outcome unknown: ${summary.diagnostic ?? "no diagnostic"}`), ...kept });
+        if (!readable && outcome.exitStatus.code !== 0) return await retain({ ...response("uncertain", `MCP call ended without a readable answer (exit ${outcome.exitStatus.code ?? outcome.exitStatus.signal}); it may have reached the server`), ...kept });
+      }
       const result = outcome.spawnError || outcome.timedOut || outcome.outputTruncated ? response("uncertain", outcome.spawnError ?? (outcome.timedOut ? "execution timed out" : "execution exceeded output bound")) : { executionId, outcome: { kind: "completed", exitStatus: outcome.exitStatus } };
       if (group?.phase === "last" && result.outcome.kind === "completed" && result.outcome.exitStatus.code === 0) {
         delete groups.active;

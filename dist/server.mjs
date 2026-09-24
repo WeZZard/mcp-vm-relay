@@ -12,9 +12,9 @@ var __esm = (fn, res) => function __init() {
 var __commonJS = (cb, mod) => function __require() {
   return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
 };
-var __export = (target, all) => {
+var __export = (target2, all) => {
   for (var name in all)
-    __defProp(target, name, { get: all[name], enumerable: true });
+    __defProp(target2, name, { get: all[name], enumerable: true });
 };
 var __copyProps = (to, from, except, desc) => {
   if (from && typeof from === "object" || typeof from === "function") {
@@ -24,12 +24,12 @@ var __copyProps = (to, from, except, desc) => {
   }
   return to;
 };
-var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+var __toESM = (mod, isNodeMode, target2) => (target2 = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
   // If the importer is in node compatibility mode or this is not an ESM
   // file that has been converted to a CommonJS file using a Babel-
   // compatible transform (i.e. "__esModule" has not been set), then set
   // "default" to the CommonJS "module.exports" for node compatibility.
-  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+  isNodeMode || !mod || !mod.__esModule ? __defProp(target2, "default", { value: mod, enumerable: true }) : target2,
   mod
 ));
 
@@ -3680,49 +3680,49 @@ var require_schemes = __commonJS({
       wsComponent.fragment = void 0;
       return wsComponent;
     }
-    function urnParse(urnComponent, options) {
+    function urnParse(urnComponent, options2) {
       if (!urnComponent.path) {
         urnComponent.error = "URN can not be parsed";
         return urnComponent;
       }
       const matches = urnComponent.path.match(URN_REG);
       if (matches && matches[0] === urnComponent.path) {
-        const scheme = options.scheme || urnComponent.scheme || "urn";
+        const scheme = options2.scheme || urnComponent.scheme || "urn";
         urnComponent.nid = matches[1].toLowerCase();
         urnComponent.nss = matches[2];
-        const urnScheme = `${scheme}:${options.nid || urnComponent.nid}`;
+        const urnScheme = `${scheme}:${options2.nid || urnComponent.nid}`;
         const schemeHandler = getSchemeHandler(urnScheme);
         urnComponent.path = void 0;
         if (schemeHandler) {
-          urnComponent = schemeHandler.parse(urnComponent, options);
+          urnComponent = schemeHandler.parse(urnComponent, options2);
         }
       } else {
         urnComponent.error = urnComponent.error || "URN can not be parsed.";
       }
       return urnComponent;
     }
-    function urnSerialize(urnComponent, options) {
+    function urnSerialize(urnComponent, options2) {
       if (urnComponent.nid === void 0) {
         throw new Error("URN without nid cannot be serialized");
       }
-      const scheme = options.scheme || urnComponent.scheme || "urn";
+      const scheme = options2.scheme || urnComponent.scheme || "urn";
       const nid = urnComponent.nid.toLowerCase();
-      const urnScheme = `${scheme}:${options.nid || nid}`;
+      const urnScheme = `${scheme}:${options2.nid || nid}`;
       const schemeHandler = getSchemeHandler(urnScheme);
       if (schemeHandler) {
-        urnComponent = schemeHandler.serialize(urnComponent, options);
+        urnComponent = schemeHandler.serialize(urnComponent, options2);
       }
       const uriComponent = urnComponent;
       const nss = urnComponent.nss;
-      uriComponent.path = `${nid || options.nid}:${nss}`;
-      options.skipEscape = true;
+      uriComponent.path = `${nid || options2.nid}:${nss}`;
+      options2.skipEscape = true;
       return uriComponent;
     }
-    function urnuuidParse(urnComponent, options) {
+    function urnuuidParse(urnComponent, options2) {
       const uuidComponent = urnComponent;
       uuidComponent.uuid = uuidComponent.nss;
       uuidComponent.nss = void 0;
-      if (!options.tolerant && (!uuidComponent.uuid || !isUUID(uuidComponent.uuid))) {
+      if (!options2.tolerant && (!uuidComponent.uuid || !isUUID(uuidComponent.uuid))) {
         uuidComponent.error = uuidComponent.error || "UUID is not valid.";
       }
       return uuidComponent;
@@ -3831,18 +3831,18 @@ var require_fast_uri = __commonJS({
       }
       return decodedScheme;
     }
-    function normalize2(uri, options) {
+    function normalize2(uri, options2) {
       if (typeof uri === "string") {
         uri = /** @type {T} */
-        normalizeString(uri, options);
+        normalizeString(uri, options2);
       } else if (typeof uri === "object") {
         uri = /** @type {T} */
-        parse7(serialize(uri, options), options);
+        parse7(serialize(uri, options2), options2);
       }
       return uri;
     }
-    function resolve11(baseURI, relativeURI, options) {
-      const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
+    function resolve11(baseURI, relativeURI, options2) {
+      const schemelessOptions = options2 ? Object.assign({ scheme: "null" }, options2) : { scheme: "null" };
       const {
         parsed: baseParsed,
         malformedAuthorityOrPort: baseMalformed,
@@ -3863,10 +3863,10 @@ var require_fast_uri = __commonJS({
         throw new Error(baseParsed.error || relativeParsed.error || "URI is malformed.");
       }
       const resolved = resolveComponent(baseParsed, relativeParsed, schemelessOptions, true);
-      const resolvedSchemeHandler = getSchemeHandler(options && options.scheme || resolved.scheme);
+      const resolvedSchemeHandler = getSchemeHandler(options2 && options2.scheme || resolved.scheme);
       const resolvedHost = resolved.host;
       const resolvedHostIsIP = resolvedHost !== void 0 && resolvedHost !== "" && (isIPv4(resolvedHost) || normalizeIPv6(resolvedHost).isIPV6);
-      canonicalizeHost(resolved, options || {}, resolvedSchemeHandler, resolvedHostIsIP);
+      canonicalizeHost(resolved, options2 || {}, resolvedSchemeHandler, resolvedHostIsIP);
       const encodedASCIIHost = resolvedHost && resolvedHost.indexOf("%") !== -1 && !new RegExp("\\P{ASCII}", "u").test(resolvedHost);
       if (resolved.error && !encodedASCIIHost) {
         throw new Error(resolved.error);
@@ -3874,62 +3874,62 @@ var require_fast_uri = __commonJS({
       schemelessOptions.skipEscape = true;
       return serialize(resolved, schemelessOptions);
     }
-    function resolveComponent(base, relative6, options, skipNormalization) {
-      const target = {};
+    function resolveComponent(base, relative6, options2, skipNormalization) {
+      const target2 = {};
       if (!skipNormalization) {
-        base = parse7(serialize(base, options), options);
-        relative6 = parse7(serialize(relative6, options), options);
+        base = parse7(serialize(base, options2), options2);
+        relative6 = parse7(serialize(relative6, options2), options2);
       }
-      options = options || {};
-      if (!options.tolerant && relative6.scheme) {
-        target.scheme = relative6.scheme;
-        target.userinfo = relative6.userinfo;
-        target.host = relative6.host;
-        target.port = relative6.port;
-        target.path = removeDotSegments(relative6.path || "");
-        target.query = relative6.query;
+      options2 = options2 || {};
+      if (!options2.tolerant && relative6.scheme) {
+        target2.scheme = relative6.scheme;
+        target2.userinfo = relative6.userinfo;
+        target2.host = relative6.host;
+        target2.port = relative6.port;
+        target2.path = removeDotSegments(relative6.path || "");
+        target2.query = relative6.query;
       } else {
         if (relative6.userinfo !== void 0 || relative6.host !== void 0 || relative6.port !== void 0) {
-          target.userinfo = relative6.userinfo;
-          target.host = relative6.host;
-          target.port = relative6.port;
-          target.path = removeDotSegments(relative6.path || "");
-          target.query = relative6.query;
+          target2.userinfo = relative6.userinfo;
+          target2.host = relative6.host;
+          target2.port = relative6.port;
+          target2.path = removeDotSegments(relative6.path || "");
+          target2.query = relative6.query;
         } else {
           if (!relative6.path) {
-            target.path = base.path;
+            target2.path = base.path;
             if (relative6.query !== void 0) {
-              target.query = relative6.query;
+              target2.query = relative6.query;
             } else {
-              target.query = base.query;
+              target2.query = base.query;
             }
           } else {
             if (relative6.path[0] === "/") {
-              target.path = removeDotSegments(relative6.path);
+              target2.path = removeDotSegments(relative6.path);
             } else {
               if ((base.userinfo !== void 0 || base.host !== void 0 || base.port !== void 0) && !base.path) {
-                target.path = "/" + relative6.path;
+                target2.path = "/" + relative6.path;
               } else if (!base.path) {
-                target.path = relative6.path;
+                target2.path = relative6.path;
               } else {
-                target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative6.path;
+                target2.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative6.path;
               }
-              target.path = removeDotSegments(target.path);
+              target2.path = removeDotSegments(target2.path);
             }
-            target.query = relative6.query;
+            target2.query = relative6.query;
           }
-          target.userinfo = base.userinfo;
-          target.host = base.host;
-          target.port = base.port;
+          target2.userinfo = base.userinfo;
+          target2.host = base.host;
+          target2.port = base.port;
         }
-        target.scheme = base.scheme;
+        target2.scheme = base.scheme;
       }
-      target.fragment = relative6.fragment;
-      return target;
+      target2.fragment = relative6.fragment;
+      return target2;
     }
-    function equal(uriA, uriB, options) {
-      const normalizedA = normalizeComparableURI(uriA, options);
-      const normalizedB = normalizeComparableURI(uriB, options);
+    function equal(uriA, uriB, options2) {
+      const normalizedA = normalizeComparableURI(uriA, options2);
+      const normalizedB = normalizeComparableURI(uriB, options2);
       return normalizedA !== void 0 && normalizedB !== void 0 && normalizedA === normalizedB;
     }
     function serialize(cmpts, opts) {
@@ -3949,29 +3949,29 @@ var require_fast_uri = __commonJS({
         secure: cmpts.secure,
         error: ""
       };
-      const options = Object.assign({}, opts);
+      const options2 = Object.assign({}, opts);
       const uriTokens = [];
       if (component.scheme) {
         component.scheme = decodeValidScheme(component.scheme);
       }
-      const schemeHandler = getSchemeHandler(options.scheme || component.scheme);
-      if (schemeHandler && schemeHandler.serialize) schemeHandler.serialize(component, options);
+      const schemeHandler = getSchemeHandler(options2.scheme || component.scheme);
+      if (schemeHandler && schemeHandler.serialize) schemeHandler.serialize(component, options2);
       const hasAuthority = component.userinfo !== void 0 || component.host !== void 0 || component.port !== void 0;
-      const pathNoScheme = !options.skipEscape && component.scheme === void 0 && !hasAuthority;
+      const pathNoScheme = !options2.skipEscape && component.scheme === void 0 && !hasAuthority;
       if (component.path !== void 0) {
-        if (!options.skipEscape) {
+        if (!options2.skipEscape) {
           component.path = serializePathEncoding(component.path, pathNoScheme);
         } else {
           component.path = normalizePercentEncoding(component.path);
         }
       }
-      if (options.reference !== "suffix" && component.scheme) {
+      if (options2.reference !== "suffix" && component.scheme) {
         component.scheme = decodeValidScheme(component.scheme);
         uriTokens.push(component.scheme, ":");
       }
       const authority = recomposeAuthority(component);
       if (authority !== void 0) {
-        if (options.reference !== "suffix") {
+        if (options2.reference !== "suffix") {
           uriTokens.push("//");
         }
         uriTokens.push(authority);
@@ -3981,7 +3981,7 @@ var require_fast_uri = __commonJS({
       }
       if (component.path !== void 0) {
         let s = component.path;
-        if (!options.absolutePath && (!schemeHandler || !schemeHandler.absolutePath)) {
+        if (!options2.absolutePath && (!schemeHandler || !schemeHandler.absolutePath)) {
           s = removeDotSegments(s);
         }
         if (pathNoScheme) {
@@ -4030,8 +4030,8 @@ var require_fast_uri = __commonJS({
       const host = matches[4];
       return hasMalformedPercentEncoding(matches[3]) || host !== void 0 && !isIPLiteral(host) && hasMalformedPercentEncoding(host) || hasMalformedPercentEncoding(matches[6]) || hasMalformedPercentEncoding(matches[7]) || hasMalformedPercentEncoding(matches[8]);
     }
-    function canonicalizeHost(parsed, options, schemeHandler, isIP3) {
-      if (!options.unicodeSupport && (!schemeHandler || !schemeHandler.unicodeSupport) && parsed.host && !isIPLiteral(parsed.host) && (options.domainHost || schemeHandler && schemeHandler.domainHost) && isIP3 === false && nonSimpleDomain(parsed.host)) {
+    function canonicalizeHost(parsed, options2, schemeHandler, isIP3) {
+      if (!options2.unicodeSupport && (!schemeHandler || !schemeHandler.unicodeSupport) && parsed.host && !isIPLiteral(parsed.host) && (options2.domainHost || schemeHandler && schemeHandler.domainHost) && isIP3 === false && nonSimpleDomain(parsed.host)) {
         try {
           parsed.host = new URL("http://" + parsed.host).hostname;
         } catch (e) {
@@ -4042,7 +4042,7 @@ var require_fast_uri = __commonJS({
       return false;
     }
     function parseWithStatus(uri, opts) {
-      const options = Object.assign({}, opts);
+      const options2 = Object.assign({}, opts);
       const parsed = {
         scheme: void 0,
         userinfo: void 0,
@@ -4059,9 +4059,9 @@ var require_fast_uri = __commonJS({
       let malformedIPLiteral = false;
       let malformedScheme = false;
       let isIP3 = false;
-      if (options.reference === "suffix") {
-        if (options.scheme) {
-          uri = options.scheme + ":" + uri;
+      if (options2.reference === "suffix") {
+        if (options2.scheme) {
+          uri = options2.scheme + ":" + uri;
         } else {
           uri = "//" + uri;
         }
@@ -4141,12 +4141,12 @@ var require_fast_uri = __commonJS({
         } else {
           parsed.reference = "uri";
         }
-        if (options.reference && options.reference !== "suffix" && options.reference !== parsed.reference) {
-          parsed.error = parsed.error || "URI is not a " + options.reference + " reference.";
+        if (options2.reference && options2.reference !== "suffix" && options2.reference !== parsed.reference) {
+          parsed.error = parsed.error || "URI is not a " + options2.reference + " reference.";
         }
-        const schemeHandler = getSchemeHandler(options.scheme || parsed.scheme);
+        const schemeHandler = getSchemeHandler(options2.scheme || parsed.scheme);
         if (!malformedIPLiteral) {
-          malformedHost = canonicalizeHost(parsed, options, schemeHandler, isIP3);
+          malformedHost = canonicalizeHost(parsed, options2, schemeHandler, isIP3);
         }
         if (!schemeHandler || schemeHandler && !schemeHandler.skipNormalize) {
           if (uri.indexOf("%") !== -1) {
@@ -4166,7 +4166,7 @@ var require_fast_uri = __commonJS({
           }
         }
         if (schemeHandler && schemeHandler.parse) {
-          schemeHandler.parse(parsed, options);
+          schemeHandler.parse(parsed, options2);
           if (schemeHandler === SCHEMES.urn && parsed.nid === void 0) {
             malformedSchemeSpecific = true;
           }
@@ -4340,7 +4340,7 @@ var require_core = __commonJS({
         uriResolver
       };
     }
-    var Ajv2 = class {
+    var Ajv3 = class {
       constructor(opts = {}) {
         this.schemas = {};
         this.refs = {};
@@ -4710,13 +4710,13 @@ var require_core = __commonJS({
         }
       }
     };
-    Ajv2.ValidationError = validation_error_1.default;
-    Ajv2.MissingRefError = ref_error_1.default;
-    exports.default = Ajv2;
-    function checkOptions(checkOpts, options, msg, log = "error") {
+    Ajv3.ValidationError = validation_error_1.default;
+    Ajv3.MissingRefError = ref_error_1.default;
+    exports.default = Ajv3;
+    function checkOptions(checkOpts, options2, msg, log = "error") {
       for (const key in checkOpts) {
         const opt = key;
-        if (opt in options)
+        if (opt in options2)
           this.logger[log](`${msg}: option ${key}. ${checkOpts[opt]}`);
       }
     }
@@ -6362,7 +6362,7 @@ var require_applicator = __commonJS({
     var allOf_1 = require_allOf();
     var if_1 = require_if();
     var thenElse_1 = require_thenElse();
-    function getApplicator(draft2020 = false) {
+    function getApplicator(draft20202 = false) {
       const applicator = [
         // any
         not_1.default,
@@ -6378,7 +6378,7 @@ var require_applicator = __commonJS({
         properties_1.default,
         patternProperties_1.default
       ];
-      if (draft2020)
+      if (draft20202)
         applicator.push(prefixItems_1.default, items2020_1.default);
       else
         applicator.push(additionalItems_1.default, items_1.default);
@@ -6823,7 +6823,7 @@ var require_ajv = __commonJS({
     var draft7MetaSchema = require_json_schema_draft_07();
     var META_SUPPORT_DATA = ["/properties"];
     var META_SCHEMA_ID = "http://json-schema.org/draft-07/schema";
-    var Ajv2 = class extends core_1.default {
+    var Ajv3 = class extends core_1.default {
       _addVocabularies() {
         super._addVocabularies();
         draft7_1.default.forEach((v) => this.addVocabulary(v));
@@ -6842,11 +6842,11 @@ var require_ajv = __commonJS({
         return this.opts.defaultMeta = super.defaultMeta() || (this.getSchema(META_SCHEMA_ID) ? META_SCHEMA_ID : void 0);
       }
     };
-    exports.Ajv = Ajv2;
-    module.exports = exports = Ajv2;
-    module.exports.Ajv = Ajv2;
+    exports.Ajv = Ajv3;
+    module.exports = exports = Ajv3;
+    module.exports.Ajv = Ajv3;
     Object.defineProperty(exports, "__esModule", { value: true });
-    exports.default = Ajv2;
+    exports.default = Ajv3;
     var validate_1 = require_validate();
     Object.defineProperty(exports, "KeywordCxt", { enumerable: true, get: function() {
       return validate_1.KeywordCxt;
@@ -7168,12 +7168,12 @@ var require_dist = __commonJS({
     var fastName = new codegen_1.Name("fastFormats");
     var formatsPlugin = (ajv, opts = { keywords: true }) => {
       if (Array.isArray(opts)) {
-        addFormats(ajv, opts, formats_1.fullFormats, fullName);
+        addFormats2(ajv, opts, formats_1.fullFormats, fullName);
         return ajv;
       }
       const [formats2, exportName] = opts.mode === "fast" ? [formats_1.fastFormats, fastName] : [formats_1.fullFormats, fullName];
       const list = opts.formats || formats_1.formatNames;
-      addFormats(ajv, list, formats2, exportName);
+      addFormats2(ajv, list, formats2, exportName);
       if (opts.keywords)
         (0, limit_1.default)(ajv);
       return ajv;
@@ -7185,7 +7185,7 @@ var require_dist = __commonJS({
         throw new Error(`Unknown format "${name}"`);
       return f;
     };
-    function addFormats(ajv, list, fs, exportName) {
+    function addFormats2(ajv, list, fs, exportName) {
       var _a3;
       var _b;
       (_a3 = (_b = ajv.opts.code).formats) !== null && _a3 !== void 0 ? _a3 : _b.formats = (0, codegen_1._)`require("ajv-formats/dist/formats").${exportName}`;
@@ -7444,11 +7444,1291 @@ var init_evidence_package = __esm({
   }
 });
 
+// node_modules/ajv/dist/vocabularies/dynamic/dynamicAnchor.js
+var require_dynamicAnchor = __commonJS({
+  "node_modules/ajv/dist/vocabularies/dynamic/dynamicAnchor.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.dynamicAnchor = void 0;
+    var codegen_1 = require_codegen();
+    var names_1 = require_names();
+    var compile_1 = require_compile();
+    var ref_1 = require_ref();
+    var def = {
+      keyword: "$dynamicAnchor",
+      schemaType: "string",
+      code: (cxt) => dynamicAnchor(cxt, cxt.schema)
+    };
+    function dynamicAnchor(cxt, anchor2) {
+      const { gen, it } = cxt;
+      it.schemaEnv.root.dynamicAnchors[anchor2] = true;
+      const v = (0, codegen_1._)`${names_1.default.dynamicAnchors}${(0, codegen_1.getProperty)(anchor2)}`;
+      const validate2 = it.errSchemaPath === "#" ? it.validateName : _getValidate(cxt);
+      gen.if((0, codegen_1._)`!${v}`, () => gen.assign(v, validate2));
+    }
+    exports.dynamicAnchor = dynamicAnchor;
+    function _getValidate(cxt) {
+      const { schemaEnv, schema, self } = cxt.it;
+      const { root, baseId, localRefs, meta: meta2 } = schemaEnv.root;
+      const { schemaId } = self.opts;
+      const sch = new compile_1.SchemaEnv({ schema, schemaId, root, baseId, localRefs, meta: meta2 });
+      compile_1.compileSchema.call(self, sch);
+      return (0, ref_1.getValidate)(cxt, sch);
+    }
+    exports.default = def;
+  }
+});
+
+// node_modules/ajv/dist/vocabularies/dynamic/dynamicRef.js
+var require_dynamicRef = __commonJS({
+  "node_modules/ajv/dist/vocabularies/dynamic/dynamicRef.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.dynamicRef = void 0;
+    var codegen_1 = require_codegen();
+    var names_1 = require_names();
+    var ref_1 = require_ref();
+    var def = {
+      keyword: "$dynamicRef",
+      schemaType: "string",
+      code: (cxt) => dynamicRef(cxt, cxt.schema)
+    };
+    function dynamicRef(cxt, ref) {
+      const { gen, keyword, it } = cxt;
+      if (ref[0] !== "#")
+        throw new Error(`"${keyword}" only supports hash fragment reference`);
+      const anchor2 = ref.slice(1);
+      if (it.allErrors) {
+        _dynamicRef();
+      } else {
+        const valid = gen.let("valid", false);
+        _dynamicRef(valid);
+        cxt.ok(valid);
+      }
+      function _dynamicRef(valid) {
+        if (it.schemaEnv.root.dynamicAnchors[anchor2]) {
+          const v = gen.let("_v", (0, codegen_1._)`${names_1.default.dynamicAnchors}${(0, codegen_1.getProperty)(anchor2)}`);
+          gen.if(v, _callRef(v, valid), _callRef(it.validateName, valid));
+        } else {
+          _callRef(it.validateName, valid)();
+        }
+      }
+      function _callRef(validate2, valid) {
+        return valid ? () => gen.block(() => {
+          (0, ref_1.callRef)(cxt, validate2);
+          gen.let(valid, true);
+        }) : () => (0, ref_1.callRef)(cxt, validate2);
+      }
+    }
+    exports.dynamicRef = dynamicRef;
+    exports.default = def;
+  }
+});
+
+// node_modules/ajv/dist/vocabularies/dynamic/recursiveAnchor.js
+var require_recursiveAnchor = __commonJS({
+  "node_modules/ajv/dist/vocabularies/dynamic/recursiveAnchor.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    var dynamicAnchor_1 = require_dynamicAnchor();
+    var util_1 = require_util();
+    var def = {
+      keyword: "$recursiveAnchor",
+      schemaType: "boolean",
+      code(cxt) {
+        if (cxt.schema)
+          (0, dynamicAnchor_1.dynamicAnchor)(cxt, "");
+        else
+          (0, util_1.checkStrictMode)(cxt.it, "$recursiveAnchor: false is ignored");
+      }
+    };
+    exports.default = def;
+  }
+});
+
+// node_modules/ajv/dist/vocabularies/dynamic/recursiveRef.js
+var require_recursiveRef = __commonJS({
+  "node_modules/ajv/dist/vocabularies/dynamic/recursiveRef.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    var dynamicRef_1 = require_dynamicRef();
+    var def = {
+      keyword: "$recursiveRef",
+      schemaType: "string",
+      code: (cxt) => (0, dynamicRef_1.dynamicRef)(cxt, cxt.schema)
+    };
+    exports.default = def;
+  }
+});
+
+// node_modules/ajv/dist/vocabularies/dynamic/index.js
+var require_dynamic = __commonJS({
+  "node_modules/ajv/dist/vocabularies/dynamic/index.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    var dynamicAnchor_1 = require_dynamicAnchor();
+    var dynamicRef_1 = require_dynamicRef();
+    var recursiveAnchor_1 = require_recursiveAnchor();
+    var recursiveRef_1 = require_recursiveRef();
+    var dynamic = [dynamicAnchor_1.default, dynamicRef_1.default, recursiveAnchor_1.default, recursiveRef_1.default];
+    exports.default = dynamic;
+  }
+});
+
+// node_modules/ajv/dist/vocabularies/validation/dependentRequired.js
+var require_dependentRequired = __commonJS({
+  "node_modules/ajv/dist/vocabularies/validation/dependentRequired.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    var dependencies_1 = require_dependencies();
+    var def = {
+      keyword: "dependentRequired",
+      type: "object",
+      schemaType: "object",
+      error: dependencies_1.error,
+      code: (cxt) => (0, dependencies_1.validatePropertyDeps)(cxt)
+    };
+    exports.default = def;
+  }
+});
+
+// node_modules/ajv/dist/vocabularies/applicator/dependentSchemas.js
+var require_dependentSchemas = __commonJS({
+  "node_modules/ajv/dist/vocabularies/applicator/dependentSchemas.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    var dependencies_1 = require_dependencies();
+    var def = {
+      keyword: "dependentSchemas",
+      type: "object",
+      schemaType: "object",
+      code: (cxt) => (0, dependencies_1.validateSchemaDeps)(cxt)
+    };
+    exports.default = def;
+  }
+});
+
+// node_modules/ajv/dist/vocabularies/validation/limitContains.js
+var require_limitContains = __commonJS({
+  "node_modules/ajv/dist/vocabularies/validation/limitContains.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    var util_1 = require_util();
+    var def = {
+      keyword: ["maxContains", "minContains"],
+      type: "array",
+      schemaType: "number",
+      code({ keyword, parentSchema, it }) {
+        if (parentSchema.contains === void 0) {
+          (0, util_1.checkStrictMode)(it, `"${keyword}" without "contains" is ignored`);
+        }
+      }
+    };
+    exports.default = def;
+  }
+});
+
+// node_modules/ajv/dist/vocabularies/next.js
+var require_next = __commonJS({
+  "node_modules/ajv/dist/vocabularies/next.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    var dependentRequired_1 = require_dependentRequired();
+    var dependentSchemas_1 = require_dependentSchemas();
+    var limitContains_1 = require_limitContains();
+    var next = [dependentRequired_1.default, dependentSchemas_1.default, limitContains_1.default];
+    exports.default = next;
+  }
+});
+
+// node_modules/ajv/dist/vocabularies/unevaluated/unevaluatedProperties.js
+var require_unevaluatedProperties = __commonJS({
+  "node_modules/ajv/dist/vocabularies/unevaluated/unevaluatedProperties.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    var codegen_1 = require_codegen();
+    var util_1 = require_util();
+    var names_1 = require_names();
+    var error2 = {
+      message: "must NOT have unevaluated properties",
+      params: ({ params }) => (0, codegen_1._)`{unevaluatedProperty: ${params.unevaluatedProperty}}`
+    };
+    var def = {
+      keyword: "unevaluatedProperties",
+      type: "object",
+      schemaType: ["boolean", "object"],
+      trackErrors: true,
+      error: error2,
+      code(cxt) {
+        const { gen, schema, data, errsCount, it } = cxt;
+        if (!errsCount)
+          throw new Error("ajv implementation error");
+        const { allErrors, props } = it;
+        if (props instanceof codegen_1.Name) {
+          gen.if((0, codegen_1._)`${props} !== true`, () => gen.forIn("key", data, (key) => gen.if(unevaluatedDynamic(props, key), () => unevaluatedPropCode(key))));
+        } else if (props !== true) {
+          gen.forIn("key", data, (key) => props === void 0 ? unevaluatedPropCode(key) : gen.if(unevaluatedStatic(props, key), () => unevaluatedPropCode(key)));
+        }
+        it.props = true;
+        cxt.ok((0, codegen_1._)`${errsCount} === ${names_1.default.errors}`);
+        function unevaluatedPropCode(key) {
+          if (schema === false) {
+            cxt.setParams({ unevaluatedProperty: key });
+            cxt.error();
+            if (!allErrors)
+              gen.break();
+            return;
+          }
+          if (!(0, util_1.alwaysValidSchema)(it, schema)) {
+            const valid = gen.name("valid");
+            cxt.subschema({
+              keyword: "unevaluatedProperties",
+              dataProp: key,
+              dataPropType: util_1.Type.Str
+            }, valid);
+            if (!allErrors)
+              gen.if((0, codegen_1.not)(valid), () => gen.break());
+          }
+        }
+        function unevaluatedDynamic(evaluatedProps, key) {
+          return (0, codegen_1._)`!${evaluatedProps} || !${evaluatedProps}[${key}]`;
+        }
+        function unevaluatedStatic(evaluatedProps, key) {
+          const ps = [];
+          for (const p in evaluatedProps) {
+            if (evaluatedProps[p] === true)
+              ps.push((0, codegen_1._)`${key} !== ${p}`);
+          }
+          return (0, codegen_1.and)(...ps);
+        }
+      }
+    };
+    exports.default = def;
+  }
+});
+
+// node_modules/ajv/dist/vocabularies/unevaluated/unevaluatedItems.js
+var require_unevaluatedItems = __commonJS({
+  "node_modules/ajv/dist/vocabularies/unevaluated/unevaluatedItems.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    var codegen_1 = require_codegen();
+    var util_1 = require_util();
+    var error2 = {
+      message: ({ params: { len } }) => (0, codegen_1.str)`must NOT have more than ${len} items`,
+      params: ({ params: { len } }) => (0, codegen_1._)`{limit: ${len}}`
+    };
+    var def = {
+      keyword: "unevaluatedItems",
+      type: "array",
+      schemaType: ["boolean", "object"],
+      error: error2,
+      code(cxt) {
+        const { gen, schema, data, it } = cxt;
+        const items = it.items || 0;
+        if (items === true)
+          return;
+        const len = gen.const("len", (0, codegen_1._)`${data}.length`);
+        if (schema === false) {
+          cxt.setParams({ len: items });
+          cxt.fail((0, codegen_1._)`${len} > ${items}`);
+        } else if (typeof schema == "object" && !(0, util_1.alwaysValidSchema)(it, schema)) {
+          const valid = gen.var("valid", (0, codegen_1._)`${len} <= ${items}`);
+          gen.if((0, codegen_1.not)(valid), () => validateItems(valid, items));
+          cxt.ok(valid);
+        }
+        it.items = true;
+        function validateItems(valid, from) {
+          gen.forRange("i", from, len, (i) => {
+            cxt.subschema({ keyword: "unevaluatedItems", dataProp: i, dataPropType: util_1.Type.Num }, valid);
+            if (!it.allErrors)
+              gen.if((0, codegen_1.not)(valid), () => gen.break());
+          });
+        }
+      }
+    };
+    exports.default = def;
+  }
+});
+
+// node_modules/ajv/dist/vocabularies/unevaluated/index.js
+var require_unevaluated = __commonJS({
+  "node_modules/ajv/dist/vocabularies/unevaluated/index.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    var unevaluatedProperties_1 = require_unevaluatedProperties();
+    var unevaluatedItems_1 = require_unevaluatedItems();
+    var unevaluated = [unevaluatedProperties_1.default, unevaluatedItems_1.default];
+    exports.default = unevaluated;
+  }
+});
+
+// node_modules/ajv/dist/refs/json-schema-2019-09/schema.json
+var require_schema = __commonJS({
+  "node_modules/ajv/dist/refs/json-schema-2019-09/schema.json"(exports, module) {
+    module.exports = {
+      $schema: "https://json-schema.org/draft/2019-09/schema",
+      $id: "https://json-schema.org/draft/2019-09/schema",
+      $vocabulary: {
+        "https://json-schema.org/draft/2019-09/vocab/core": true,
+        "https://json-schema.org/draft/2019-09/vocab/applicator": true,
+        "https://json-schema.org/draft/2019-09/vocab/validation": true,
+        "https://json-schema.org/draft/2019-09/vocab/meta-data": true,
+        "https://json-schema.org/draft/2019-09/vocab/format": false,
+        "https://json-schema.org/draft/2019-09/vocab/content": true
+      },
+      $recursiveAnchor: true,
+      title: "Core and Validation specifications meta-schema",
+      allOf: [
+        { $ref: "meta/core" },
+        { $ref: "meta/applicator" },
+        { $ref: "meta/validation" },
+        { $ref: "meta/meta-data" },
+        { $ref: "meta/format" },
+        { $ref: "meta/content" }
+      ],
+      type: ["object", "boolean"],
+      properties: {
+        definitions: {
+          $comment: "While no longer an official keyword as it is replaced by $defs, this keyword is retained in the meta-schema to prevent incompatible extensions as it remains in common use.",
+          type: "object",
+          additionalProperties: { $recursiveRef: "#" },
+          default: {}
+        },
+        dependencies: {
+          $comment: '"dependencies" is no longer a keyword, but schema authors should avoid redefining it to facilitate a smooth transition to "dependentSchemas" and "dependentRequired"',
+          type: "object",
+          additionalProperties: {
+            anyOf: [{ $recursiveRef: "#" }, { $ref: "meta/validation#/$defs/stringArray" }]
+          }
+        }
+      }
+    };
+  }
+});
+
+// node_modules/ajv/dist/refs/json-schema-2019-09/meta/applicator.json
+var require_applicator2 = __commonJS({
+  "node_modules/ajv/dist/refs/json-schema-2019-09/meta/applicator.json"(exports, module) {
+    module.exports = {
+      $schema: "https://json-schema.org/draft/2019-09/schema",
+      $id: "https://json-schema.org/draft/2019-09/meta/applicator",
+      $vocabulary: {
+        "https://json-schema.org/draft/2019-09/vocab/applicator": true
+      },
+      $recursiveAnchor: true,
+      title: "Applicator vocabulary meta-schema",
+      type: ["object", "boolean"],
+      properties: {
+        additionalItems: { $recursiveRef: "#" },
+        unevaluatedItems: { $recursiveRef: "#" },
+        items: {
+          anyOf: [{ $recursiveRef: "#" }, { $ref: "#/$defs/schemaArray" }]
+        },
+        contains: { $recursiveRef: "#" },
+        additionalProperties: { $recursiveRef: "#" },
+        unevaluatedProperties: { $recursiveRef: "#" },
+        properties: {
+          type: "object",
+          additionalProperties: { $recursiveRef: "#" },
+          default: {}
+        },
+        patternProperties: {
+          type: "object",
+          additionalProperties: { $recursiveRef: "#" },
+          propertyNames: { format: "regex" },
+          default: {}
+        },
+        dependentSchemas: {
+          type: "object",
+          additionalProperties: {
+            $recursiveRef: "#"
+          }
+        },
+        propertyNames: { $recursiveRef: "#" },
+        if: { $recursiveRef: "#" },
+        then: { $recursiveRef: "#" },
+        else: { $recursiveRef: "#" },
+        allOf: { $ref: "#/$defs/schemaArray" },
+        anyOf: { $ref: "#/$defs/schemaArray" },
+        oneOf: { $ref: "#/$defs/schemaArray" },
+        not: { $recursiveRef: "#" }
+      },
+      $defs: {
+        schemaArray: {
+          type: "array",
+          minItems: 1,
+          items: { $recursiveRef: "#" }
+        }
+      }
+    };
+  }
+});
+
+// node_modules/ajv/dist/refs/json-schema-2019-09/meta/content.json
+var require_content = __commonJS({
+  "node_modules/ajv/dist/refs/json-schema-2019-09/meta/content.json"(exports, module) {
+    module.exports = {
+      $schema: "https://json-schema.org/draft/2019-09/schema",
+      $id: "https://json-schema.org/draft/2019-09/meta/content",
+      $vocabulary: {
+        "https://json-schema.org/draft/2019-09/vocab/content": true
+      },
+      $recursiveAnchor: true,
+      title: "Content vocabulary meta-schema",
+      type: ["object", "boolean"],
+      properties: {
+        contentMediaType: { type: "string" },
+        contentEncoding: { type: "string" },
+        contentSchema: { $recursiveRef: "#" }
+      }
+    };
+  }
+});
+
+// node_modules/ajv/dist/refs/json-schema-2019-09/meta/core.json
+var require_core3 = __commonJS({
+  "node_modules/ajv/dist/refs/json-schema-2019-09/meta/core.json"(exports, module) {
+    module.exports = {
+      $schema: "https://json-schema.org/draft/2019-09/schema",
+      $id: "https://json-schema.org/draft/2019-09/meta/core",
+      $vocabulary: {
+        "https://json-schema.org/draft/2019-09/vocab/core": true
+      },
+      $recursiveAnchor: true,
+      title: "Core vocabulary meta-schema",
+      type: ["object", "boolean"],
+      properties: {
+        $id: {
+          type: "string",
+          format: "uri-reference",
+          $comment: "Non-empty fragments not allowed.",
+          pattern: "^[^#]*#?$"
+        },
+        $schema: {
+          type: "string",
+          format: "uri"
+        },
+        $anchor: {
+          type: "string",
+          pattern: "^[A-Za-z][-A-Za-z0-9.:_]*$"
+        },
+        $ref: {
+          type: "string",
+          format: "uri-reference"
+        },
+        $recursiveRef: {
+          type: "string",
+          format: "uri-reference"
+        },
+        $recursiveAnchor: {
+          type: "boolean",
+          default: false
+        },
+        $vocabulary: {
+          type: "object",
+          propertyNames: {
+            type: "string",
+            format: "uri"
+          },
+          additionalProperties: {
+            type: "boolean"
+          }
+        },
+        $comment: {
+          type: "string"
+        },
+        $defs: {
+          type: "object",
+          additionalProperties: { $recursiveRef: "#" },
+          default: {}
+        }
+      }
+    };
+  }
+});
+
+// node_modules/ajv/dist/refs/json-schema-2019-09/meta/format.json
+var require_format3 = __commonJS({
+  "node_modules/ajv/dist/refs/json-schema-2019-09/meta/format.json"(exports, module) {
+    module.exports = {
+      $schema: "https://json-schema.org/draft/2019-09/schema",
+      $id: "https://json-schema.org/draft/2019-09/meta/format",
+      $vocabulary: {
+        "https://json-schema.org/draft/2019-09/vocab/format": true
+      },
+      $recursiveAnchor: true,
+      title: "Format vocabulary meta-schema",
+      type: ["object", "boolean"],
+      properties: {
+        format: { type: "string" }
+      }
+    };
+  }
+});
+
+// node_modules/ajv/dist/refs/json-schema-2019-09/meta/meta-data.json
+var require_meta_data = __commonJS({
+  "node_modules/ajv/dist/refs/json-schema-2019-09/meta/meta-data.json"(exports, module) {
+    module.exports = {
+      $schema: "https://json-schema.org/draft/2019-09/schema",
+      $id: "https://json-schema.org/draft/2019-09/meta/meta-data",
+      $vocabulary: {
+        "https://json-schema.org/draft/2019-09/vocab/meta-data": true
+      },
+      $recursiveAnchor: true,
+      title: "Meta-data vocabulary meta-schema",
+      type: ["object", "boolean"],
+      properties: {
+        title: {
+          type: "string"
+        },
+        description: {
+          type: "string"
+        },
+        default: true,
+        deprecated: {
+          type: "boolean",
+          default: false
+        },
+        readOnly: {
+          type: "boolean",
+          default: false
+        },
+        writeOnly: {
+          type: "boolean",
+          default: false
+        },
+        examples: {
+          type: "array",
+          items: true
+        }
+      }
+    };
+  }
+});
+
+// node_modules/ajv/dist/refs/json-schema-2019-09/meta/validation.json
+var require_validation2 = __commonJS({
+  "node_modules/ajv/dist/refs/json-schema-2019-09/meta/validation.json"(exports, module) {
+    module.exports = {
+      $schema: "https://json-schema.org/draft/2019-09/schema",
+      $id: "https://json-schema.org/draft/2019-09/meta/validation",
+      $vocabulary: {
+        "https://json-schema.org/draft/2019-09/vocab/validation": true
+      },
+      $recursiveAnchor: true,
+      title: "Validation vocabulary meta-schema",
+      type: ["object", "boolean"],
+      properties: {
+        multipleOf: {
+          type: "number",
+          exclusiveMinimum: 0
+        },
+        maximum: {
+          type: "number"
+        },
+        exclusiveMaximum: {
+          type: "number"
+        },
+        minimum: {
+          type: "number"
+        },
+        exclusiveMinimum: {
+          type: "number"
+        },
+        maxLength: { $ref: "#/$defs/nonNegativeInteger" },
+        minLength: { $ref: "#/$defs/nonNegativeIntegerDefault0" },
+        pattern: {
+          type: "string",
+          format: "regex"
+        },
+        maxItems: { $ref: "#/$defs/nonNegativeInteger" },
+        minItems: { $ref: "#/$defs/nonNegativeIntegerDefault0" },
+        uniqueItems: {
+          type: "boolean",
+          default: false
+        },
+        maxContains: { $ref: "#/$defs/nonNegativeInteger" },
+        minContains: {
+          $ref: "#/$defs/nonNegativeInteger",
+          default: 1
+        },
+        maxProperties: { $ref: "#/$defs/nonNegativeInteger" },
+        minProperties: { $ref: "#/$defs/nonNegativeIntegerDefault0" },
+        required: { $ref: "#/$defs/stringArray" },
+        dependentRequired: {
+          type: "object",
+          additionalProperties: {
+            $ref: "#/$defs/stringArray"
+          }
+        },
+        const: true,
+        enum: {
+          type: "array",
+          items: true
+        },
+        type: {
+          anyOf: [
+            { $ref: "#/$defs/simpleTypes" },
+            {
+              type: "array",
+              items: { $ref: "#/$defs/simpleTypes" },
+              minItems: 1,
+              uniqueItems: true
+            }
+          ]
+        }
+      },
+      $defs: {
+        nonNegativeInteger: {
+          type: "integer",
+          minimum: 0
+        },
+        nonNegativeIntegerDefault0: {
+          $ref: "#/$defs/nonNegativeInteger",
+          default: 0
+        },
+        simpleTypes: {
+          enum: ["array", "boolean", "integer", "null", "number", "object", "string"]
+        },
+        stringArray: {
+          type: "array",
+          items: { type: "string" },
+          uniqueItems: true,
+          default: []
+        }
+      }
+    };
+  }
+});
+
+// node_modules/ajv/dist/refs/json-schema-2019-09/index.js
+var require_json_schema_2019_09 = __commonJS({
+  "node_modules/ajv/dist/refs/json-schema-2019-09/index.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    var metaSchema = require_schema();
+    var applicator = require_applicator2();
+    var content = require_content();
+    var core = require_core3();
+    var format = require_format3();
+    var metadata = require_meta_data();
+    var validation = require_validation2();
+    var META_SUPPORT_DATA = ["/properties"];
+    function addMetaSchema2019($data) {
+      ;
+      [
+        metaSchema,
+        applicator,
+        content,
+        core,
+        with$data(this, format),
+        metadata,
+        with$data(this, validation)
+      ].forEach((sch) => this.addMetaSchema(sch, void 0, false));
+      return this;
+      function with$data(ajv, sch) {
+        return $data ? ajv.$dataMetaSchema(sch, META_SUPPORT_DATA) : sch;
+      }
+    }
+    exports.default = addMetaSchema2019;
+  }
+});
+
+// node_modules/ajv/dist/2019.js
+var require__ = __commonJS({
+  "node_modules/ajv/dist/2019.js"(exports, module) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.MissingRefError = exports.ValidationError = exports.CodeGen = exports.Name = exports.nil = exports.stringify = exports.str = exports._ = exports.KeywordCxt = exports.Ajv2019 = void 0;
+    var core_1 = require_core();
+    var draft7_1 = require_draft7();
+    var dynamic_1 = require_dynamic();
+    var next_1 = require_next();
+    var unevaluated_1 = require_unevaluated();
+    var discriminator_1 = require_discriminator();
+    var json_schema_2019_09_1 = require_json_schema_2019_09();
+    var META_SCHEMA_ID = "https://json-schema.org/draft/2019-09/schema";
+    var Ajv20192 = class extends core_1.default {
+      constructor(opts = {}) {
+        super({
+          ...opts,
+          dynamicRef: true,
+          next: true,
+          unevaluated: true
+        });
+      }
+      _addVocabularies() {
+        super._addVocabularies();
+        this.addVocabulary(dynamic_1.default);
+        draft7_1.default.forEach((v) => this.addVocabulary(v));
+        this.addVocabulary(next_1.default);
+        this.addVocabulary(unevaluated_1.default);
+        if (this.opts.discriminator)
+          this.addKeyword(discriminator_1.default);
+      }
+      _addDefaultMetaSchema() {
+        super._addDefaultMetaSchema();
+        const { $data, meta: meta2 } = this.opts;
+        if (!meta2)
+          return;
+        json_schema_2019_09_1.default.call(this, $data);
+        this.refs["http://json-schema.org/schema"] = META_SCHEMA_ID;
+      }
+      defaultMeta() {
+        return this.opts.defaultMeta = super.defaultMeta() || (this.getSchema(META_SCHEMA_ID) ? META_SCHEMA_ID : void 0);
+      }
+    };
+    exports.Ajv2019 = Ajv20192;
+    module.exports = exports = Ajv20192;
+    module.exports.Ajv2019 = Ajv20192;
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.default = Ajv20192;
+    var validate_1 = require_validate();
+    Object.defineProperty(exports, "KeywordCxt", { enumerable: true, get: function() {
+      return validate_1.KeywordCxt;
+    } });
+    var codegen_1 = require_codegen();
+    Object.defineProperty(exports, "_", { enumerable: true, get: function() {
+      return codegen_1._;
+    } });
+    Object.defineProperty(exports, "str", { enumerable: true, get: function() {
+      return codegen_1.str;
+    } });
+    Object.defineProperty(exports, "stringify", { enumerable: true, get: function() {
+      return codegen_1.stringify;
+    } });
+    Object.defineProperty(exports, "nil", { enumerable: true, get: function() {
+      return codegen_1.nil;
+    } });
+    Object.defineProperty(exports, "Name", { enumerable: true, get: function() {
+      return codegen_1.Name;
+    } });
+    Object.defineProperty(exports, "CodeGen", { enumerable: true, get: function() {
+      return codegen_1.CodeGen;
+    } });
+    var validation_error_1 = require_validation_error();
+    Object.defineProperty(exports, "ValidationError", { enumerable: true, get: function() {
+      return validation_error_1.default;
+    } });
+    var ref_error_1 = require_ref_error();
+    Object.defineProperty(exports, "MissingRefError", { enumerable: true, get: function() {
+      return ref_error_1.default;
+    } });
+  }
+});
+
+// node_modules/ajv/dist/vocabularies/draft2020.js
+var require_draft2020 = __commonJS({
+  "node_modules/ajv/dist/vocabularies/draft2020.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    var core_1 = require_core2();
+    var validation_1 = require_validation();
+    var applicator_1 = require_applicator();
+    var dynamic_1 = require_dynamic();
+    var next_1 = require_next();
+    var unevaluated_1 = require_unevaluated();
+    var format_1 = require_format2();
+    var metadata_1 = require_metadata();
+    var draft2020Vocabularies = [
+      dynamic_1.default,
+      core_1.default,
+      validation_1.default,
+      (0, applicator_1.default)(true),
+      format_1.default,
+      metadata_1.metadataVocabulary,
+      metadata_1.contentVocabulary,
+      next_1.default,
+      unevaluated_1.default
+    ];
+    exports.default = draft2020Vocabularies;
+  }
+});
+
+// node_modules/ajv/dist/refs/json-schema-2020-12/schema.json
+var require_schema2 = __commonJS({
+  "node_modules/ajv/dist/refs/json-schema-2020-12/schema.json"(exports, module) {
+    module.exports = {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $id: "https://json-schema.org/draft/2020-12/schema",
+      $vocabulary: {
+        "https://json-schema.org/draft/2020-12/vocab/core": true,
+        "https://json-schema.org/draft/2020-12/vocab/applicator": true,
+        "https://json-schema.org/draft/2020-12/vocab/unevaluated": true,
+        "https://json-schema.org/draft/2020-12/vocab/validation": true,
+        "https://json-schema.org/draft/2020-12/vocab/meta-data": true,
+        "https://json-schema.org/draft/2020-12/vocab/format-annotation": true,
+        "https://json-schema.org/draft/2020-12/vocab/content": true
+      },
+      $dynamicAnchor: "meta",
+      title: "Core and Validation specifications meta-schema",
+      allOf: [
+        { $ref: "meta/core" },
+        { $ref: "meta/applicator" },
+        { $ref: "meta/unevaluated" },
+        { $ref: "meta/validation" },
+        { $ref: "meta/meta-data" },
+        { $ref: "meta/format-annotation" },
+        { $ref: "meta/content" }
+      ],
+      type: ["object", "boolean"],
+      $comment: "This meta-schema also defines keywords that have appeared in previous drafts in order to prevent incompatible extensions as they remain in common use.",
+      properties: {
+        definitions: {
+          $comment: '"definitions" has been replaced by "$defs".',
+          type: "object",
+          additionalProperties: { $dynamicRef: "#meta" },
+          deprecated: true,
+          default: {}
+        },
+        dependencies: {
+          $comment: '"dependencies" has been split and replaced by "dependentSchemas" and "dependentRequired" in order to serve their differing semantics.',
+          type: "object",
+          additionalProperties: {
+            anyOf: [{ $dynamicRef: "#meta" }, { $ref: "meta/validation#/$defs/stringArray" }]
+          },
+          deprecated: true,
+          default: {}
+        },
+        $recursiveAnchor: {
+          $comment: '"$recursiveAnchor" has been replaced by "$dynamicAnchor".',
+          $ref: "meta/core#/$defs/anchorString",
+          deprecated: true
+        },
+        $recursiveRef: {
+          $comment: '"$recursiveRef" has been replaced by "$dynamicRef".',
+          $ref: "meta/core#/$defs/uriReferenceString",
+          deprecated: true
+        }
+      }
+    };
+  }
+});
+
+// node_modules/ajv/dist/refs/json-schema-2020-12/meta/applicator.json
+var require_applicator3 = __commonJS({
+  "node_modules/ajv/dist/refs/json-schema-2020-12/meta/applicator.json"(exports, module) {
+    module.exports = {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $id: "https://json-schema.org/draft/2020-12/meta/applicator",
+      $vocabulary: {
+        "https://json-schema.org/draft/2020-12/vocab/applicator": true
+      },
+      $dynamicAnchor: "meta",
+      title: "Applicator vocabulary meta-schema",
+      type: ["object", "boolean"],
+      properties: {
+        prefixItems: { $ref: "#/$defs/schemaArray" },
+        items: { $dynamicRef: "#meta" },
+        contains: { $dynamicRef: "#meta" },
+        additionalProperties: { $dynamicRef: "#meta" },
+        properties: {
+          type: "object",
+          additionalProperties: { $dynamicRef: "#meta" },
+          default: {}
+        },
+        patternProperties: {
+          type: "object",
+          additionalProperties: { $dynamicRef: "#meta" },
+          propertyNames: { format: "regex" },
+          default: {}
+        },
+        dependentSchemas: {
+          type: "object",
+          additionalProperties: { $dynamicRef: "#meta" },
+          default: {}
+        },
+        propertyNames: { $dynamicRef: "#meta" },
+        if: { $dynamicRef: "#meta" },
+        then: { $dynamicRef: "#meta" },
+        else: { $dynamicRef: "#meta" },
+        allOf: { $ref: "#/$defs/schemaArray" },
+        anyOf: { $ref: "#/$defs/schemaArray" },
+        oneOf: { $ref: "#/$defs/schemaArray" },
+        not: { $dynamicRef: "#meta" }
+      },
+      $defs: {
+        schemaArray: {
+          type: "array",
+          minItems: 1,
+          items: { $dynamicRef: "#meta" }
+        }
+      }
+    };
+  }
+});
+
+// node_modules/ajv/dist/refs/json-schema-2020-12/meta/unevaluated.json
+var require_unevaluated2 = __commonJS({
+  "node_modules/ajv/dist/refs/json-schema-2020-12/meta/unevaluated.json"(exports, module) {
+    module.exports = {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $id: "https://json-schema.org/draft/2020-12/meta/unevaluated",
+      $vocabulary: {
+        "https://json-schema.org/draft/2020-12/vocab/unevaluated": true
+      },
+      $dynamicAnchor: "meta",
+      title: "Unevaluated applicator vocabulary meta-schema",
+      type: ["object", "boolean"],
+      properties: {
+        unevaluatedItems: { $dynamicRef: "#meta" },
+        unevaluatedProperties: { $dynamicRef: "#meta" }
+      }
+    };
+  }
+});
+
+// node_modules/ajv/dist/refs/json-schema-2020-12/meta/content.json
+var require_content2 = __commonJS({
+  "node_modules/ajv/dist/refs/json-schema-2020-12/meta/content.json"(exports, module) {
+    module.exports = {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $id: "https://json-schema.org/draft/2020-12/meta/content",
+      $vocabulary: {
+        "https://json-schema.org/draft/2020-12/vocab/content": true
+      },
+      $dynamicAnchor: "meta",
+      title: "Content vocabulary meta-schema",
+      type: ["object", "boolean"],
+      properties: {
+        contentEncoding: { type: "string" },
+        contentMediaType: { type: "string" },
+        contentSchema: { $dynamicRef: "#meta" }
+      }
+    };
+  }
+});
+
+// node_modules/ajv/dist/refs/json-schema-2020-12/meta/core.json
+var require_core4 = __commonJS({
+  "node_modules/ajv/dist/refs/json-schema-2020-12/meta/core.json"(exports, module) {
+    module.exports = {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $id: "https://json-schema.org/draft/2020-12/meta/core",
+      $vocabulary: {
+        "https://json-schema.org/draft/2020-12/vocab/core": true
+      },
+      $dynamicAnchor: "meta",
+      title: "Core vocabulary meta-schema",
+      type: ["object", "boolean"],
+      properties: {
+        $id: {
+          $ref: "#/$defs/uriReferenceString",
+          $comment: "Non-empty fragments not allowed.",
+          pattern: "^[^#]*#?$"
+        },
+        $schema: { $ref: "#/$defs/uriString" },
+        $ref: { $ref: "#/$defs/uriReferenceString" },
+        $anchor: { $ref: "#/$defs/anchorString" },
+        $dynamicRef: { $ref: "#/$defs/uriReferenceString" },
+        $dynamicAnchor: { $ref: "#/$defs/anchorString" },
+        $vocabulary: {
+          type: "object",
+          propertyNames: { $ref: "#/$defs/uriString" },
+          additionalProperties: {
+            type: "boolean"
+          }
+        },
+        $comment: {
+          type: "string"
+        },
+        $defs: {
+          type: "object",
+          additionalProperties: { $dynamicRef: "#meta" }
+        }
+      },
+      $defs: {
+        anchorString: {
+          type: "string",
+          pattern: "^[A-Za-z_][-A-Za-z0-9._]*$"
+        },
+        uriString: {
+          type: "string",
+          format: "uri"
+        },
+        uriReferenceString: {
+          type: "string",
+          format: "uri-reference"
+        }
+      }
+    };
+  }
+});
+
+// node_modules/ajv/dist/refs/json-schema-2020-12/meta/format-annotation.json
+var require_format_annotation = __commonJS({
+  "node_modules/ajv/dist/refs/json-schema-2020-12/meta/format-annotation.json"(exports, module) {
+    module.exports = {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $id: "https://json-schema.org/draft/2020-12/meta/format-annotation",
+      $vocabulary: {
+        "https://json-schema.org/draft/2020-12/vocab/format-annotation": true
+      },
+      $dynamicAnchor: "meta",
+      title: "Format vocabulary meta-schema for annotation results",
+      type: ["object", "boolean"],
+      properties: {
+        format: { type: "string" }
+      }
+    };
+  }
+});
+
+// node_modules/ajv/dist/refs/json-schema-2020-12/meta/meta-data.json
+var require_meta_data2 = __commonJS({
+  "node_modules/ajv/dist/refs/json-schema-2020-12/meta/meta-data.json"(exports, module) {
+    module.exports = {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $id: "https://json-schema.org/draft/2020-12/meta/meta-data",
+      $vocabulary: {
+        "https://json-schema.org/draft/2020-12/vocab/meta-data": true
+      },
+      $dynamicAnchor: "meta",
+      title: "Meta-data vocabulary meta-schema",
+      type: ["object", "boolean"],
+      properties: {
+        title: {
+          type: "string"
+        },
+        description: {
+          type: "string"
+        },
+        default: true,
+        deprecated: {
+          type: "boolean",
+          default: false
+        },
+        readOnly: {
+          type: "boolean",
+          default: false
+        },
+        writeOnly: {
+          type: "boolean",
+          default: false
+        },
+        examples: {
+          type: "array",
+          items: true
+        }
+      }
+    };
+  }
+});
+
+// node_modules/ajv/dist/refs/json-schema-2020-12/meta/validation.json
+var require_validation3 = __commonJS({
+  "node_modules/ajv/dist/refs/json-schema-2020-12/meta/validation.json"(exports, module) {
+    module.exports = {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $id: "https://json-schema.org/draft/2020-12/meta/validation",
+      $vocabulary: {
+        "https://json-schema.org/draft/2020-12/vocab/validation": true
+      },
+      $dynamicAnchor: "meta",
+      title: "Validation vocabulary meta-schema",
+      type: ["object", "boolean"],
+      properties: {
+        type: {
+          anyOf: [
+            { $ref: "#/$defs/simpleTypes" },
+            {
+              type: "array",
+              items: { $ref: "#/$defs/simpleTypes" },
+              minItems: 1,
+              uniqueItems: true
+            }
+          ]
+        },
+        const: true,
+        enum: {
+          type: "array",
+          items: true
+        },
+        multipleOf: {
+          type: "number",
+          exclusiveMinimum: 0
+        },
+        maximum: {
+          type: "number"
+        },
+        exclusiveMaximum: {
+          type: "number"
+        },
+        minimum: {
+          type: "number"
+        },
+        exclusiveMinimum: {
+          type: "number"
+        },
+        maxLength: { $ref: "#/$defs/nonNegativeInteger" },
+        minLength: { $ref: "#/$defs/nonNegativeIntegerDefault0" },
+        pattern: {
+          type: "string",
+          format: "regex"
+        },
+        maxItems: { $ref: "#/$defs/nonNegativeInteger" },
+        minItems: { $ref: "#/$defs/nonNegativeIntegerDefault0" },
+        uniqueItems: {
+          type: "boolean",
+          default: false
+        },
+        maxContains: { $ref: "#/$defs/nonNegativeInteger" },
+        minContains: {
+          $ref: "#/$defs/nonNegativeInteger",
+          default: 1
+        },
+        maxProperties: { $ref: "#/$defs/nonNegativeInteger" },
+        minProperties: { $ref: "#/$defs/nonNegativeIntegerDefault0" },
+        required: { $ref: "#/$defs/stringArray" },
+        dependentRequired: {
+          type: "object",
+          additionalProperties: {
+            $ref: "#/$defs/stringArray"
+          }
+        }
+      },
+      $defs: {
+        nonNegativeInteger: {
+          type: "integer",
+          minimum: 0
+        },
+        nonNegativeIntegerDefault0: {
+          $ref: "#/$defs/nonNegativeInteger",
+          default: 0
+        },
+        simpleTypes: {
+          enum: ["array", "boolean", "integer", "null", "number", "object", "string"]
+        },
+        stringArray: {
+          type: "array",
+          items: { type: "string" },
+          uniqueItems: true,
+          default: []
+        }
+      }
+    };
+  }
+});
+
+// node_modules/ajv/dist/refs/json-schema-2020-12/index.js
+var require_json_schema_2020_12 = __commonJS({
+  "node_modules/ajv/dist/refs/json-schema-2020-12/index.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    var metaSchema = require_schema2();
+    var applicator = require_applicator3();
+    var unevaluated = require_unevaluated2();
+    var content = require_content2();
+    var core = require_core4();
+    var format = require_format_annotation();
+    var metadata = require_meta_data2();
+    var validation = require_validation3();
+    var META_SUPPORT_DATA = ["/properties"];
+    function addMetaSchema2020($data) {
+      ;
+      [
+        metaSchema,
+        applicator,
+        unevaluated,
+        content,
+        core,
+        with$data(this, format),
+        metadata,
+        with$data(this, validation)
+      ].forEach((sch) => this.addMetaSchema(sch, void 0, false));
+      return this;
+      function with$data(ajv, sch) {
+        return $data ? ajv.$dataMetaSchema(sch, META_SUPPORT_DATA) : sch;
+      }
+    }
+    exports.default = addMetaSchema2020;
+  }
+});
+
+// node_modules/ajv/dist/2020.js
+var require__2 = __commonJS({
+  "node_modules/ajv/dist/2020.js"(exports, module) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.MissingRefError = exports.ValidationError = exports.CodeGen = exports.Name = exports.nil = exports.stringify = exports.str = exports._ = exports.KeywordCxt = exports.Ajv2020 = void 0;
+    var core_1 = require_core();
+    var draft2020_1 = require_draft2020();
+    var discriminator_1 = require_discriminator();
+    var json_schema_2020_12_1 = require_json_schema_2020_12();
+    var META_SCHEMA_ID = "https://json-schema.org/draft/2020-12/schema";
+    var Ajv20202 = class extends core_1.default {
+      constructor(opts = {}) {
+        super({
+          ...opts,
+          dynamicRef: true,
+          next: true,
+          unevaluated: true
+        });
+      }
+      _addVocabularies() {
+        super._addVocabularies();
+        draft2020_1.default.forEach((v) => this.addVocabulary(v));
+        if (this.opts.discriminator)
+          this.addKeyword(discriminator_1.default);
+      }
+      _addDefaultMetaSchema() {
+        super._addDefaultMetaSchema();
+        const { $data, meta: meta2 } = this.opts;
+        if (!meta2)
+          return;
+        json_schema_2020_12_1.default.call(this, $data);
+        this.refs["http://json-schema.org/schema"] = META_SCHEMA_ID;
+      }
+      defaultMeta() {
+        return this.opts.defaultMeta = super.defaultMeta() || (this.getSchema(META_SCHEMA_ID) ? META_SCHEMA_ID : void 0);
+      }
+    };
+    exports.Ajv2020 = Ajv20202;
+    module.exports = exports = Ajv20202;
+    module.exports.Ajv2020 = Ajv20202;
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.default = Ajv20202;
+    var validate_1 = require_validate();
+    Object.defineProperty(exports, "KeywordCxt", { enumerable: true, get: function() {
+      return validate_1.KeywordCxt;
+    } });
+    var codegen_1 = require_codegen();
+    Object.defineProperty(exports, "_", { enumerable: true, get: function() {
+      return codegen_1._;
+    } });
+    Object.defineProperty(exports, "str", { enumerable: true, get: function() {
+      return codegen_1.str;
+    } });
+    Object.defineProperty(exports, "stringify", { enumerable: true, get: function() {
+      return codegen_1.stringify;
+    } });
+    Object.defineProperty(exports, "nil", { enumerable: true, get: function() {
+      return codegen_1.nil;
+    } });
+    Object.defineProperty(exports, "Name", { enumerable: true, get: function() {
+      return codegen_1.Name;
+    } });
+    Object.defineProperty(exports, "CodeGen", { enumerable: true, get: function() {
+      return codegen_1.CodeGen;
+    } });
+    var validation_error_1 = require_validation_error();
+    Object.defineProperty(exports, "ValidationError", { enumerable: true, get: function() {
+      return validation_error_1.default;
+    } });
+    var ref_error_1 = require_ref_error();
+    Object.defineProperty(exports, "MissingRefError", { enumerable: true, get: function() {
+      return ref_error_1.default;
+    } });
+  }
+});
+
 // src/server.ts
-import { randomUUID as randomUUID8 } from "node:crypto";
+import { randomUUID as randomUUID9 } from "node:crypto";
 import { execFile } from "node:child_process";
 import { realpath as realpath2 } from "node:fs/promises";
-import { join as join16, resolve as resolve10 } from "node:path";
+import { join as join17, resolve as resolve10 } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
@@ -7619,8 +8899,8 @@ function defineLazy(object5, key, getter) {
 function objectClone(obj) {
   return Object.create(Object.getPrototypeOf(obj), Object.getOwnPropertyDescriptors(obj));
 }
-function assignProp(target, prop, value) {
-  Object.defineProperty(target, prop, {
+function assignProp(target2, prop, value) {
+  Object.defineProperty(target2, prop, {
     value,
     writable: true,
     enumerable: true,
@@ -7634,8 +8914,8 @@ function rawShape(def) {
 function sourceShape(schema) {
   return rawShape(schema._zod.def) ?? schema._zod.def.shape;
 }
-function deferProp(target, key, getter) {
-  Object.defineProperty(target, key, {
+function deferProp(target2, key, getter) {
+  Object.defineProperty(target2, key, {
     get() {
       const value = getter();
       assignProp(this, key, value);
@@ -7645,36 +8925,36 @@ function deferProp(target, key, getter) {
     configurable: true
   });
 }
-function putProp(target, key, value) {
-  if (key in target)
-    assignProp(target, key, value);
+function putProp(target2, key, value) {
+  if (key in target2)
+    assignProp(target2, key, value);
   else
-    target[key] = value;
+    target2[key] = value;
 }
-function mirrorShape(target, source, keys, wrap) {
+function mirrorShape(target2, source, keys, wrap) {
   const raw = sourceShape(source);
   for (const key of keys) {
     const desc = Object.getOwnPropertyDescriptor(raw, key);
     if (!desc.enumerable)
       continue;
     if (desc.get) {
-      deferProp(target, key, () => {
+      deferProp(target2, key, () => {
         const value = source._zod.def.shape[key];
         return wrap ? wrap(value, key) : value;
       });
     } else
-      putProp(target, key, wrap ? wrap(desc.value, key) : desc.value);
+      putProp(target2, key, wrap ? wrap(desc.value, key) : desc.value);
   }
 }
-function mirrorProps(target, source) {
+function mirrorProps(target2, source) {
   for (const key of Reflect.ownKeys(source)) {
     const desc = Object.getOwnPropertyDescriptor(source, key);
     if (!desc.enumerable)
       continue;
     if (desc.get)
-      deferProp(target, key, () => source[key]);
+      deferProp(target2, key, () => source[key]);
     else
-      putProp(target, key, desc.value);
+      putProp(target2, key, desc.value);
   }
 }
 function mergeDefs(...defs) {
@@ -7853,35 +9133,35 @@ function normalizeParams(_params) {
   return params;
 }
 function createTransparentProxy(getter) {
-  let target;
+  let target2;
   return new Proxy({}, {
     get(_, prop, receiver) {
-      target ?? (target = getter());
-      return Reflect.get(target, prop, receiver);
+      target2 ?? (target2 = getter());
+      return Reflect.get(target2, prop, receiver);
     },
     set(_, prop, value, receiver) {
-      target ?? (target = getter());
-      return Reflect.set(target, prop, value, receiver);
+      target2 ?? (target2 = getter());
+      return Reflect.set(target2, prop, value, receiver);
     },
     has(_, prop) {
-      target ?? (target = getter());
-      return Reflect.has(target, prop);
+      target2 ?? (target2 = getter());
+      return Reflect.has(target2, prop);
     },
     deleteProperty(_, prop) {
-      target ?? (target = getter());
-      return Reflect.deleteProperty(target, prop);
+      target2 ?? (target2 = getter());
+      return Reflect.deleteProperty(target2, prop);
     },
     ownKeys(_) {
-      target ?? (target = getter());
-      return Reflect.ownKeys(target);
+      target2 ?? (target2 = getter());
+      return Reflect.ownKeys(target2);
     },
     getOwnPropertyDescriptor(_, prop) {
-      target ?? (target = getter());
-      return Reflect.getOwnPropertyDescriptor(target, prop);
+      target2 ?? (target2 = getter());
+      return Reflect.getOwnPropertyDescriptor(target2, prop);
     },
     defineProperty(_, prop, descriptor) {
-      target ?? (target = getter());
-      return Reflect.defineProperty(target, prop, descriptor);
+      target2 ?? (target2 = getter());
+      return Reflect.defineProperty(target2, prop, descriptor);
     }
   });
 }
@@ -8349,10 +9629,10 @@ function $constructor(name, initializer3, proto, params) {
       let up = own2;
       while (up && up !== ctorProto)
         up = Object.getPrototypeOf(up);
-      const target = up ?? own2;
-      if (!initialized.has(target)) {
-        initialized.add(target);
-        members(target, protoMembers);
+      const target2 = up ?? own2;
+      if (!initialized.has(target2)) {
+        initialized.add(target2);
+        members(target2, protoMembers);
       }
     }
     const proto2 = _.prototype;
@@ -11722,26 +13002,26 @@ function _check(fn, params) {
 }
 
 // node_modules/zod/v4/core/to-json-schema.js
-function assignProps(target, ...sources) {
+function assignProps(target2, ...sources) {
   for (const source of sources) {
     for (const key of Reflect.ownKeys(source)) {
       if (Object.prototype.propertyIsEnumerable.call(source, key)) {
-        assignProp(target, key, source[key]);
+        assignProp(target2, key, source[key]);
       }
     }
   }
-  return target;
+  return target2;
 }
 function initializeContext(params) {
-  let target = params?.target ?? "draft-2020-12";
-  if (target === "draft-4")
-    target = "draft-04";
-  if (target === "draft-7")
-    target = "draft-07";
+  let target2 = params?.target ?? "draft-2020-12";
+  if (target2 === "draft-4")
+    target2 = "draft-04";
+  if (target2 === "draft-7")
+    target2 = "draft-07";
   return {
     processors: params.processors ?? {},
     metadataRegistry: params?.metadata ?? globalRegistry,
-    target,
+    target: target2,
     unrepresentable: params?.unrepresentable ?? "throw",
     override: params?.override ?? (() => {
     }),
@@ -11919,11 +13199,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     ctx.sharedDefsExtractedFor = ctx.external;
 }
 function compactTypeUnion(schema) {
-  const options = schema.anyOf;
-  if (!Array.isArray(options) || options.length === 0 || schema.type !== void 0)
+  const options2 = schema.anyOf;
+  if (!Array.isArray(options2) || options2.length === 0 || schema.type !== void 0)
     return;
   const types = [];
-  for (const option of options) {
+  for (const option of options2) {
     if (!option || typeof option !== "object")
       return;
     compactTypeUnion(option);
@@ -12244,8 +13524,8 @@ var createToJSONSchemaMethod = (schema, processors = {}) => (params) => {
   return finalize(ctx, schema);
 };
 var createStandardJSONSchemaMethod = (schema, io, processors = {}) => (params) => {
-  const { libraryOptions, target } = params ?? {};
-  const ctx = initializeContext({ ...libraryOptions ?? {}, target, io, processors });
+  const { libraryOptions, target: target2 } = params ?? {};
+  const ctx = initializeContext({ ...libraryOptions ?? {}, target: target2, io, processors });
   processSchema(schema, ctx);
   extractDefs(ctx, schema);
   return finalize(ctx, schema);
@@ -12568,14 +13848,14 @@ var objectProcessor = (schema, ctx, _json, params) => {
 var unionProcessor = (schema, ctx, json2, params) => {
   const def = schema._zod.def;
   const isExclusive = def.inclusive === false;
-  const options = def.options.map((x, i) => processSchema(x, ctx, {
+  const options2 = def.options.map((x, i) => processSchema(x, ctx, {
     ...params,
     path: [...params.path, isExclusive ? "oneOf" : "anyOf", i]
   }));
   if (isExclusive) {
-    json2.oneOf = options;
+    json2.oneOf = options2;
   } else {
-    json2.anyOf = options;
+    json2.anyOf = options2;
   }
 };
 var intersectionProcessor = (schema, ctx, json2, params) => {
@@ -12994,8 +14274,8 @@ var ZodType = /* @__PURE__ */ $constructor("ZodType", (inst, def) => {
   catch(params) {
     return _catch(this, params);
   },
-  pipe(target) {
-    return pipe(this, target);
+  pipe(target2) {
+    return pipe(this, target2);
   },
   readonly() {
     return readonly(this);
@@ -13546,10 +14826,10 @@ var ZodUnion = /* @__PURE__ */ $constructor("ZodUnion", (inst, def) => {
   inst._zod.processJSONSchema = (ctx, json2, params) => unionProcessor(inst, ctx, json2, params);
   inst.options = def.options;
 });
-function union(options, params) {
+function union(options2, params) {
   return new ZodUnion({
     type: "union",
-    options,
+    options: options2,
     ...util_exports.normalizeParams(params)
   });
 }
@@ -13557,10 +14837,10 @@ var ZodDiscriminatedUnion = /* @__PURE__ */ $constructor("ZodDiscriminatedUnion"
   ZodUnion.init(inst, def);
   $ZodDiscriminatedUnion.init(inst, def);
 });
-function discriminatedUnion(discriminator, options, params) {
+function discriminatedUnion(discriminator, options2, params) {
   return new ZodDiscriminatedUnion({
     type: "union",
-    options,
+    options: options2,
     discriminator,
     ...util_exports.normalizeParams(params)
   });
@@ -15709,11 +16989,11 @@ var Protocol = class {
         }
         await this.notification(notification, notificationOptions);
       },
-      sendRequest: async (r, resultSchema, options) => {
+      sendRequest: async (r, resultSchema, options2) => {
         if (abortController.signal.aborted) {
           throw new McpError(ErrorCode.ConnectionClosed, "Request was cancelled");
         }
-        const requestOptions = { ...options, relatedRequestId: request.id };
+        const requestOptions = { ...options2, relatedRequestId: request.id };
         if (relatedTaskId && !requestOptions.relatedTask) {
           requestOptions.relatedTask = { taskId: relatedTaskId };
         }
@@ -15882,11 +17162,11 @@ var Protocol = class {
    *
    * @experimental Use `client.experimental.tasks.requestStream()` to access this method.
    */
-  async *requestStream(request, resultSchema, options) {
-    const { task } = options ?? {};
+  async *requestStream(request, resultSchema, options2) {
+    const { task } = options2 ?? {};
     if (!task) {
       try {
-        const result2 = await this.request(request, resultSchema, options);
+        const result2 = await this.request(request, resultSchema, options2);
         yield { type: "result", result: result2 };
       } catch (error2) {
         yield {
@@ -15898,7 +17178,7 @@ var Protocol = class {
     }
     let taskId;
     try {
-      const createResult = await this.request(request, CreateTaskResultSchema, options);
+      const createResult = await this.request(request, CreateTaskResultSchema, options2);
       if (createResult.task) {
         taskId = createResult.task.taskId;
         yield { type: "taskCreated", task: createResult.task };
@@ -15906,11 +17186,11 @@ var Protocol = class {
         throw new McpError(ErrorCode.InternalError, "Task creation did not return a task");
       }
       while (true) {
-        const task2 = await this.getTask({ taskId }, options);
+        const task2 = await this.getTask({ taskId }, options2);
         yield { type: "taskStatus", task: task2 };
         if (isTerminal(task2.status)) {
           if (task2.status === "completed") {
-            const result2 = await this.getTaskResult({ taskId }, resultSchema, options);
+            const result2 = await this.getTaskResult({ taskId }, resultSchema, options2);
             yield { type: "result", result: result2 };
           } else if (task2.status === "failed") {
             yield {
@@ -15926,13 +17206,13 @@ var Protocol = class {
           return;
         }
         if (task2.status === "input_required") {
-          const result2 = await this.getTaskResult({ taskId }, resultSchema, options);
+          const result2 = await this.getTaskResult({ taskId }, resultSchema, options2);
           yield { type: "result", result: result2 };
           return;
         }
         const pollInterval = task2.pollInterval ?? this._options?.defaultTaskPollInterval ?? 1e3;
         await new Promise((resolve11) => setTimeout(resolve11, pollInterval));
-        options?.signal?.throwIfAborted();
+        options2?.signal?.throwIfAborted();
       }
     } catch (error2) {
       yield {
@@ -15946,8 +17226,8 @@ var Protocol = class {
    *
    * Do not use this method to emit notifications! Use notification() instead.
    */
-  request(request, resultSchema, options) {
-    const { relatedRequestId, resumptionToken, onresumptiontoken, task, relatedTask } = options ?? {};
+  request(request, resultSchema, options2) {
+    const { relatedRequestId, resumptionToken, onresumptiontoken, task, relatedTask } = options2 ?? {};
     return new Promise((resolve11, reject) => {
       const earlyReject = (error2) => {
         reject(error2);
@@ -15967,15 +17247,15 @@ var Protocol = class {
           return;
         }
       }
-      options?.signal?.throwIfAborted();
+      options2?.signal?.throwIfAborted();
       const messageId = this._requestMessageId++;
       const jsonrpcRequest = {
         ...request,
         jsonrpc: "2.0",
         id: messageId
       };
-      if (options?.onprogress) {
-        this._progressHandlers.set(messageId, options.onprogress);
+      if (options2?.onprogress) {
+        this._progressHandlers.set(messageId, options2.onprogress);
         jsonrpcRequest.params = {
           ...request.params,
           _meta: {
@@ -16015,7 +17295,7 @@ var Protocol = class {
         reject(error2);
       };
       this._responseHandlers.set(messageId, (response) => {
-        if (options?.signal?.aborted) {
+        if (options2?.signal?.aborted) {
           return;
         }
         if (response instanceof Error) {
@@ -16032,12 +17312,12 @@ var Protocol = class {
           reject(error2);
         }
       });
-      options?.signal?.addEventListener("abort", () => {
-        cancel(options?.signal?.reason);
+      options2?.signal?.addEventListener("abort", () => {
+        cancel(options2?.signal?.reason);
       });
-      const timeout = options?.timeout ?? DEFAULT_REQUEST_TIMEOUT_MSEC;
+      const timeout = options2?.timeout ?? DEFAULT_REQUEST_TIMEOUT_MSEC;
       const timeoutHandler = () => cancel(McpError.fromError(ErrorCode.RequestTimeout, "Request timed out", { timeout }));
-      this._setupTimeout(messageId, timeout, options?.maxTotalTimeout, timeoutHandler, options?.resetTimeoutOnProgress ?? false);
+      this._setupTimeout(messageId, timeout, options2?.maxTotalTimeout, timeoutHandler, options2?.resetTimeoutOnProgress ?? false);
       const relatedTaskId = relatedTask?.taskId;
       if (relatedTaskId) {
         const responseResolver = (response) => {
@@ -16070,42 +17350,42 @@ var Protocol = class {
    *
    * @experimental Use `client.experimental.tasks.getTask()` to access this method.
    */
-  async getTask(params, options) {
-    return this.request({ method: "tasks/get", params }, GetTaskResultSchema, options);
+  async getTask(params, options2) {
+    return this.request({ method: "tasks/get", params }, GetTaskResultSchema, options2);
   }
   /**
    * Retrieves the result of a completed task.
    *
    * @experimental Use `client.experimental.tasks.getTaskResult()` to access this method.
    */
-  async getTaskResult(params, resultSchema, options) {
-    return this.request({ method: "tasks/result", params }, resultSchema, options);
+  async getTaskResult(params, resultSchema, options2) {
+    return this.request({ method: "tasks/result", params }, resultSchema, options2);
   }
   /**
    * Lists tasks, optionally starting from a pagination cursor.
    *
    * @experimental Use `client.experimental.tasks.listTasks()` to access this method.
    */
-  async listTasks(params, options) {
-    return this.request({ method: "tasks/list", params }, ListTasksResultSchema, options);
+  async listTasks(params, options2) {
+    return this.request({ method: "tasks/list", params }, ListTasksResultSchema, options2);
   }
   /**
    * Cancels a specific task.
    *
    * @experimental Use `client.experimental.tasks.cancelTask()` to access this method.
    */
-  async cancelTask(params, options) {
-    return this.request({ method: "tasks/cancel", params }, CancelTaskResultSchema, options);
+  async cancelTask(params, options2) {
+    return this.request({ method: "tasks/cancel", params }, CancelTaskResultSchema, options2);
   }
   /**
    * Emits a notification, which is a one-way message that does not expect a response.
    */
-  async notification(notification, options) {
+  async notification(notification, options2) {
     if (!this._transport) {
       throw new Error("Not connected");
     }
     this.assertNotificationCapability(notification.method);
-    const relatedTaskId = options?.relatedTask?.taskId;
+    const relatedTaskId = options2?.relatedTask?.taskId;
     if (relatedTaskId) {
       const jsonrpcNotification2 = {
         ...notification,
@@ -16114,7 +17394,7 @@ var Protocol = class {
           ...notification.params,
           _meta: {
             ...notification.params?._meta || {},
-            [RELATED_TASK_META_KEY]: options.relatedTask
+            [RELATED_TASK_META_KEY]: options2.relatedTask
           }
         }
       };
@@ -16126,7 +17406,7 @@ var Protocol = class {
       return;
     }
     const debouncedMethods = this._options?.debouncedNotificationMethods ?? [];
-    const canDebounce = debouncedMethods.includes(notification.method) && !notification.params && !options?.relatedRequestId && !options?.relatedTask;
+    const canDebounce = debouncedMethods.includes(notification.method) && !notification.params && !options2?.relatedRequestId && !options2?.relatedTask;
     if (canDebounce) {
       if (this._pendingDebouncedNotifications.has(notification.method)) {
         return;
@@ -16141,19 +17421,19 @@ var Protocol = class {
           ...notification,
           jsonrpc: "2.0"
         };
-        if (options?.relatedTask) {
+        if (options2?.relatedTask) {
           jsonrpcNotification2 = {
             ...jsonrpcNotification2,
             params: {
               ...jsonrpcNotification2.params,
               _meta: {
                 ...jsonrpcNotification2.params?._meta || {},
-                [RELATED_TASK_META_KEY]: options.relatedTask
+                [RELATED_TASK_META_KEY]: options2.relatedTask
               }
             }
           };
         }
-        this._transport?.send(jsonrpcNotification2, options).catch((error2) => this._onerror(error2));
+        this._transport?.send(jsonrpcNotification2, options2).catch((error2) => this._onerror(error2));
       });
       return;
     }
@@ -16161,19 +17441,19 @@ var Protocol = class {
       ...notification,
       jsonrpc: "2.0"
     };
-    if (options?.relatedTask) {
+    if (options2?.relatedTask) {
       jsonrpcNotification = {
         ...jsonrpcNotification,
         params: {
           ...jsonrpcNotification.params,
           _meta: {
             ...jsonrpcNotification.params?._meta || {},
-            [RELATED_TASK_META_KEY]: options.relatedTask
+            [RELATED_TASK_META_KEY]: options2.relatedTask
           }
         }
       };
     }
-    await this._transport.send(jsonrpcNotification, options);
+    await this._transport.send(jsonrpcNotification, options2);
   }
   /**
    * Registers a handler to invoke when this protocol object receives a request with the given method.
@@ -16395,8 +17675,8 @@ function createDefaultAjvInstance() {
     validateSchema: false,
     allErrors: true
   });
-  const addFormats = import_ajv_formats.default;
-  addFormats(ajv);
+  const addFormats2 = import_ajv_formats.default;
+  addFormats2(ajv);
   return ajv;
 }
 var AjvJsonSchemaValidator = class {
@@ -16472,8 +17752,8 @@ var ExperimentalServerTasks = class {
    *
    * @experimental
    */
-  requestStream(request, resultSchema, options) {
-    return this._server.requestStream(request, resultSchema, options);
+  requestStream(request, resultSchema, options2) {
+    return this._server.requestStream(request, resultSchema, options2);
   }
   /**
    * Sends a sampling request and returns an AsyncGenerator that yields response messages.
@@ -16518,7 +17798,7 @@ var ExperimentalServerTasks = class {
    *
    * @experimental
    */
-  createMessageStream(params, options) {
+  createMessageStream(params, options2) {
     const clientCapabilities = this._server.getClientCapabilities();
     if ((params.tools || params.toolChoice) && !clientCapabilities?.sampling?.tools) {
       throw new Error("Client does not support sampling tools capability.");
@@ -16549,7 +17829,7 @@ var ExperimentalServerTasks = class {
     return this.requestStream({
       method: "sampling/createMessage",
       params
-    }, CreateMessageResultSchema, options);
+    }, CreateMessageResultSchema, options2);
   }
   /**
    * Sends an elicitation request and returns an AsyncGenerator that yields response messages.
@@ -16593,7 +17873,7 @@ var ExperimentalServerTasks = class {
    *
    * @experimental
    */
-  elicitInputStream(params, options) {
+  elicitInputStream(params, options2) {
     const clientCapabilities = this._server.getClientCapabilities();
     const mode = params.mode ?? "form";
     switch (mode) {
@@ -16614,7 +17894,7 @@ var ExperimentalServerTasks = class {
     return this.requestStream({
       method: "elicitation/create",
       params: normalizedParams
-    }, ElicitResultSchema, options);
+    }, ElicitResultSchema, options2);
   }
   /**
    * Gets the current status of a task.
@@ -16625,8 +17905,8 @@ var ExperimentalServerTasks = class {
    *
    * @experimental
    */
-  async getTask(taskId, options) {
-    return this._server.getTask({ taskId }, options);
+  async getTask(taskId, options2) {
+    return this._server.getTask({ taskId }, options2);
   }
   /**
    * Retrieves the result of a completed task.
@@ -16638,8 +17918,8 @@ var ExperimentalServerTasks = class {
    *
    * @experimental
    */
-  async getTaskResult(taskId, resultSchema, options) {
-    return this._server.getTaskResult({ taskId }, resultSchema, options);
+  async getTaskResult(taskId, resultSchema, options2) {
+    return this._server.getTaskResult({ taskId }, resultSchema, options2);
   }
   /**
    * Lists tasks with optional pagination.
@@ -16650,8 +17930,8 @@ var ExperimentalServerTasks = class {
    *
    * @experimental
    */
-  async listTasks(cursor, options) {
-    return this._server.listTasks(cursor ? { cursor } : void 0, options);
+  async listTasks(cursor, options2) {
+    return this._server.listTasks(cursor ? { cursor } : void 0, options2);
   }
   /**
    * Cancels a running task.
@@ -16661,8 +17941,8 @@ var ExperimentalServerTasks = class {
    *
    * @experimental
    */
-  async cancelTask(taskId, options) {
-    return this._server.cancelTask({ taskId }, options);
+  async cancelTask(taskId, options2) {
+    return this._server.cancelTask({ taskId }, options2);
   }
 };
 
@@ -16706,8 +17986,8 @@ var Server = class extends Protocol {
   /**
    * Initializes this server with the given name and version information.
    */
-  constructor(_serverInfo, options) {
-    super(options);
+  constructor(_serverInfo, options2) {
+    super(options2);
     this._serverInfo = _serverInfo;
     this._loggingLevels = /* @__PURE__ */ new Map();
     this.LOG_LEVEL_SEVERITY = new Map(LoggingLevelSchema.options.map((level, index) => [level, index]));
@@ -16715,9 +17995,9 @@ var Server = class extends Protocol {
       const currentLevel = this._loggingLevels.get(sessionId);
       return currentLevel ? this.LOG_LEVEL_SEVERITY.get(level) < this.LOG_LEVEL_SEVERITY.get(currentLevel) : false;
     };
-    this._capabilities = options?.capabilities ?? {};
-    this._instructions = options?.instructions;
-    this._jsonSchemaValidator = options?.jsonSchemaValidator ?? new AjvJsonSchemaValidator();
+    this._capabilities = options2?.capabilities ?? {};
+    this._instructions = options2?.instructions;
+    this._jsonSchemaValidator = options2?.jsonSchemaValidator ?? new AjvJsonSchemaValidator();
     this.setRequestHandler(InitializeRequestSchema, (request) => this._oninitialize(request));
     this.setNotificationHandler(InitializedNotificationSchema, () => this.oninitialized?.());
     if (this._capabilities.logging) {
@@ -16942,7 +18222,7 @@ var Server = class extends Protocol {
     return this.request({ method: "ping" }, EmptyResultSchema);
   }
   // Implementation
-  async createMessage(params, options) {
+  async createMessage(params, options2) {
     if (params.tools || params.toolChoice) {
       if (!this._clientCapabilities?.sampling?.tools) {
         throw new Error("Client does not support sampling tools capability.");
@@ -16972,9 +18252,9 @@ var Server = class extends Protocol {
       }
     }
     if (params.tools) {
-      return this.request({ method: "sampling/createMessage", params }, CreateMessageResultWithToolsSchema, options);
+      return this.request({ method: "sampling/createMessage", params }, CreateMessageResultWithToolsSchema, options2);
     }
-    return this.request({ method: "sampling/createMessage", params }, CreateMessageResultSchema, options);
+    return this.request({ method: "sampling/createMessage", params }, CreateMessageResultSchema, options2);
   }
   /**
    * Creates an elicitation request for the given parameters.
@@ -16983,7 +18263,7 @@ var Server = class extends Protocol {
    * @param options Optional request options.
    * @returns The result of the elicitation request.
    */
-  async elicitInput(params, options) {
+  async elicitInput(params, options2) {
     const mode = params.mode ?? "form";
     switch (mode) {
       case "url": {
@@ -16991,14 +18271,14 @@ var Server = class extends Protocol {
           throw new Error("Client does not support url elicitation.");
         }
         const urlParams = params;
-        return this.request({ method: "elicitation/create", params: urlParams }, ElicitResultSchema, options);
+        return this.request({ method: "elicitation/create", params: urlParams }, ElicitResultSchema, options2);
       }
       case "form": {
         if (!this._clientCapabilities?.elicitation?.form) {
           throw new Error("Client does not support form elicitation.");
         }
         const formParams = params.mode === "form" ? params : { ...params, mode: "form" };
-        const result2 = await this.request({ method: "elicitation/create", params: formParams }, ElicitResultSchema, options);
+        const result2 = await this.request({ method: "elicitation/create", params: formParams }, ElicitResultSchema, options2);
         if (result2.action === "accept" && result2.content && formParams.requestedSchema) {
           try {
             const validator = this._jsonSchemaValidator.getValidator(formParams.requestedSchema);
@@ -17025,7 +18305,7 @@ var Server = class extends Protocol {
    * @param options Optional notification options. Useful when the completion notification should be related to a prior request.
    * @returns A function that emits the completion notification when awaited.
    */
-  createElicitationCompletionNotifier(elicitationId, options) {
+  createElicitationCompletionNotifier(elicitationId, options2) {
     if (!this._clientCapabilities?.elicitation?.url) {
       throw new Error("Client does not support URL elicitation (required for notifications/elicitation/complete)");
     }
@@ -17034,10 +18314,10 @@ var Server = class extends Protocol {
       params: {
         elicitationId
       }
-    }, options);
+    }, options2);
   }
-  async listRoots(params, options) {
-    return this.request({ method: "roots/list", params }, ListRootsResultSchema, options);
+  async listRoots(params, options2) {
+    return this.request({ method: "roots/list", params }, ListRootsResultSchema, options2);
   }
   /**
    * Sends a logging message to the client, if connected.
@@ -17078,8 +18358,8 @@ import process2 from "node:process";
 // node_modules/@modelcontextprotocol/sdk/dist/esm/shared/stdio.js
 var STDIO_DEFAULT_MAX_BUFFER_SIZE = 10 * 1024 * 1024;
 var ReadBuffer = class {
-  constructor(options) {
-    this._maxBufferSize = options?.maxBufferSize ?? STDIO_DEFAULT_MAX_BUFFER_SIZE;
+  constructor(options2) {
+    this._maxBufferSize = options2?.maxBufferSize ?? STDIO_DEFAULT_MAX_BUFFER_SIZE;
   }
   append(chunk) {
     const newSize = (this._buffer?.length ?? 0) + chunk.length;
@@ -17114,7 +18394,7 @@ function serializeMessage(message2) {
 
 // node_modules/@modelcontextprotocol/sdk/dist/esm/server/stdio.js
 var StdioServerTransport = class {
-  constructor(_stdin = process2.stdin, _stdout = process2.stdout, options) {
+  constructor(_stdin = process2.stdin, _stdout = process2.stdout, options2) {
     this._stdin = _stdin;
     this._stdout = _stdout;
     this._started = false;
@@ -17131,7 +18411,7 @@ var StdioServerTransport = class {
     this._onerror = (error2) => {
       this.onerror?.(error2);
     };
-    this._readBuffer = new ReadBuffer({ maxBufferSize: options?.maxBufferSize });
+    this._readBuffer = new ReadBuffer({ maxBufferSize: options2?.maxBufferSize });
   }
   /**
    * Starts listening for messages on stdin.
@@ -17180,9 +18460,9 @@ var StdioServerTransport = class {
 };
 
 // src/manager.ts
-import { randomUUID as randomUUID6 } from "node:crypto";
-import { mkdir as mkdir9, readFile as readFile10, cp, access } from "node:fs/promises";
-import { dirname as dirname9, join as join14, resolve as resolve9 } from "node:path";
+import { randomUUID as randomUUID7 } from "node:crypto";
+import { mkdir as mkdir10, readFile as readFile11, cp, access } from "node:fs/promises";
+import { dirname as dirname9, join as join15, resolve as resolve9 } from "node:path";
 
 // src/config.ts
 import { homedir as homedir2 } from "node:os";
@@ -17333,13 +18613,13 @@ function absolute(value, label) {
   if (!isAbsolute2(value)) throw new TypeError(`${label} must be an absolute path`);
   return normalize(value);
 }
-function relayStateRoot(options = {}) {
-  const env = options.env ?? process.env;
-  const selected = selectedEnvironment(env, options.home);
+function relayStateRoot(options2 = {}) {
+  const env = options2.env ?? process.env;
+  const selected = selectedEnvironment(env, options2.home);
   if (selected) return selected.profile.relayStateDir;
   if (env.MCP_VM_RELAY_STATE_DIR !== void 0) return absolute(env.MCP_VM_RELAY_STATE_DIR, "MCP_VM_RELAY_STATE_DIR");
   if (env.XDG_STATE_HOME !== void 0) return join2(absolute(env.XDG_STATE_HOME, "XDG_STATE_HOME"), "mcp-vm-relay");
-  return join2(absolute(options.home ?? env.HOME ?? homedir2(), "home"), ".local", "state", "mcp-vm-relay");
+  return join2(absolute(options2.home ?? env.HOME ?? homedir2(), "home"), ".local", "state", "mcp-vm-relay");
 }
 function pythonExecutable(env = process.env) {
   return nonblank(env.MCP_VM_RELAY_PYTHON ?? "python3", "MCP_VM_RELAY_PYTHON");
@@ -17353,8 +18633,8 @@ import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
 import { dirname as dirname2, join as join3 } from "node:path";
 var SubmissionStore = class {
   options;
-  constructor(options) {
-    this.options = options;
+  constructor(options2) {
+    this.options = options2;
   }
   sessionPath(sessionId) {
     return join3(this.options.rootDir, "sessions", `${sessionId}.json`);
@@ -17463,7 +18743,7 @@ var Relay = class _Relay {
   }
   /** Register the transport used by start(); e.g. (o) => new SshTransport(o). */
   useTransport(factory) {
-    this.transportFactory = async (options) => await factory(options);
+    this.transportFactory = async (options2) => await factory(options2);
   }
   get submissions() {
     return this.store;
@@ -17473,18 +18753,18 @@ var Relay = class _Relay {
    * before any connection attempt so a startup failure after acquiring
    * remote resources remains discoverable (D14).
    */
-  async start(options) {
-    const sessionId = options.sessionId ?? formatId(allocateId("session"));
+  async start(options2) {
+    const sessionId = options2.sessionId ?? formatId(allocateId("session"));
     const record3 = {
       sessionId,
-      taskId: options.taskId,
-      target: options.target,
+      taskId: options2.taskId,
+      target: options2.target,
       createdAt: (/* @__PURE__ */ new Date()).toISOString(),
       state: "starting",
       executions: []
     };
     await this.store.saveSessionBeforeConnect(record3);
-    const transport = await this.connect(options);
+    const transport = await this.connect(options2);
     await this.markState(sessionId, "active");
     return new Session(sessionId, transport, this.store);
   }
@@ -17503,11 +18783,11 @@ var Relay = class _Relay {
   async listSessions() {
     return this.store.listSessions();
   }
-  async connect(options) {
+  async connect(options2) {
     if (!this.transportFactory) {
       throw new Error("no transport configured: call relay.useTransport(...) (e.g. () => new SshTransport({ target }))");
     }
-    return this.transportFactory(options);
+    return this.transportFactory(options2);
   }
   async markState(sessionId, state) {
     const record3 = await this.store.getSession(sessionId);
@@ -17539,7 +18819,7 @@ var Session = class {
    * persisted before transmission; a transport loss leaves the submission
    * inspectable as uncertain, never replayed.
    */
-  async exec(argv2, options = {}) {
+  async exec(argv2, options2 = {}) {
     const executionId = formatId(allocateId("execution"));
     const submission = {
       executionId,
@@ -17555,9 +18835,9 @@ var Session = class {
       kind: "exec",
       executionId,
       argv: argv2,
-      cwd: options.cwd,
-      step: options.step,
-      snapshots: options.snapshots
+      cwd: options2.cwd,
+      step: options2.step,
+      snapshots: options2.snapshots
     });
     const state = response.outcome.kind === "completed" ? "completed" : "uncertain";
     await this.store.saveExecutionBeforeSubmit({
@@ -17572,15 +18852,15 @@ var Session = class {
    * script identity, and content hash are durably persisted before
    * transmission; the same outcome states as exec() apply (D14/D17).
    */
-  async runScript(localPath, remotePath, language2, options = {}) {
-    const { createHash: createHash6 } = await import("node:crypto");
-    const { readFile: readFile11 } = await import("node:fs/promises");
-    const bytes = await readFile11(localPath);
-    const scriptSha256 = createHash6("sha256").update(bytes).digest("hex");
+  async runScript(localPath, remotePath, language2, options2 = {}) {
+    const { createHash: createHash7 } = await import("node:crypto");
+    const { readFile: readFile12 } = await import("node:fs/promises");
+    const bytes = await readFile12(localPath);
+    const scriptSha256 = createHash7("sha256").update(bytes).digest("hex");
     const upload = await this.transport.upload(localPath, { remotePath });
     const executionId = formatId(allocateId("execution"));
     const interpreter = language2 === "python" ? "python3" : language2 === "typescript" ? "tsx" : "node";
-    const argv2 = [interpreter, ...options.interpreterArgs ?? [], remotePath];
+    const argv2 = [interpreter, ...options2.interpreterArgs ?? [], remotePath];
     const submission = {
       executionId,
       sessionId: this.sessionId,
@@ -17603,9 +18883,9 @@ var Session = class {
       remotePath,
       language: language2,
       argv: argv2,
-      cwd: options.cwd,
-      step: options.step,
-      snapshots: options.snapshots,
+      cwd: options2.cwd,
+      step: options2.step,
+      snapshots: options2.snapshots,
       scriptId: upload.scriptId,
       scriptSha256
     });
@@ -17623,9 +18903,9 @@ var Session = class {
    * the durable submission, hashed before transmission and verified on the
    * remote after receipt. Same outcome states as exec() (D14/D17).
    */
-  async runCode(code, language2, options = {}) {
-    const { createHash: createHash6 } = await import("node:crypto");
-    const codeSha256 = createHash6("sha256").update(code, "utf8").digest("hex");
+  async runCode(code, language2, options2 = {}) {
+    const { createHash: createHash7 } = await import("node:crypto");
+    const codeSha256 = createHash7("sha256").update(code, "utf8").digest("hex");
     const executionId = formatId(allocateId("execution"));
     const interpreter = language2 === "python" ? "python3" : language2 === "typescript" ? "tsx" : "node";
     const submission = {
@@ -17651,9 +18931,9 @@ var Session = class {
       code,
       codeSha256,
       argv: [interpreter],
-      cwd: options.cwd,
-      step: options.step,
-      snapshots: options.snapshots
+      cwd: options2.cwd,
+      step: options2.step,
+      snapshots: options2.snapshots
     });
     const state = response.outcome.kind === "completed" ? "completed" : "uncertain";
     await this.store.saveExecutionBeforeSubmit({
@@ -17668,7 +18948,7 @@ var Session = class {
    * hash, to demonstrate the remote hash-mismatch refusal. Not part of the
    * normal surface — normal callers use runCode, which computes the hash.
    */
-  async runCodeWithHash(code, codeSha256, language2, options = {}) {
+  async runCodeWithHash(code, codeSha256, language2, options2 = {}) {
     const executionId = formatId(allocateId("execution"));
     const submission = {
       executionId,
@@ -17688,8 +18968,8 @@ var Session = class {
       code,
       codeSha256,
       argv: [language2 === "python" ? "python3" : language2 === "typescript" ? "tsx" : "node"],
-      cwd: options.cwd,
-      step: options.step
+      cwd: options2.cwd,
+      step: options2.step
     });
     const state = response.outcome.kind === "completed" ? "completed" : "uncertain";
     await this.store.saveExecutionBeforeSubmit({ ...submission, state, outcome: response.outcome });
@@ -17700,8 +18980,8 @@ var Session = class {
     return this.store.listExecutions(this.sessionId);
   }
   /** Finalize capture, transfer the package, and validate host delivery. */
-  async finish(options) {
-    return this.transport.finish(options);
+  async finish(options2) {
+    return this.transport.finish(options2);
   }
   async close() {
     await this.transport.close();
@@ -17714,7 +18994,7 @@ init_evidence_package();
 // node_modules/@wezzard/relay-driver-host-sdk/dist/src/trajectory.js
 import { readFile as readFile3, readdir as readdir2 } from "node:fs/promises";
 import { join as join5 } from "node:path";
-async function buildTrajectory(packageDir, options = {}) {
+async function buildTrajectory(packageDir, options2 = {}) {
   const manifest = JSON.parse(await readFile3(join5(packageDir, "manifest.json"), "utf8"));
   const journalLines = (await readFile3(join5(packageDir, "journal", "session-events.jsonl"), "utf8")).split("\n").filter(Boolean).map((l) => JSON.parse(l));
   const completionByAction = /* @__PURE__ */ new Map();
@@ -17759,7 +19039,7 @@ async function buildTrajectory(packageDir, options = {}) {
       return { ...groupPair, ...own2, groupId: own2.groupId ?? groupPair.groupId };
     return own2 ?? groupPair;
   };
-  const steps = options.steps ?? journalLines.filter((r) => r.kind === "action-start").map((start, i) => {
+  const steps = options2.steps ?? journalLines.filter((r) => r.kind === "action-start").map((start, i) => {
     const actionKey = start.actionId ?? `action-${i}`;
     const completion = completionByAction.get(actionKey);
     const outcome = completion?.toolOutcome;
@@ -17804,14 +19084,14 @@ async function buildTrajectory(packageDir, options = {}) {
   const damaged = manifest.media.filter((m) => m.decode !== "playable");
   return {
     formatVersion: "draft",
-    packageId: options.packageId ?? manifest.packageId,
+    packageId: options2.packageId ?? manifest.packageId,
     sessionId: manifest.sessionId,
     media: manifest.media,
     segments,
     steps,
     outcomes: {
       recording: damaged.length === 0 ? "complete" : "incomplete",
-      execution: options.execution ?? (steps.some((s) => s.execution === "failed") ? "failed" : steps.some((s) => s.execution === "incomplete") ? "uncertain" : "passed"),
+      execution: options2.execution ?? (steps.some((s) => s.execution === "failed") ? "failed" : steps.some((s) => s.execution === "incomplete") ? "uncertain" : "passed"),
       humanReview: "pending"
     }
   };
@@ -17820,8 +19100,8 @@ async function buildTrajectory(packageDir, options = {}) {
 // src/vm-service.ts
 import { isIP as isIP2 } from "node:net";
 var VmServiceError = class extends Error {
-  constructor(message2, status, responseBody, options) {
-    super(message2, options);
+  constructor(message2, status, responseBody, options2) {
+    super(message2, options2);
     this.status = status;
     this.responseBody = responseBody;
     this.name = "VmServiceError";
@@ -17851,54 +19131,54 @@ var VmService = class {
   timeoutMs;
   acquireTimeoutMs;
   maxResponseBytes;
-  constructor(options = {}) {
-    if (typeof options === "string") options = { baseUrl: options };
-    this.environment = options.environment;
-    const url = new URL(options.baseUrl ?? options.environment?.profile.vmServiceUrl ?? "http://localhost:6240");
-    if (options.environment && url.origin !== new URL(options.environment.profile.vmServiceUrl).origin) throw new TypeError("Backend endpoint does not match the selected environment");
+  constructor(options2 = {}) {
+    if (typeof options2 === "string") options2 = { baseUrl: options2 };
+    this.environment = options2.environment;
+    const url = new URL(options2.baseUrl ?? options2.environment?.profile.vmServiceUrl ?? "http://localhost:6240");
+    if (options2.environment && url.origin !== new URL(options2.environment.profile.vmServiceUrl).origin) throw new TypeError("Backend endpoint does not match the selected environment");
     const host = url.hostname.replace(/^\[|\]$/g, "");
     const loopback = host === "localhost" || host === "::1" || isIP2(host) === 4 && host.startsWith("127.");
     if (!loopback || !["http:", "https:"].includes(url.protocol) || url.username || url.password || url.search || url.hash || url.pathname !== "/") {
       throw new TypeError("vm-service baseUrl must be a loopback HTTP(S) origin without credentials, path, query or fragment");
     }
     this.baseUrl = url.origin;
-    this.timeoutMs = positive(options.timeoutMs ?? 66e4, "timeoutMs");
-    this.acquireTimeoutMs = positive(options.acquireTimeoutMs ?? 36e5, "acquireTimeoutMs");
-    this.maxResponseBytes = positive(options.maxResponseBytes ?? 4 * 1024 * 1024, "maxResponseBytes");
+    this.timeoutMs = positive(options2.timeoutMs ?? 66e4, "timeoutMs");
+    this.acquireTimeoutMs = positive(options2.acquireTimeoutMs ?? 36e5, "acquireTimeoutMs");
+    this.maxResponseBytes = positive(options2.maxResponseBytes ?? 4 * 1024 * 1024, "maxResponseBytes");
   }
-  health(options = {}) {
-    return this.request("/health", void 0, options);
+  health(options2 = {}) {
+    return this.request("/health", void 0, options2);
   }
-  list(options = {}) {
-    return this.request("/vms", void 0, options);
+  list(options2 = {}) {
+    return this.request("/vms", void 0, options2);
   }
-  images(options = {}) {
-    return this.request("/images", void 0, options);
+  images(options2 = {}) {
+    return this.request("/images", void 0, options2);
   }
-  applications(options = {}) {
-    return this.request("/applications", void 0, options);
+  applications(options2 = {}) {
+    return this.request("/applications", void 0, options2);
   }
-  acquisitionCapabilities(options = {}) {
-    return this.consoleRequest("/acquisition-capabilities", void 0, options);
+  acquisitionCapabilities(options2 = {}) {
+    return this.consoleRequest("/acquisition-capabilities", void 0, options2);
   }
-  consoleResolve(vm, body, options = {}) {
-    return this.consoleRequest(this.path(vm, "console/resolve"), body, options);
+  consoleResolve(vm, body, options2 = {}) {
+    return this.consoleRequest(this.path(vm, "console/resolve"), body, options2);
   }
-  consoleOpen(vm, body, options = {}) {
-    return this.consoleRequest(this.path(vm, "console/open"), body, options);
+  consoleOpen(vm, body, options2 = {}) {
+    return this.consoleRequest(this.path(vm, "console/open"), body, options2);
   }
-  consoleCancel(vm, body, options = {}) {
-    return this.consoleRequest(this.path(vm, "console/cancel"), body, options);
+  consoleCancel(vm, body, options2 = {}) {
+    return this.consoleRequest(this.path(vm, "console/cancel"), body, options2);
   }
-  async consoleRequest(path, body, options) {
+  async consoleRequest(path, body, options2) {
     try {
-      return await this.request(path, body, options);
+      return await this.request(path, body, options2);
     } catch (error2) {
       throw new VmServiceError(`Console API unavailable or request outcome unknown${error2 instanceof VmServiceError && error2.status ? ` (HTTP ${error2.status})` : ""}; resolve before another open`, error2 instanceof VmServiceError ? error2.status : void 0);
     }
   }
-  get(vm, options = {}) {
-    return this.request(this.path(vm), void 0, options);
+  get(vm, options2 = {}) {
+    return this.request(this.path(vm), void 0, options2);
   }
   /**
    * Cancellation before dispatch prevents allocation. Once dispatched we deliberately
@@ -17907,10 +19187,10 @@ var VmService = class {
    * lease before checking its signal. Network loss/deadline remains indeterminate
    * (a daemon protocol limitation); never blindly retry acquisition.
    */
-  async acquire(body, options = {}) {
-    options.signal?.throwIfAborted();
+  async acquire(body, options2 = {}) {
+    options2.signal?.throwIfAborted();
     if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(body.purpose)) throw new TypeError("Invalid VM purpose");
-    const timeoutMs2 = positive(options.timeoutMs ?? this.acquireTimeoutMs, "timeoutMs");
+    const timeoutMs2 = positive(options2.timeoutMs ?? this.acquireTimeoutMs, "timeoutMs");
     try {
       const lease = await this.request("/acquire", body, { timeoutMs: timeoutMs2 });
       if (!isLease(lease)) throw new VmServiceError("Invalid vm-service acquire response");
@@ -17921,31 +19201,31 @@ var VmService = class {
       throw new AcquireIndeterminateError(body.purpose, safeError);
     }
   }
-  exec(vm, body, options = {}) {
-    return this.request(this.path(vm, "exec"), body, options);
+  exec(vm, body, options2 = {}) {
+    return this.request(this.path(vm, "exec"), body, options2);
   }
-  push(vm, body, options = {}) {
-    return this.request(this.path(vm, "push"), body, options);
+  push(vm, body, options2 = {}) {
+    return this.request(this.path(vm, "push"), body, options2);
   }
-  pull(vm, body, options = {}) {
-    return this.request(this.path(vm, "pull"), body, options);
+  pull(vm, body, options2 = {}) {
+    return this.request(this.path(vm, "pull"), body, options2);
   }
-  heartbeat(vm, body = {}, options = {}) {
-    return this.request(this.path(vm, "heartbeat"), body, options);
+  heartbeat(vm, body = {}, options2 = {}) {
+    return this.request(this.path(vm, "heartbeat"), body, options2);
   }
-  release(vm, body = {}, options = {}) {
-    return this.request(this.path(vm, "release"), body, options);
+  release(vm, body = {}, options2 = {}) {
+    return this.request(this.path(vm, "release"), body, options2);
   }
   path(vm, action) {
     if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(vm)) throw new TypeError("Invalid VM name");
     return `/vms/${encodeURIComponent(vm)}${action ? `/${action}` : ""}`;
   }
-  async request(path, body, options) {
-    options.signal?.throwIfAborted();
-    const timeoutMs2 = positive(options.timeoutMs ?? this.timeoutMs, "timeoutMs");
+  async request(path, body, options2) {
+    options2.signal?.throwIfAborted();
+    const timeoutMs2 = positive(options2.timeoutMs ?? this.timeoutMs, "timeoutMs");
     const controller = new AbortController();
-    const abort = () => controller.abort(options.signal?.reason);
-    options.signal?.addEventListener("abort", abort, { once: true });
+    const abort = () => controller.abort(options2.signal?.reason);
+    options2.signal?.addEventListener("abort", abort, { once: true });
     const timer = setTimeout(() => controller.abort(new VmServiceError(`vm-service ${path} timed out after ${timeoutMs2}ms`)), timeoutMs2);
     try {
       const response = await fetch(`${this.baseUrl}${path}`, {
@@ -17993,7 +19273,7 @@ var VmService = class {
       throw new VmServiceError(`vm-service ${path}: request failed`, void 0, void 0, { cause });
     } finally {
       clearTimeout(timer);
-      options.signal?.removeEventListener("abort", abort);
+      options2.signal?.removeEventListener("abort", abort);
     }
   }
 };
@@ -18009,8 +19289,8 @@ import { homedir as homedir3 } from "node:os";
 import { spawn as spawn2 } from "node:child_process";
 import { dirname as dirname3, join as join6, resolve as resolve3 } from "node:path";
 var RegistryError = class extends Error {
-  constructor(message2, options) {
-    super(message2, options);
+  constructor(message2, options2) {
+    super(message2, options2);
     this.name = "RegistryError";
   }
 };
@@ -18062,28 +19342,28 @@ function table(text4) {
   const last = rows.at(-1) ?? separator;
   return { rows, insertion: last.end, newline: text4.includes("\r\n") ? "\r\n" : "\n" };
 }
-function resolveRegistry(options = {}) {
-  const env = options.env ?? process.env;
-  const root = options.managedRoot ?? selectedEnvironment(env, options.home)?.profile.relayStateDir;
-  if (root !== void 0 && options.path === void 0) return { path: join6(absolute(root, "managed registry root"), "registry.md"), managed: true };
-  const explicit = options.path ?? env.MCP_VM_RELAY_REGISTRY;
+function resolveRegistry(options2 = {}) {
+  const env = options2.env ?? process.env;
+  const root = options2.managedRoot ?? selectedEnvironment(env, options2.home)?.profile.relayStateDir;
+  if (root !== void 0 && options2.path === void 0) return { path: join6(absolute(root, "managed registry root"), "registry.md"), managed: true };
+  const explicit = options2.path ?? env.MCP_VM_RELAY_REGISTRY;
   const validate2 = (path) => {
     if (!statSync2(path).isFile()) throw new RegistryError("Registry target must be a regular file");
     table(readFileSync2(path, "utf8"));
   };
   if (explicit !== void 0) {
-    const path = options.path !== void 0 ? resolve3(nonblank(explicit, "Registry path")) : absolute(explicit, "MCP_VM_RELAY_REGISTRY");
+    const path = options2.path !== void 0 ? resolve3(nonblank(explicit, "Registry path")) : absolute(explicit, "MCP_VM_RELAY_REGISTRY");
     validate2(path);
     return { path, managed: false };
   }
-  const legacy = join6(options.home ?? env.HOME ?? homedir3(), "AGENTS.md");
+  const legacy = join6(options2.home ?? env.HOME ?? homedir3(), "AGENTS.md");
   try {
     validate2(legacy);
     return { path: resolve3(legacy), managed: false };
   } catch (error2) {
     if (!(error2 instanceof RegistryError) && !errno(error2, "ENOENT") && !errno(error2, "ENOTDIR")) throw error2;
   }
-  return { path: join6(relayStateRoot(options), "registry.md"), managed: true };
+  return { path: join6(relayStateRoot(options2), "registry.md"), managed: true };
 }
 var MANAGED_REGISTRY = `# mcp-vm-relay task registry
 
@@ -18125,17 +19405,17 @@ var Registry = class {
   lockTimeoutMs;
   lockRetryMs;
   pythonExecutable;
-  constructor(options = {}) {
-    if (typeof options === "string") options = { path: options };
-    const registry2 = resolveRegistry(options);
+  constructor(options2 = {}) {
+    if (typeof options2 === "string") options2 = { path: options2 };
+    const registry2 = resolveRegistry(options2);
     this.path = registry2.path;
     this.managed = registry2.managed;
-    this.lockTimeoutMs = bounded(options.lockTimeoutMs ?? 1e4, "lockTimeoutMs");
-    this.lockRetryMs = bounded(options.lockRetryMs ?? 25, "lockRetryMs");
-    this.pythonExecutable = options.pythonExecutable === void 0 ? pythonExecutable(options.env) : nonblank(options.pythonExecutable, "pythonExecutable");
+    this.lockTimeoutMs = bounded(options2.lockTimeoutMs ?? 1e4, "lockTimeoutMs");
+    this.lockRetryMs = bounded(options2.lockRetryMs ?? 25, "lockRetryMs");
+    this.pythonExecutable = options2.pythonExecutable === void 0 ? pythonExecutable(options2.env) : nonblank(options2.pythonExecutable, "pythonExecutable");
   }
   /** Returns false when this exact row is already registered (idempotent). */
-  async add(row, options = {}) {
+  async add(row, options2 = {}) {
     const desired = cells(row);
     return this.update((text4) => {
       const registry2 = table(text4);
@@ -18147,10 +19427,10 @@ var Registry = class {
       const prefix = registry2.insertion > 0 && !/[\r\n]/.test(text4[registry2.insertion - 1]) ? registry2.newline : "";
       const added = `${prefix}| ${desired.join(" | ")} |${registry2.newline}`;
       return text4.slice(0, registry2.insertion) + added + text4.slice(registry2.insertion);
-    }, options.signal);
+    }, options2.signal);
   }
   /** Returns false when absent. Never removes a row whose ownership differs. */
-  async remove(row, options = {}) {
+  async remove(row, options2 = {}) {
     const desired = cells(row);
     return this.update((text4) => {
       const registry2 = table(text4);
@@ -18161,7 +19441,7 @@ var Registry = class {
       }
       const line = matching[0];
       return text4.slice(0, line.start) + text4.slice(line.end);
-    }, options.signal);
+    }, options2.signal);
   }
   async update(transform2, signal) {
     signal?.throwIfAborted();
@@ -18171,19 +19451,19 @@ var Registry = class {
       if (!parent.isDirectory()) throw new RegistryError("Managed registry parent must be a directory, not a symlink");
       if ((parent.mode & 63) !== 0) throw new RegistryError("Managed registry parent must be private (0700); choose a private state directory. Existing directory permissions are not changed automatically.");
     }
-    const target = this.managed ? join6(await realpath(dirname3(this.path)), "registry.md") : await realpath(this.path);
-    const lock = await this.lock(`${target}.mcp-vm-relay.lock`, signal);
+    const target2 = this.managed ? join6(await realpath(dirname3(this.path)), "registry.md") : await realpath(this.path);
+    const lock = await this.lock(`${target2}.mcp-vm-relay.lock`, signal);
     const token2 = randomUUID();
     let temporary;
     try {
       signal?.throwIfAborted();
-      if (this.managed) await this.initialize(target, lock.check);
-      const before = await lstat(target);
+      if (this.managed) await this.initialize(target2, lock.check);
+      const before = await lstat(target2);
       if (!before.isFile()) throw new RegistryError("Registry target must be a regular file");
-      const original = await readFile4(target, "utf8");
+      const original = await readFile4(target2, "utf8");
       const updated = transform2(original);
       if (original === updated) return false;
-      temporary = join6(dirname3(target), `.${target.split("/").at(-1)}.${token2}.tmp`);
+      temporary = join6(dirname3(target2), `.${target2.split("/").at(-1)}.${token2}.tmp`);
       const handle = await open2(temporary, "wx", before.mode & 511);
       try {
         await handle.chmod(before.mode & 511);
@@ -18193,14 +19473,14 @@ var Registry = class {
         await handle.close();
       }
       signal?.throwIfAborted();
-      const current = await lstat(target);
-      if (current.ino !== before.ino || current.mtimeMs !== before.mtimeMs || await readFile4(target, "utf8") !== original) {
+      const current = await lstat(target2);
+      if (current.ino !== before.ino || current.mtimeMs !== before.mtimeMs || await readFile4(target2, "utf8") !== original) {
         throw new RegistryError("Registry changed outside its lock; retry without overwriting those changes");
       }
       lock.check();
-      await rename2(temporary, target);
+      await rename2(temporary, target2);
       temporary = void 0;
-      const dir = await open2(dirname3(target), "r");
+      const dir = await open2(dirname3(target2), "r");
       try {
         await dir.sync();
       } finally {
@@ -18219,14 +19499,14 @@ var Registry = class {
   }
   /** Publish a complete initial table without replacing any existing path.
    * Called only under the same cooperative lock used by all row updates. */
-  async initialize(target, check) {
+  async initialize(target2, check) {
     try {
-      await lstat(target);
+      await lstat(target2);
       return;
     } catch (error2) {
       if (!errno(error2, "ENOENT")) throw error2;
     }
-    const temporary = join6(dirname3(target), `.registry.${randomUUID()}.tmp`);
+    const temporary = join6(dirname3(target2), `.registry.${randomUUID()}.tmp`);
     const handle = await open2(temporary, "wx", 384);
     try {
       try {
@@ -18238,11 +19518,11 @@ var Registry = class {
       }
       check();
       try {
-        await link(temporary, target);
+        await link(temporary, target2);
       } catch (error2) {
         if (!errno(error2, "EEXIST")) throw error2;
       }
-      const dir = await open2(dirname3(target), "r");
+      const dir = await open2(dirname3(target2), "r");
       try {
         await dir.sync();
       } finally {
@@ -18349,10 +19629,10 @@ async function jsonFile(path, value) {
 }
 function within(root, path) {
   if (!path || isAbsolute3(path) || path.includes("\0") || path.includes("\\") || path.split("/").some((part) => !part || part === "." || part === "..")) throw new Error("Invalid relative path");
-  const target = resolve4(root, path);
-  const rel = relative3(resolve4(root), target);
+  const target2 = resolve4(root, path);
+  const rel = relative3(resolve4(root), target2);
   if (!rel || rel.startsWith("..") || isAbsolute3(rel)) throw new Error(`Path must be inside ${root}: ${path}`);
-  return target;
+  return target2;
 }
 async function inventory(root) {
   const result2 = [];
@@ -18369,19 +19649,19 @@ async function inventory(root) {
   await walk(root);
   return result2;
 }
-async function command(argv2, options = {}) {
-  options.signal?.throwIfAborted();
+async function command(argv2, options2 = {}) {
+  options2.signal?.throwIfAborted();
   return new Promise((resolve11, reject) => {
-    const child = spawn3(argv2[0], argv2.slice(1), { cwd: options.cwd, env: options.env, stdio: ["ignore", "pipe", "pipe"], signal: options.signal });
+    const child = spawn3(argv2[0], argv2.slice(1), { cwd: options2.cwd, env: options2.env, stdio: ["ignore", "pipe", "pipe"], signal: options2.signal });
     let stdout = "", stderr = "", size = 0;
     let failure2;
     const timer = setTimeout(() => {
       failure2 = new Error(`Command timed out: ${argv2[0]}`);
       child.kill("SIGKILL");
-    }, options.timeoutMs ?? 1e4);
+    }, options2.timeoutMs ?? 1e4);
     const consume = (channel, chunk) => {
       size += chunk.length;
-      if (size > (options.maxBytes ?? 128 * 1024)) {
+      if (size > (options2.maxBytes ?? 128 * 1024)) {
         failure2 = new Error(`Command output exceeded limit: ${argv2[0]}`);
         child.kill("SIGKILL");
         return;
@@ -18408,17 +19688,17 @@ var MAX_BYTES = 512 * 1024 * 1024;
 var MAX_IMAGE_BYTES = 64 * 1024 * 1024;
 var MAX_IMAGE_METADATA_BYTES = 4 * 1024 * 1024;
 var ImageTransferError = class extends Error {
-  constructor(code, message2, options) {
-    super(message2, options);
+  constructor(code, message2, options2) {
+    super(message2, options2);
     this.code = code;
     this.name = "ImageTransferError";
   }
 };
-function imagePath(root, target) {
-  for (const path of [root, target]) {
+function imagePath(root, target2) {
+  for (const path of [root, target2]) {
     if (!isAbsolute4(path) || path.includes("\\") || path.includes("\0") || path.split("/").includes("..")) throw new ImageTransferError("unsafe-path", "Image paths must be absolute and traversal-free");
   }
-  const rel = relative4(root, target);
+  const rel = relative4(root, target2);
   if (rel === ".." || rel.startsWith("../") || isAbsolute4(rel)) throw new ImageTransferError("unsafe-path", "Image path escapes approved root");
 }
 function imageFormat(bytes) {
@@ -18436,11 +19716,11 @@ function validImageFact(value, maxBytes = MAX_IMAGE_BYTES) {
   const f = value;
   return !!f && /^[a-f0-9]{64}$/.test(f.sha256) && Number.isSafeInteger(f.bytes) && f.bytes > 0 && f.bytes <= maxBytes;
 }
-async function assertHostPath(root, target, allowMissing = false) {
+async function assertHostPath(root, target2, allowMissing = false) {
   root = resolve5(root);
-  target = resolve5(target);
-  const rel = relative4(root, target);
-  if (rel === ".." || rel.startsWith("../") || isAbsolute4(rel)) throw new Error(`Path must be inside ${root}: ${target}`);
+  target2 = resolve5(target2);
+  const rel = relative4(root, target2);
+  if (rel === ".." || rel.startsWith("../") || isAbsolute4(rel)) throw new Error(`Path must be inside ${root}: ${target2}`);
   let path = root;
   for (const part of ["", ...rel ? rel.split("/") : []]) {
     if (part) path = join8(path, part);
@@ -18483,11 +19763,11 @@ function validFact(value) {
   return !!f && typeof f === "object" && typeof f.path === "string" && typeof f.sha256 === "string" && /^[a-f0-9]{64}$/.test(f.sha256) && Number.isSafeInteger(f.bytes) && f.bytes >= 0 && f.bytes <= MAX_BYTES;
 }
 var Transfer = class {
-  constructor(vm, name, node2, options = {}) {
+  constructor(vm, name, node2, options2 = {}) {
     this.vm = vm;
     this.name = name;
     this.node = node2;
-    this.options = options;
+    this.options = options2;
   }
   async copy(operation, transfer, validate2) {
     for (let attempt = 1; ; attempt++) {
@@ -18551,8 +19831,8 @@ var Transfer = class {
     if (JSON.stringify(await inventory(local)) !== JSON.stringify(files)) throw new Error(`Staging source changed: ${local}`);
     return result2;
   }
-  async guestPath(root, target) {
-    await this.checked([this.node, "-e", `const fs=require('fs'),p=require('path');${GUEST_PATH}check(process.argv[1],process.argv[2]);`, root, target]);
+  async guestPath(root, target2) {
+    await this.checked([this.node, "-e", `const fs=require('fs'),p=require('path');${GUEST_PATH}check(process.argv[1],process.argv[2]);`, root, target2]);
   }
   /** Small stat/hash acknowledgement only; never carry a JSON document on exec stdout. */
   async fileFact(remote, approvedRoot) {
@@ -18582,19 +19862,19 @@ var Transfer = class {
     if (JSON.stringify(await this.fileFact(remote, approvedRoot)) !== JSON.stringify(before)) throw new Error(`Source changed during extraction: ${remote}`);
     return bytes;
   }
-  async imageFact(remote, approvedRoot, options = {}) {
-    const { path, sha256, bytes } = await this.imageMetadata(remote, approvedRoot, options);
+  async imageFact(remote, approvedRoot, options2 = {}) {
+    const { path, sha256, bytes } = await this.imageMetadata(remote, approvedRoot, options2);
     return { path, sha256, bytes };
   }
-  async imageMetadata(remote, approvedRoot, options, requireImage2 = true) {
+  async imageMetadata(remote, approvedRoot, options2, requireImage2 = true) {
     const maxBytes = requireImage2 ? MAX_IMAGE_BYTES : MAX_IMAGE_METADATA_BYTES;
     imagePath(approvedRoot, remote);
-    if (options.deadline !== void 0 && !Number.isFinite(options.deadline)) throw new ImageTransferError("transfer-failed", "Invalid image deadline");
-    const deadline = Math.min(options.deadline ?? Infinity, Date.now() + 9e4);
+    if (options2.deadline !== void 0 && !Number.isFinite(options2.deadline)) throw new ImageTransferError("transfer-failed", "Invalid image deadline");
+    const deadline = Math.min(options2.deadline ?? Infinity, Date.now() + 9e4);
     const controller = new AbortController();
-    const abort = () => controller.abort(options.signal?.reason);
-    options.signal?.addEventListener("abort", abort, { once: true });
-    if (options.signal?.aborted) abort();
+    const abort = () => controller.abort(options2.signal?.reason);
+    options2.signal?.addEventListener("abort", abort, { once: true });
+    if (options2.signal?.aborted) abort();
     const timer = setTimeout(() => controller.abort(new Error("Image metadata deadline exceeded")), Math.max(0, deadline - Date.now()));
     let listener;
     try {
@@ -18616,29 +19896,29 @@ var Transfer = class {
       throw new ImageTransferError("transfer-failed", "Image metadata failed", { cause });
     } finally {
       clearTimeout(timer);
-      options.signal?.removeEventListener("abort", abort);
+      options2.signal?.removeEventListener("abort", abort);
       if (listener) controller.signal.removeEventListener("abort", listener);
     }
   }
-  async pullImage(remote, local, approvedRoot, approvedLocalRoot, expected, options = {}) {
-    return this.pullImageFile(remote, local, approvedRoot, approvedLocalRoot, expected, options, true);
+  async pullImage(remote, local, approvedRoot, approvedLocalRoot, expected, options2 = {}) {
+    return this.pullImageFile(remote, local, approvedRoot, approvedLocalRoot, expected, options2, true);
   }
-  async pullImageMetadata(remote, local, approvedRoot, approvedLocalRoot, options = {}) {
-    if (options.metadataFormat !== void 0 && options.metadataFormat !== "json" && options.metadataFormat !== "jsonl") throw new ImageTransferError("integrity-failed", "Invalid metadata format");
-    return this.pullImageFile(remote, local, approvedRoot, approvedLocalRoot, void 0, options, false);
+  async pullImageMetadata(remote, local, approvedRoot, approvedLocalRoot, options2 = {}) {
+    if (options2.metadataFormat !== void 0 && options2.metadataFormat !== "json" && options2.metadataFormat !== "jsonl") throw new ImageTransferError("integrity-failed", "Invalid metadata format");
+    return this.pullImageFile(remote, local, approvedRoot, approvedLocalRoot, void 0, options2, false);
   }
-  async pullImageFile(remote, local, approvedRoot, approvedLocalRoot, expected, options, requireImage2) {
+  async pullImageFile(remote, local, approvedRoot, approvedLocalRoot, expected, options2, requireImage2) {
     imagePath(approvedRoot, remote);
     imagePath(approvedLocalRoot, local);
-    const attemptBudget = options.attemptBudget ?? { remaining: 3 };
+    const attemptBudget = options2.attemptBudget ?? { remaining: 3 };
     if (!Number.isSafeInteger(attemptBudget.remaining) || attemptBudget.remaining < 0) throw new ImageTransferError("transfer-failed", "Invalid image transfer attempt budget");
     if (expected !== void 0 && !validImageFact(expected)) throw new ImageTransferError("integrity-failed", "Invalid expected image identity");
-    if (options.deadline !== void 0 && !Number.isFinite(options.deadline)) throw new ImageTransferError("transfer-failed", "Invalid image deadline");
-    const deadline = Math.min(options.deadline ?? Infinity, Date.now() + 9e4);
+    if (options2.deadline !== void 0 && !Number.isFinite(options2.deadline)) throw new ImageTransferError("transfer-failed", "Invalid image deadline");
+    const deadline = Math.min(options2.deadline ?? Infinity, Date.now() + 9e4);
     const controller = new AbortController();
-    const abort = () => controller.abort(options.signal?.reason);
-    options.signal?.addEventListener("abort", abort, { once: true });
-    if (options.signal?.aborted) abort();
+    const abort = () => controller.abort(options2.signal?.reason);
+    options2.signal?.addEventListener("abort", abort, { once: true });
+    if (options2.signal?.aborted) abort();
     const timer = setTimeout(() => controller.abort(new Error("Image transfer deadline exceeded")), Math.max(0, deadline - Date.now()));
     const guard2 = () => {
       if (controller.signal.aborted || Date.now() >= deadline) throw new ImageTransferError("transfer-failed", "Image transfer cancelled or deadline exceeded", { cause: controller.signal.reason });
@@ -18693,7 +19973,7 @@ var Transfer = class {
         } else {
           try {
             const text4 = new TextDecoder("utf-8", { fatal: true }).decode(result2);
-            if (options.metadataFormat === "jsonl") {
+            if (options2.metadataFormat === "jsonl") {
               for (const line of text4.split("\n")) if (line.trim()) JSON.parse(line);
             } else JSON.parse(text4);
           } catch (cause) {
@@ -18805,7 +20085,7 @@ var Transfer = class {
       throw new ImageTransferError("transfer-failed", "Image transfer failed", { cause });
     } finally {
       clearTimeout(timer);
-      options.signal?.removeEventListener("abort", abort);
+      options2.signal?.removeEventListener("abort", abort);
     }
   }
   async scan(remote, approvedRoot = remote) {
@@ -18921,6 +20201,7 @@ var VmTransport = class {
         "/usr/bin/env",
         `RELAY_RUNTIME_ROOT=${this.guestRoot}`,
         `RELAY_CUA_DRIVER=${this.cuaDriver}`,
+        `RELAY_MCP_HOST=${join9(this.guestRoot, "mcp-host.mjs")}`,
         this.transfer.node,
         "-e",
         INVOKE,
@@ -18944,9 +20225,9 @@ var VmTransport = class {
     this.response = response;
     return response;
   }
-  async upload(path, options) {
-    const fact = await this.transfer.pushFile(path, options.remotePath);
-    return { scriptId: `script-${hash(fact.remote + fact.sha256).slice(0, 24)}`, path: options.remotePath };
+  async upload(path, options2) {
+    const fact = await this.transfer.pushFile(path, options2.remotePath);
+    return { scriptId: `script-${hash(fact.remote + fact.sha256).slice(0, 24)}`, path: options2.remotePath };
   }
   async finish() {
     throw new Error("Use relay action=finish: SDK finish lacks snapshot manifest classification");
@@ -19042,11 +20323,11 @@ function reconcileOutcome(original, receipts) {
   if (outcomes.includes("failed")) return "failed";
   return original === "completed" && outcomes.includes("uncertain") ? "uncertain" : original;
 }
-async function analyze(root, options, files) {
-  text(options.packageId, "packageId");
-  text(options.sessionId, "sessionId");
-  text(options.taskId, "taskId");
-  relativePath(options.sessionId);
+async function analyze(root, options2, files) {
+  text(options2.packageId, "packageId");
+  text(options2.sessionId, "sessionId");
+  text(options2.taskId, "taskId");
+  relativePath(options2.sessionId);
   const journalPath = "state/journal/events.jsonl";
   if (!files.includes(journalPath)) throw new Error("missing original state/journal/events.jsonl");
   const events = (await readFile7(join10(root, journalPath), "utf8")).split("\n").filter((l) => l.trim()).map((l, i) => object3(JSON.parse(l), `journal line ${i + 1}`));
@@ -19054,7 +20335,7 @@ async function analyze(root, options, files) {
   const actionRecords = /* @__PURE__ */ new Map();
   const findings = [];
   for (const event of events) {
-    if (event.sessionId !== void 0 && event.sessionId !== options.sessionId) throw new Error("journal session identity mismatch");
+    if (event.sessionId !== void 0 && event.sessionId !== options2.sessionId) throw new Error("journal session identity mismatch");
     for (const [kind, map] of [["action-start", starts], ["action-completion", completions], ["action-refusal", refusals]]) {
       if (event.kind !== kind) continue;
       const id2 = text(event.actionId, "actionId");
@@ -19064,7 +20345,7 @@ async function analyze(root, options, files) {
   }
   for (const path of files.filter((p) => /^state\/records\/actions?\/[^/]+\.json$/.test(p))) {
     const record3 = await readJson(root, path), id2 = text(record3.actionId, "action record id");
-    if (record3.sessionId !== options.sessionId || actionRecords.has(id2)) throw new Error(`invalid action record identity: ${id2}`);
+    if (record3.sessionId !== options2.sessionId || actionRecords.has(id2)) throw new Error(`invalid action record identity: ${id2}`);
     actionRecords.set(id2, record3);
     const start = starts.get(id2), completion = completions.get(id2);
     if (start && record3.attemptId !== start.attemptId) throw new Error(`action attempt mismatch: ${id2}`);
@@ -19077,7 +20358,7 @@ async function analyze(root, options, files) {
     const id2 = text(event.actionId, "snapshot actionId"), start = starts.get(id2);
     if (!start) throw new Error(`snapshot references unknown action ${id2}`);
     if (events.indexOf(event) <= events.indexOf(start) || completions.has(id2) && events.indexOf(event) >= events.indexOf(completions.get(id2))) throw new Error(`snapshot outside action interval: ${id2}`);
-    const sn = object3(event.snapshot, "captured snapshot"), path = snapshotPath(options.sessionId, sn);
+    const sn = object3(event.snapshot, "captured snapshot"), path = snapshotPath(options2.sessionId, sn);
     if (byPath.has(path)) throw new Error(`duplicate snapshot capture: ${path}`);
     if (sn.role !== "before" && sn.role !== "after") throw new Error(`invalid snapshot role: ${path}`);
     if (!/^[a-f0-9]{64}$/.test(sn.sha256) || !Number.isSafeInteger(sn.bytes) || sn.bytes < 0) throw new Error(`invalid capture integrity: ${path}`);
@@ -19114,7 +20395,7 @@ async function analyze(root, options, files) {
     if ((record3.groupId ?? void 0) !== start.snapshotPlan?.group?.groupId || record3.snapshotRole !== start.snapshotPlan?.role) throw new Error(`action group reference mismatch: ${id2}`);
     const cited = /* @__PURE__ */ new Set();
     for (const raw of record3.snapshots) {
-      const ref = object3(raw, "snapshot reference"), path = snapshotPath(options.sessionId, ref), sn = byPath.get(path);
+      const ref = object3(raw, "snapshot reference"), path = snapshotPath(options2.sessionId, ref), sn = byPath.get(path);
       if (!sn || sn.actionId !== id2 || !sameRef(ref, sn) || cited.has(path)) throw new Error(`invalid action snapshot reference: ${id2} -> ${path}`);
       cited.add(path);
     }
@@ -19155,7 +20436,7 @@ async function analyze(root, options, files) {
       if (receipt[key] !== void 0) text(receipt[key], `receipt ${key}`);
       if (envelope?.[key] !== void 0 && receipt[key] !== void 0 && envelope[key] !== receipt[key]) throw new Error(`receipt ${key} identity mismatch`);
     }
-    if (receipt.sessionId !== void 0 && receipt.sessionId !== options.sessionId) throw new Error("receipt session identity mismatch");
+    if (receipt.sessionId !== void 0 && receipt.sessionId !== options2.sessionId) throw new Error("receipt session identity mismatch");
     const executionId = receipt.executionId ?? envelope?.executionId;
     const actionId = receipt.actionId ?? envelope?.actionId;
     if (executionId === void 0 && actionId === void 0) throw new Error("receipt lacks execution/action identity");
@@ -19248,8 +20529,8 @@ Original subprocess/action evidence (not an authoritative input-success verdict)
   if (receiptUncertain) findings.push("retained execution receipt reports uncertainty");
   return { snapshots: snapshots2, steps, incompleteGroups, findings, completeness, execution };
 }
-function summary(options, a) {
-  return { formatVersion: 1, ...options, snapshots: a.completeness, execution: a.execution, humanReview: "pending", findings: a.findings };
+function summary(options2, a) {
+  return { formatVersion: 1, ...options2, snapshots: a.completeness, execution: a.execution, humanReview: "pending", findings: a.findings };
 }
 function result(root, a) {
   return { manifestPath: join10(root, "manifest.json"), deliveryVerified: true, snapshots: a.completeness, execution: a.execution, humanReview: "pending", findings: a.findings };
@@ -19259,21 +20540,21 @@ async function buildReview(root, a) {
   return { ...trajectory, steps: a.steps, outcomes: { ...trajectory.outcomes, recording: a.completeness } };
 }
 var escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-function viewer(options, a) {
+function viewer(options2, a) {
   const link2 = (step2) => `#step-${encodeURIComponent(step2.id)}`;
   const image = (path, role) => path ? `<figure><figcaption>${role}</figcaption><img alt="${role} dispatch snapshot" src="${escapeHtml(path.split("/").map(encodeURIComponent).join("/"))}"></figure>` : `<p>${role}: unavailable \u2014 incomplete evidence</p>`;
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' file:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>Relay review: ${escapeHtml(options.packageId)}</title><style>body{font:16px system-ui;margin:2rem;color:#202020;background:#fff}main{display:grid;grid-template-columns:17rem 1fr;gap:2rem}nav{position:sticky;top:1rem;align-self:start}article{border:1px solid #aaa;padding:1rem;margin-bottom:2rem;scroll-margin-top:1rem}article:target{outline:4px solid #258}img{max-width:100%;height:auto}.pair{display:grid;grid-template-columns:1fr 1fr;gap:1rem}figure{margin:0}pre{white-space:pre-wrap;overflow-wrap:anywhere}a{color:#136} @media(max-width:700px){main,.pair{display:block}nav{position:static}}</style></head><body><h1>${escapeHtml(options.packageId)}</h1><p>Snapshot completeness: ${a.completeness} \xB7 Execution: ${a.execution} \xB7 Human review: pending</p><p>Delivery integrity is separate from execution success. Snapshots are dispatch-time evidence, not continuous video.</p><main><nav aria-label="Review steps"><ol>${a.steps.map((s) => `<li><a href="${escapeHtml(link2(s))}">${escapeHtml(s.title)} \u2014 ${s.execution}</a></li>`).join("")}</ol><a href="manifest.json">Manifest</a> \xB7 <a href="summary.json">Summary</a></nav><section>${a.steps.map((s, i) => `<article id="step-${escapeHtml(s.id)}"><h2>${escapeHtml(s.title)}</h2><p>Execution: ${s.execution} \xB7 State: ${escapeHtml(s.state)} \xB7 Input mode: ${escapeHtml(s.inputMode)}</p><p>Routing reason: ${escapeHtml(s.because ?? "Not present in retained host metadata")}</p><p>Expected: ${escapeHtml(s.expected ?? "Not supplied")}</p><pre>Observed: ${escapeHtml(s.observed ?? "No confirmed result")}</pre><p>Declared after interval: ${s.snapshots?.declaredAfterIntervalMs ?? "unavailable"} ms${s.snapshots?.groupId ? ` \xB7 Group: ${escapeHtml(s.snapshots.groupId)}` : ""}</p><div class="pair">${image(s.snapshots?.before, "Before")}${image(s.snapshots?.after, "After")}</div><p>${i ? `<a href="${escapeHtml(link2(a.steps[i - 1]))}">Previous</a> \xB7 ` : ""}<a href="${escapeHtml(link2(s))}">Stable link</a>${i + 1 < a.steps.length ? ` \xB7 <a href="${escapeHtml(link2(a.steps[i + 1]))}">Next</a>` : ""}</p></article>`).join("")}</section></main></body></html>
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' file:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>Relay review: ${escapeHtml(options2.packageId)}</title><style>body{font:16px system-ui;margin:2rem;color:#202020;background:#fff}main{display:grid;grid-template-columns:17rem 1fr;gap:2rem}nav{position:sticky;top:1rem;align-self:start}article{border:1px solid #aaa;padding:1rem;margin-bottom:2rem;scroll-margin-top:1rem}article:target{outline:4px solid #258}img{max-width:100%;height:auto}.pair{display:grid;grid-template-columns:1fr 1fr;gap:1rem}figure{margin:0}pre{white-space:pre-wrap;overflow-wrap:anywhere}a{color:#136} @media(max-width:700px){main,.pair{display:block}nav{position:static}}</style></head><body><h1>${escapeHtml(options2.packageId)}</h1><p>Snapshot completeness: ${a.completeness} \xB7 Execution: ${a.execution} \xB7 Human review: pending</p><p>Delivery integrity is separate from execution success. Snapshots are dispatch-time evidence, not continuous video.</p><main><nav aria-label="Review steps"><ol>${a.steps.map((s) => `<li><a href="${escapeHtml(link2(s))}">${escapeHtml(s.title)} \u2014 ${s.execution}</a></li>`).join("")}</ol><a href="manifest.json">Manifest</a> \xB7 <a href="summary.json">Summary</a></nav><section>${a.steps.map((s, i) => `<article id="step-${escapeHtml(s.id)}"><h2>${escapeHtml(s.title)}</h2><p>Execution: ${s.execution} \xB7 State: ${escapeHtml(s.state)} \xB7 Input mode: ${escapeHtml(s.inputMode)}</p><p>Routing reason: ${escapeHtml(s.because ?? "Not present in retained host metadata")}</p><p>Expected: ${escapeHtml(s.expected ?? "Not supplied")}</p><pre>Observed: ${escapeHtml(s.observed ?? "No confirmed result")}</pre><p>Declared after interval: ${s.snapshots?.declaredAfterIntervalMs ?? "unavailable"} ms${s.snapshots?.groupId ? ` \xB7 Group: ${escapeHtml(s.snapshots.groupId)}` : ""}</p><div class="pair">${image(s.snapshots?.before, "Before")}${image(s.snapshots?.after, "After")}</div><p>${i ? `<a href="${escapeHtml(link2(a.steps[i - 1]))}">Previous</a> \xB7 ` : ""}<a href="${escapeHtml(link2(s))}">Stable link</a>${i + 1 < a.steps.length ? ` \xB7 <a href="${escapeHtml(link2(a.steps[i + 1]))}">Next</a>` : ""}</p></article>`).join("")}</section></main></body></html>
 `;
 }
-async function deliverPackage(rootDir, options) {
+async function deliverPackage(rootDir, options2) {
   const root = await rootPath(rootDir), files = await filesUnder(root);
   if (files.includes("manifest.json")) {
     const existing = await readJson(root, "manifest.json");
-    if (existing.packageId !== options.packageId || existing.sessionId !== options.sessionId || existing.taskId !== options.taskId) throw new Error("existing package identity mismatch");
+    if (existing.packageId !== options2.packageId || existing.sessionId !== options2.sessionId || existing.taskId !== options2.taskId) throw new Error("existing package identity mismatch");
     return verifyDeliveredPackage(root);
   }
   for (const path of files) if (generated.has(path)) throw new Error(`reserved package output already exists: ${path}`);
-  const a = await analyze(root, options, files);
+  const a = await analyze(root, options2, files);
   const created = [];
   const save = async (path, contents) => {
     await mkdir5(dirname6(join10(root, path)), { recursive: true });
@@ -19282,13 +20563,13 @@ async function deliverPackage(rootDir, options) {
   };
   try {
     await save("journal/session-events.jsonl", await readFile7(join10(root, "state/journal/events.jsonl")));
-    await save("summary.json", json(summary(options, a)));
-    await save("index.html", viewer(options, a));
+    await save("summary.json", json(summary(options2, a)));
+    await save("index.html", viewer(options2, a));
     await save("OPENING.txt", "Open index.html directly in a browser (file://); no server, network, or test machine is required. Select a step or use Previous/Next. Snapshot completeness, execution, and human review are separate. Originals are under state/, host metadata under host/, and declared extractions under extractions/. manifest.json checksums every artifact except itself.\n");
     const build = async () => {
       const all = await filesUnder(root), snapshotPaths = new Set(a.snapshots.map((s) => s.path));
       return buildManifest({
-        ...options,
+        ...options2,
         rootDir: root,
         media: [],
         segments: [],
@@ -19328,8 +20609,8 @@ async function verifyDeliveredPackage(rootDir) {
     if (required2 === "manifest.json") continue;
     if (required2 === "trajectory.json" ? !seen.has(required2) && !seen.has(legacyTrajectoryFile) : !seen.has(required2)) throw new Error(`missing required package output: ${required2}`);
   }
-  const options = { packageId: manifest.packageId, sessionId: manifest.sessionId, taskId: manifest.taskId };
-  const a = await analyze(root, options, files);
+  const options2 = { packageId: manifest.packageId, sessionId: manifest.sessionId, taskId: manifest.taskId };
+  const a = await analyze(root, options2, files);
   const expectedAttachments = files.filter((p) => p.startsWith("extractions/")).sort();
   if (JSON.stringify((manifest.attachments ?? []).map((a2) => a2.path).sort()) !== JSON.stringify(expectedAttachments)) throw new Error("extraction attachment classification mismatch");
   const actualSnapshots = manifest.snapshots ?? [];
@@ -19339,8 +20620,8 @@ async function verifyDeliveredPackage(rootDir) {
     if (!actual || actual.actionId !== sn.actionId || actual.groupId !== sn.groupId || actual.provenance !== "dispatch-captured" || !sameRef(actual, sn)) throw new Error(`snapshot provenance mismatch: ${sn.path}`);
   }
   if (!(await readFile7(join10(root, "state/journal/events.jsonl"))).equals(await readFile7(join10(root, "journal/session-events.jsonl")))) throw new Error("trajectory journal differs from original");
-  if (await readFile7(join10(root, "summary.json"), "utf8") !== json(summary(options, a))) throw new Error("summary disagrees with original evidence");
-  if (await readFile7(join10(root, "index.html"), "utf8") !== viewer(options, a)) throw new Error("viewer disagrees with original evidence");
+  if (await readFile7(join10(root, "summary.json"), "utf8") !== json(summary(options2, a))) throw new Error("summary disagrees with original evidence");
+  if (await readFile7(join10(root, "index.html"), "utf8") !== viewer(options2, a)) throw new Error("viewer disagrees with original evidence");
   const trajectoryFile = !files.includes("trajectory.json") && files.includes(legacyTrajectoryFile) ? legacyTrajectoryFile : "trajectory.json";
   if (await readFile7(join10(root, trajectoryFile), "utf8") !== json(await buildReview(root, a))) throw new Error("trajectory disagrees with original evidence");
   const acceptance = await verifyPackage(manifest, root);
@@ -19392,8 +20673,8 @@ import { spawn as spawn4 } from "node:child_process";
 import { constants as constants3 } from "node:fs";
 import { open as open5 } from "node:fs/promises";
 var OwnerLockError = class extends Error {
-  constructor(message2, options) {
-    super(message2, options);
+  constructor(message2, options2) {
+    super(message2, options2);
     this.name = "OwnerLockError";
   }
 };
@@ -19407,13 +20688,13 @@ except BlockingIOError:
 print("locked", flush=True)
 sys.stdin.buffer.read()
 `;
-async function acquireOwnerLock(path, options = {}) {
-  const timeoutMs2 = options.timeoutMs ?? 2e3;
+async function acquireOwnerLock(path, options2 = {}) {
+  const timeoutMs2 = options2.timeoutMs ?? 2e3;
   if (!Number.isSafeInteger(timeoutMs2) || timeoutMs2 <= 0 || timeoutMs2 > 2147483647) {
     throw new TypeError("timeoutMs must be a positive bounded integer");
   }
-  const executable = options.pythonExecutable === void 0 ? pythonExecutable() : nonblank(options.pythonExecutable, "pythonExecutable");
-  const signal = options.signal;
+  const executable = options2.pythonExecutable === void 0 ? pythonExecutable() : nonblank(options2.pythonExecutable, "pythonExecutable");
+  const signal = options2.signal;
   signal?.throwIfAborted();
   const file = await open5(path, constants3.O_RDWR | constants3.O_CREAT | constants3.O_NOFOLLOW, 384);
   try {
@@ -19925,9 +21206,9 @@ function Reset() {
   settings.correctiveParse = false;
   settings.unionPrioritySort = true;
 }
-function Set2(options) {
-  for (const key of guard_exports.Keys(options)) {
-    const value = options[key];
+function Set2(options2) {
+  for (const key of guard_exports.Keys(options2)) {
+    const value = options2[key];
     if (value !== void 0) {
       Object.defineProperty(settings, key, { value });
     }
@@ -20023,9 +21304,9 @@ function MergeHidden(left, right) {
 function Merge(left, right) {
   return { ...left, ...right };
 }
-function Create(hidden, enumerable, options = {}) {
+function Create(hidden, enumerable, options2 = {}) {
   Metrics.create += 1;
-  const withOptions = Merge(enumerable, options);
+  const withOptions = Merge(enumerable, options2);
   const withHidden = settings_exports.Get().enumerableKind ? Merge(withOptions, hidden) : MergeHidden(withOptions, hidden);
   return Freeze(withHidden);
 }
@@ -20077,8 +21358,8 @@ function IsSchema(value) {
 }
 
 // node_modules/typebox/build/type/types/deferred.mjs
-function Deferred(action, parameters, options) {
-  return memory_exports.Create({ "~kind": "Deferred" }, { type: "deferred", action, parameters, options }, {});
+function Deferred(action, parameters, options2) {
+  return memory_exports.Create({ "~kind": "Deferred" }, { type: "deferred", action, parameters, options: options2 }, {});
 }
 function IsDeferred(value) {
   return IsKind(value, "Deferred");
@@ -20088,31 +21369,31 @@ function IsDeferred(value) {
 function AddReadonlyOperation(type) {
   return memory_exports.Update(type, { "~readonly": true }, {});
 }
-function AddReadonlyAction(type, options) {
-  const result2 = memory_exports.Update(AddReadonlyOperation(type), {}, options);
+function AddReadonlyAction(type, options2) {
+  const result2 = memory_exports.Update(AddReadonlyOperation(type), {}, options2);
   return result2;
 }
-function AddReadonlyInstantiate(context, state, type, options) {
+function AddReadonlyInstantiate(context, state, type, options2) {
   const instantiatedType = InstantiateType(context, state, type);
-  return AddReadonlyAction(instantiatedType, options);
+  return AddReadonlyAction(instantiatedType, options2);
 }
 
 // node_modules/typebox/build/type/engine/optional/instantiate_add.mjs
 function AddOptionalOperation(type) {
   return memory_exports.Update(type, { "~optional": true }, {});
 }
-function AddOptionalAction(type, options) {
-  const result2 = memory_exports.Update(AddOptionalOperation(type), {}, options);
+function AddOptionalAction(type, options2) {
+  const result2 = memory_exports.Update(AddOptionalOperation(type), {}, options2);
   return result2;
 }
-function AddOptionalInstantiate(context, state, type, options) {
+function AddOptionalInstantiate(context, state, type, options2) {
   const instantiatedType = InstantiateType(context, state, type);
-  return AddOptionalAction(instantiatedType, options);
+  return AddOptionalAction(instantiatedType, options2);
 }
 
 // node_modules/typebox/build/type/types/array.mjs
-function _Array_(items, options) {
-  return memory_exports.Create({ "~kind": "Array" }, { type: "array", items }, options);
+function _Array_(items, options2) {
+  return memory_exports.Create({ "~kind": "Array" }, { type: "array", items }, options2);
 }
 function IsArray2(value) {
   return IsKind(value, "Array");
@@ -20122,8 +21403,8 @@ function ArrayOptions(type) {
 }
 
 // node_modules/typebox/build/type/types/constructor.mjs
-function Constructor(parameters, instanceType, options = {}) {
-  return memory_exports.Create({ "~kind": "Constructor" }, { type: "constructor", parameters, instanceType }, options);
+function Constructor(parameters, instanceType, options2 = {}) {
+  return memory_exports.Create({ "~kind": "Constructor" }, { type: "constructor", parameters, instanceType }, options2);
 }
 function IsConstructor2(value) {
   return IsKind(value, "Constructor");
@@ -20133,8 +21414,8 @@ function ConstructorOptions(type) {
 }
 
 // node_modules/typebox/build/type/types/function.mjs
-function _Function_(parameters, returnType, options = {}) {
-  return memory_exports.Create({ ["~kind"]: "Function" }, { type: "function", parameters, returnType }, options);
+function _Function_(parameters, returnType, options2 = {}) {
+  return memory_exports.Create({ ["~kind"]: "Function" }, { type: "function", parameters, returnType }, options2);
 }
 function IsFunction2(value) {
   return IsKind(value, "Function");
@@ -20144,8 +21425,8 @@ function FunctionOptions(type) {
 }
 
 // node_modules/typebox/build/type/types/ref.mjs
-function Ref(ref, options) {
-  return memory_exports.Create({ ["~kind"]: "Ref" }, { $ref: ref }, options);
+function Ref(ref, options2) {
+  return memory_exports.Create({ ["~kind"]: "Ref" }, { $ref: ref }, options2);
 }
 function IsRef(value) {
   return IsKind(value, "Ref");
@@ -20160,8 +21441,8 @@ function IsGeneric(value) {
 }
 
 // node_modules/typebox/build/type/types/any.mjs
-function Any(options) {
-  return memory_exports.Create({ ["~kind"]: "Any" }, {}, options);
+function Any(options2) {
+  return memory_exports.Create({ ["~kind"]: "Any" }, {}, options2);
 }
 function IsAny(value) {
   return IsKind(value, "Any");
@@ -20169,19 +21450,19 @@ function IsAny(value) {
 
 // node_modules/typebox/build/type/types/never.mjs
 var NeverPattern = "(?!)";
-function Never(options) {
-  return memory_exports.Create({ "~kind": "Never" }, { not: {} }, options);
+function Never(options2) {
+  return memory_exports.Create({ "~kind": "Never" }, { not: {} }, options2);
 }
 function IsNever(value) {
   return IsKind(value, "Never");
 }
 
 // node_modules/typebox/build/type/action/_add_optional.mjs
-function AddOptionalDeferred(type, options = {}) {
-  return Deferred("AddOptional", [type], options);
+function AddOptionalDeferred(type, options2 = {}) {
+  return Deferred("AddOptional", [type], options2);
 }
-function AddOptional(type, options = {}) {
-  return AddOptionalAction(type, options);
+function AddOptional(type, options2 = {}) {
+  return AddOptionalAction(type, options2);
 }
 
 // node_modules/typebox/build/type/types/_optional.mjs
@@ -20204,10 +21485,10 @@ function PropertyValues(properties) {
 }
 
 // node_modules/typebox/build/type/types/object.mjs
-function _Object_(properties, options = {}) {
+function _Object_(properties, options2 = {}) {
   const requiredKeys = RequiredArray(properties);
   const required2 = requiredKeys.length > 0 ? { required: requiredKeys } : {};
-  return memory_exports.Create({ "~kind": "Object" }, { type: "object", ...required2, properties }, options);
+  return memory_exports.Create({ "~kind": "Object" }, { type: "object", ...required2, properties }, options2);
 }
 function IsObject2(value) {
   return IsKind(value, "Object");
@@ -20217,19 +21498,19 @@ function ObjectOptions(type) {
 }
 
 // node_modules/typebox/build/type/types/unknown.mjs
-function Unknown(options) {
-  return memory_exports.Create({ ["~kind"]: "Unknown" }, {}, options);
+function Unknown(options2) {
+  return memory_exports.Create({ ["~kind"]: "Unknown" }, {}, options2);
 }
 function IsUnknown(value) {
   return IsKind(value, "Unknown");
 }
 
 // node_modules/typebox/build/type/types/cyclic.mjs
-function Cyclic($defs, $ref, options) {
+function Cyclic($defs, $ref, options2) {
   const defs = guard_exports.Keys($defs).reduce((result2, key) => {
     return { ...result2, [key]: memory_exports.Update($defs[key], {}, { $id: key }) };
   }, {});
-  return memory_exports.Create({ ["~kind"]: "Cyclic" }, { $defs: defs, $ref }, options);
+  return memory_exports.Create({ ["~kind"]: "Cyclic" }, { $defs: defs, $ref }, options2);
 }
 function IsCyclic(value) {
   return IsKind(value, "Cyclic");
@@ -20267,8 +21548,8 @@ function IsInfer(value) {
 }
 
 // node_modules/typebox/build/type/types/dependent.mjs
-function Dependent(if_, then_, else_, options = {}) {
-  return memory_exports.Create({ "~kind": "Dependent" }, { if: if_, then: then_, else: else_ }, options);
+function Dependent(if_, then_, else_, options2 = {}) {
+  return memory_exports.Create({ "~kind": "Dependent" }, { if: if_, then: then_, else: else_ }, options2);
 }
 function IsDependent(value) {
   return IsKind(value, "Dependent");
@@ -20290,17 +21571,17 @@ function TypeScriptEnumToEnumValues(type) {
 function IsEnumValue(value) {
   return guard_exports.IsString(value) || guard_exports.IsNumber(value);
 }
-function Enum(value, options) {
+function Enum(value, options2) {
   const values = IsTypeScriptEnumLike(value) ? TypeScriptEnumToEnumValues(value) : value;
-  return memory_exports.Create({ "~kind": "Enum" }, { enum: values }, options);
+  return memory_exports.Create({ "~kind": "Enum" }, { enum: values }, options2);
 }
 function IsEnum(value) {
   return IsKind(value, "Enum");
 }
 
 // node_modules/typebox/build/type/types/intersect.mjs
-function Intersect(types, options = {}) {
-  return memory_exports.Create({ "~kind": "Intersect" }, { allOf: types }, options);
+function Intersect(types, options2 = {}) {
+  return memory_exports.Create({ "~kind": "Intersect" }, { allOf: types }, options2);
 }
 function IsIntersect(value) {
   return IsKind(value, "Intersect");
@@ -20580,11 +21861,11 @@ function IsImmutable(value) {
 }
 
 // node_modules/typebox/build/type/action/_add_readonly.mjs
-function AddReadonlyDeferred(type, options = {}) {
-  return Deferred("AddReadonly", [type], options);
+function AddReadonlyDeferred(type, options2 = {}) {
+  return Deferred("AddReadonly", [type], options2);
 }
-function AddReadonly(type, options = {}) {
-  return AddReadonlyAction(type, options);
+function AddReadonly(type, options2 = {}) {
+  return AddReadonlyAction(type, options2);
 }
 
 // node_modules/typebox/build/type/types/_readonly.mjs
@@ -20616,16 +21897,16 @@ function IsRefine(value) {
 
 // node_modules/typebox/build/type/types/bigint.mjs
 var BigIntPattern = "-?(?:0|[1-9][0-9]*)n";
-function BigInt2(options) {
-  return memory_exports.Create({ "~kind": "BigInt" }, { type: "bigint" }, options);
+function BigInt2(options2) {
+  return memory_exports.Create({ "~kind": "BigInt" }, { type: "bigint" }, options2);
 }
 function IsBigInt2(value) {
   return IsKind(value, "BigInt");
 }
 
 // node_modules/typebox/build/type/types/boolean.mjs
-function Boolean2(options) {
-  return memory_exports.Create({ "~kind": "Boolean" }, { type: "boolean" }, options);
+function Boolean2(options2) {
+  return memory_exports.Create({ "~kind": "Boolean" }, { type: "boolean" }, options2);
 }
 function IsBoolean3(value) {
   return IsKind(value, "Boolean");
@@ -20641,8 +21922,8 @@ function IsIdentifier(value) {
 
 // node_modules/typebox/build/type/types/integer.mjs
 var IntegerPattern = "-?(?:0|[1-9][0-9]*)";
-function Integer(options) {
-  return memory_exports.Create({ "~kind": "Integer" }, { type: "integer" }, options);
+function Integer(options2) {
+  return memory_exports.Create({ "~kind": "Integer" }, { type: "integer" }, options2);
 }
 function IsInteger2(value) {
   return IsKind(value, "Integer");
@@ -20665,8 +21946,8 @@ function LiteralTypeName(value) {
     throw new InvalidLiteralValue(value);
   })();
 }
-function Literal(value, options) {
-  return memory_exports.Create({ "~kind": "Literal" }, { type: LiteralTypeName(value), const: value }, options);
+function Literal(value, options2) {
+  return memory_exports.Create({ "~kind": "Literal" }, { type: LiteralTypeName(value), const: value }, options2);
 }
 function IsLiteralValue(value) {
   return guard_exports.IsBigInt(value) || guard_exports.IsBoolean(value) || guard_exports.IsNumber(value) || guard_exports.IsString(value);
@@ -20688,8 +21969,8 @@ function IsLiteral(value) {
 }
 
 // node_modules/typebox/build/type/types/null.mjs
-function Null(options) {
-  return memory_exports.Create({ "~kind": "Null" }, { type: "null" }, options);
+function Null(options2) {
+  return memory_exports.Create({ "~kind": "Null" }, { type: "null" }, options2);
 }
 function IsNull2(value) {
   return IsKind(value, "Null");
@@ -20697,16 +21978,16 @@ function IsNull2(value) {
 
 // node_modules/typebox/build/type/types/number.mjs
 var NumberPattern = "-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?";
-function Number2(options) {
-  return memory_exports.Create({ "~kind": "Number" }, { type: "number" }, options);
+function Number2(options2) {
+  return memory_exports.Create({ "~kind": "Number" }, { type: "number" }, options2);
 }
 function IsNumber3(value) {
   return IsKind(value, "Number");
 }
 
 // node_modules/typebox/build/type/types/symbol.mjs
-function Symbol2(options) {
-  return memory_exports.Create({ "~kind": "Symbol" }, { type: "symbol" }, options);
+function Symbol2(options2) {
+  return memory_exports.Create({ "~kind": "Symbol" }, { type: "symbol" }, options2);
 }
 function IsSymbol2(value) {
   return IsKind(value, "Symbol");
@@ -20727,16 +22008,16 @@ function IsParameter(value) {
 
 // node_modules/typebox/build/type/types/string.mjs
 var StringPattern = ".*";
-function String2(options) {
-  return memory_exports.Create({ "~kind": "String" }, { type: "string" }, options);
+function String2(options2) {
+  return memory_exports.Create({ "~kind": "String" }, { type: "string" }, options2);
 }
 function IsString3(value) {
   return IsKind(value, "String");
 }
 
 // node_modules/typebox/build/type/types/union.mjs
-function Union(anyOf, options = {}) {
-  return memory_exports.Create({ "~kind": "Union" }, { anyOf }, options);
+function Union(anyOf, options2 = {}) {
+  return memory_exports.Create({ "~kind": "Union" }, { anyOf }, options2);
 }
 function IsUnion(value) {
   return IsKind(value, "Union");
@@ -20837,9 +22118,9 @@ function FromBooleanKey(value) {
 }
 
 // node_modules/typebox/build/type/types/tuple.mjs
-function Tuple(types, options = {}) {
+function Tuple(types, options2 = {}) {
   const [items, minItems, additionalItems] = [types, types.length, false];
-  return memory_exports.Create({ ["~kind"]: "Tuple" }, { type: "array", additionalItems, items, minItems }, options);
+  return memory_exports.Create({ ["~kind"]: "Tuple" }, { type: "array", additionalItems, items, minItems }, options2);
 }
 function IsTuple(value) {
   return IsKind(value, "Tuple");
@@ -20852,42 +22133,42 @@ function TupleOptions(type) {
 function RemoveReadonlyOperation(type) {
   return memory_exports.Discard(type, ["~readonly"]);
 }
-function RemoveReadonlyAction(type, options) {
-  const result2 = memory_exports.Update(RemoveReadonlyOperation(type), {}, options);
+function RemoveReadonlyAction(type, options2) {
+  const result2 = memory_exports.Update(RemoveReadonlyOperation(type), {}, options2);
   return result2;
 }
-function RemoveReadonlyInstantiate(context, state, type, options) {
+function RemoveReadonlyInstantiate(context, state, type, options2) {
   const instantiatedType = InstantiateType(context, state, type);
-  return RemoveReadonlyAction(instantiatedType, options);
+  return RemoveReadonlyAction(instantiatedType, options2);
 }
 
 // node_modules/typebox/build/type/action/_remove_readonly.mjs
-function RemoveReadonlyDeferred(type, options = {}) {
-  return Deferred("RemoveReadonly", [type], options);
+function RemoveReadonlyDeferred(type, options2 = {}) {
+  return Deferred("RemoveReadonly", [type], options2);
 }
-function RemoveReadonly(type, options = {}) {
-  return RemoveReadonlyAction(type, options);
+function RemoveReadonly(type, options2 = {}) {
+  return RemoveReadonlyAction(type, options2);
 }
 
 // node_modules/typebox/build/type/engine/optional/instantiate_remove.mjs
 function RemoveOptionalOperation(type) {
   return memory_exports.Discard(type, ["~optional"]);
 }
-function RemoveOptionalAction(type, options) {
-  const result2 = memory_exports.Update(RemoveOptionalOperation(type), {}, options);
+function RemoveOptionalAction(type, options2) {
+  const result2 = memory_exports.Update(RemoveOptionalOperation(type), {}, options2);
   return result2;
 }
-function RemoveOptionalInstantiate(context, state, type, options) {
+function RemoveOptionalInstantiate(context, state, type, options2) {
   const instantiatedType = InstantiateType(context, state, type);
-  return RemoveOptionalAction(instantiatedType, options);
+  return RemoveOptionalAction(instantiatedType, options2);
 }
 
 // node_modules/typebox/build/type/action/_remove_optional.mjs
-function RemoveOptionalDeferred(type, options = {}) {
-  return Deferred("RemoveOptional", [type], options);
+function RemoveOptionalDeferred(type, options2 = {}) {
+  return Deferred("RemoveOptional", [type], options2);
 }
-function RemoveOptional(type, options = {}) {
-  return RemoveOptionalAction(type, options);
+function RemoveOptional(type, options2 = {}) {
+  return RemoveOptionalAction(type, options2);
 }
 
 // node_modules/typebox/build/type/engine/tuple/to_object.mjs
@@ -21113,25 +22394,25 @@ function FromKey(key, value) {
 }
 
 // node_modules/typebox/build/type/engine/record/instantiate.mjs
-function RecordAction(key, value, options) {
-  const result2 = CanInstantiate([key]) ? memory_exports.Update(FromKey(key, value), {}, options) : RecordDeferred(key, value, options);
+function RecordAction(key, value, options2) {
+  const result2 = CanInstantiate([key]) ? memory_exports.Update(FromKey(key, value), {}, options2) : RecordDeferred(key, value, options2);
   return result2;
 }
-function RecordInstantiate(context, state, key, value, options) {
+function RecordInstantiate(context, state, key, value, options2) {
   const instantiatedKey = InstantiateType(context, state, key);
   const instantiatedValue = InstantiateType(context, state, value);
-  return RecordAction(instantiatedKey, instantiatedValue, options);
+  return RecordAction(instantiatedKey, instantiatedValue, options2);
 }
 
 // node_modules/typebox/build/type/types/record.mjs
 var IntegerKey = `^${IntegerPattern}$`;
 var NumberKey = `^${NumberPattern}$`;
 var StringKey = `^${StringPattern}$`;
-function RecordDeferred(key, value, options = {}) {
-  return Deferred("Record", [key, value], options);
+function RecordDeferred(key, value, options2 = {}) {
+  return Deferred("Record", [key, value], options2);
 }
-function Record(key, value, options = {}) {
-  return RecordAction(key, value, options);
+function Record(key, value, options2 = {}) {
+  return RecordAction(key, value, options2);
 }
 function RecordFromPattern(pattern, value) {
   return CreateRecord(pattern, value);
@@ -21164,24 +22445,24 @@ function IsRest(value) {
 }
 
 // node_modules/typebox/build/type/types/this.mjs
-function This(options) {
-  return memory_exports.Create({ ["~kind"]: "This" }, { $ref: "#" }, options);
+function This(options2) {
+  return memory_exports.Create({ ["~kind"]: "This" }, { $ref: "#" }, options2);
 }
 function IsThis(value) {
   return IsKind(value, "This");
 }
 
 // node_modules/typebox/build/type/types/undefined.mjs
-function Undefined(options) {
-  return memory_exports.Create({ "~kind": "Undefined" }, { type: "undefined" }, options);
+function Undefined(options2) {
+  return memory_exports.Create({ "~kind": "Undefined" }, { type: "undefined" }, options2);
 }
 function IsUndefined2(value) {
   return IsKind(value, "Undefined");
 }
 
 // node_modules/typebox/build/type/types/void.mjs
-function Void(options) {
-  return memory_exports.Create({ "~kind": "Void" }, { type: "void" }, options);
+function Void(options2) {
+  return memory_exports.Create({ "~kind": "Void" }, { type: "void" }, options2);
 }
 function IsVoid(value) {
   return IsKind(value, "Void");
@@ -21424,8 +22705,8 @@ function PropertiesMapping(input) {
 }
 function _Object_Mapping(input) {
   const [properties, patternProperties] = input;
-  const options = guard_exports.IsEqual(guard_exports.Keys(patternProperties).length, 0) ? {} : { patternProperties };
-  return _Object_(properties, options);
+  const options2 = guard_exports.IsEqual(guard_exports.Keys(patternProperties).length, 0) ? {} : { patternProperties };
+  return _Object_(properties, options2);
 }
 function ElementNamedMapping(input) {
   return guard_exports.IsEqual(input.length, 5) ? AddReadonlyDeferred(AddOptionalDeferred(input[4])) : guard_exports.IsEqual(input.length, 3) ? input[2] : guard_exports.IsEqual(input.length, 4) ? guard_exports.IsEqual(input[2], "readonly") ? AddReadonlyDeferred(input[3]) : AddOptionalDeferred(input[3]) : Unreachable2();
@@ -21580,14 +22861,14 @@ function InterfaceDeclarationGenericMapping(input) {
   const parameters = input[2];
   const heritage = input[3];
   const [properties, patternProperties] = input[4];
-  const options = guard_exports.IsEqual(guard_exports.Keys(patternProperties).length, 0) ? {} : { patternProperties };
-  return { [input[1]]: Generic(parameters, InterfaceDeferred(heritage, properties, options)) };
+  const options2 = guard_exports.IsEqual(guard_exports.Keys(patternProperties).length, 0) ? {} : { patternProperties };
+  return { [input[1]]: Generic(parameters, InterfaceDeferred(heritage, properties, options2)) };
 }
 function InterfaceDeclarationMapping(input) {
   const heritage = input[2];
   const [properties, patternProperties] = input[3];
-  const options = guard_exports.IsEqual(guard_exports.Keys(patternProperties).length, 0) ? {} : { patternProperties };
-  return { [input[1]]: InterfaceDeferred(heritage, properties, options) };
+  const options2 = guard_exports.IsEqual(guard_exports.Keys(patternProperties).length, 0) ? {} : { patternProperties };
+  return { [input[1]]: InterfaceDeferred(heritage, properties, options2) };
 }
 function TypeAliasDeclarationGenericMapping(input) {
   return { [input[1]]: Generic(input[2], input[4]) };
@@ -22086,18 +23367,18 @@ function TemplateLiteralEncode(types) {
 }
 
 // node_modules/typebox/build/type/engine/template_literal/instantiate.mjs
-function TemplateLiteralAction(types, options) {
-  const result2 = CanInstantiate(types) ? memory_exports.Update(TemplateLiteralEncode(types), {}, options) : TemplateLiteralDeferred(types, options);
+function TemplateLiteralAction(types, options2) {
+  const result2 = CanInstantiate(types) ? memory_exports.Update(TemplateLiteralEncode(types), {}, options2) : TemplateLiteralDeferred(types, options2);
   return result2;
 }
-function TemplateLiteralInstantiate(context, state, types, options) {
+function TemplateLiteralInstantiate(context, state, types, options2) {
   const instantiatedTypes = InstantiateTypes(context, state, types);
-  return TemplateLiteralAction(instantiatedTypes, options);
+  return TemplateLiteralAction(instantiatedTypes, options2);
 }
 
 // node_modules/typebox/build/type/types/template_literal.mjs
-function TemplateLiteralDeferred(types, options = {}) {
-  return Deferred("TemplateLiteral", [types], options);
+function TemplateLiteralDeferred(types, options2 = {}) {
+  return Deferred("TemplateLiteral", [types], options2);
 }
 function IsTemplateLiteralDeferred(value) {
   return IsSchema(value) && guard_exports.HasPropertyKey(value, "action") && guard_exports.IsEqual(value.action, "TemplateLiteral");
@@ -22109,9 +23390,9 @@ function TemplateLiteralFromString(template) {
   const types = ParseTemplateIntoTypes(template);
   return TemplateLiteralFromTypes(types);
 }
-function TemplateLiteral2(input, options = {}) {
+function TemplateLiteral2(input, options2 = {}) {
   const type = guard_exports.IsString(input) ? TemplateLiteralFromString(input) : TemplateLiteralFromTypes(input);
-  return memory_exports.Update(type, {}, options);
+  return memory_exports.Update(type, {}, options2);
 }
 function IsTemplateLiteral(value) {
   return IsKind(value, "TemplateLiteral");
@@ -22479,25 +23760,25 @@ function InterfaceOperation(heritage, properties) {
   const result2 = EvaluateIntersect([...heritage, _Object_(properties)]);
   return result2;
 }
-function InterfaceAction(heritage, properties, options) {
-  const result2 = CanInstantiate(heritage) ? memory_exports.Update(InterfaceOperation(heritage, properties), {}, options) : InterfaceDeferred(heritage, properties, options);
+function InterfaceAction(heritage, properties, options2) {
+  const result2 = CanInstantiate(heritage) ? memory_exports.Update(InterfaceOperation(heritage, properties), {}, options2) : InterfaceDeferred(heritage, properties, options2);
   return result2;
 }
-function InterfaceInstantiate(context, state, heritage, properties, options) {
+function InterfaceInstantiate(context, state, heritage, properties, options2) {
   const instantiatedHeritage = InstantiateTypes(context, state, heritage);
   const instantiatedProperties = InstantiateProperties(context, state, properties);
-  return InterfaceAction(instantiatedHeritage, instantiatedProperties, options);
+  return InterfaceAction(instantiatedHeritage, instantiatedProperties, options2);
 }
 
 // node_modules/typebox/build/type/action/interface.mjs
-function InterfaceDeferred(heritage, properties, options = {}) {
-  return Deferred("Interface", [heritage, properties], options);
+function InterfaceDeferred(heritage, properties, options2 = {}) {
+  return Deferred("Interface", [heritage, properties], options2);
 }
 function IsInterfaceDeferred(value) {
   return IsSchema(value) && guard_exports.HasPropertyKey(value, "action") && guard_exports.IsEqual(value.action, "Interface");
 }
-function Interface(heritage, properties, options = {}) {
-  return InterfaceAction(heritage, properties, options);
+function Interface(heritage, properties, options2 = {}) {
+  return InterfaceAction(heritage, properties, options2);
 }
 
 // node_modules/typebox/build/type/engine/cyclic/check.mjs
@@ -22660,13 +23941,13 @@ function Broaden(types) {
 }
 
 // node_modules/typebox/build/type/engine/evaluate/instantiate.mjs
-function EvaluateAction(type, options) {
-  const result2 = memory_exports.Update(EvaluateType(type), {}, options);
+function EvaluateAction(type, options2) {
+  const result2 = memory_exports.Update(EvaluateType(type), {}, options2);
   return result2;
 }
-function EvaluateInstantiate(context, state, type, options) {
+function EvaluateInstantiate(context, state, type, options2) {
   const instantiatedType = InstantiateType(context, state, type);
-  return EvaluateAction(instantiatedType, options);
+  return EvaluateAction(instantiatedType, options2);
 }
 
 // node_modules/typebox/build/type/engine/call/distribute_arguments.mjs
@@ -22722,11 +24003,11 @@ function FromGeneric(name, parameters, expression) {
 function FromRef4(context, ref, arguments_) {
   return ref in context ? FromType6(context, ref, context[ref], arguments_) : FromNotResolvable();
 }
-function FromType6(context, name, target, arguments_) {
-  return IsGeneric(target) ? FromGeneric(name, target.parameters, target.expression) : IsRef(target) ? FromRef4(context, target.$ref, arguments_) : FromNotGeneric();
+function FromType6(context, name, target2, arguments_) {
+  return IsGeneric(target2) ? FromGeneric(name, target2.parameters, target2.expression) : IsRef(target2) ? FromRef4(context, target2.$ref, arguments_) : FromNotGeneric();
 }
-function ResolveTarget(context, target, arguments_) {
-  return FromType6(context, "(anonymous)", target, arguments_);
+function ResolveTarget(context, target2, arguments_) {
+  return FromType6(context, "(anonymous)", target2, arguments_);
 }
 
 // node_modules/typebox/build/type/engine/call/resolve_arguments.mjs
@@ -22779,43 +24060,43 @@ function IsTailCall(state, name) {
   const result2 = guard_exports.IsEqual(Peek(state), name);
   return result2;
 }
-function CallDispatch(context, state, target, parameters, expression, arguments_) {
+function CallDispatch(context, state, target2, parameters, expression, arguments_) {
   InstantiationIncrement();
   try {
     const argumentsContext = ResolveArgumentsContext(context, state, parameters, arguments_);
-    const returnType = InstantiateType(argumentsContext, State([...state["callstack"], target["$ref"]], state["visited"]), expression);
+    const returnType = InstantiateType(argumentsContext, State([...state["callstack"], target2["$ref"]], state["visited"]), expression);
     return InstantiateType(argumentsContext, State([], []), returnType);
   } finally {
     InstantiationDecrement();
   }
 }
-function CallDistributed(context, state, target, parameters, expression, distributedArguments) {
+function CallDistributed(context, state, target2, parameters, expression, distributedArguments) {
   return distributedArguments.reduce((result2, arguments_) => {
-    const returnType = CallDispatch(context, state, target, parameters, expression, arguments_);
+    const returnType = CallDispatch(context, state, target2, parameters, expression, arguments_);
     return [...result2, returnType];
   }, []);
 }
-function CallImmediate(context, state, target, parameters, expression, arguments_) {
+function CallImmediate(context, state, target2, parameters, expression, arguments_) {
   const distributedArguments = DistributeArguments(parameters, arguments_, expression);
-  const returnTypes = CallDistributed(context, state, target, parameters, expression, distributedArguments);
+  const returnTypes = CallDistributed(context, state, target2, parameters, expression, distributedArguments);
   const result2 = guard_exports.IsEqual(returnTypes.length, 1) ? returnTypes[0] : EvaluateUnion(returnTypes);
   return result2;
 }
-function CallInstantiate(context, state, target, arguments_) {
+function CallInstantiate(context, state, target2, arguments_) {
   const instantiatedArguments = InstantiateTypes(context, state, arguments_);
-  const resolved = ResolveTarget(context, target, arguments_);
+  const resolved = ResolveTarget(context, target2, arguments_);
   const name = resolved[0];
   const type = resolved[1];
-  const result2 = IsGeneric(type) ? IsTailCall(state, name) ? CallConstruct(Ref(name), instantiatedArguments) : CallImmediate(context, state, Ref(name), type.parameters, type.expression, instantiatedArguments) : CallConstruct(target, instantiatedArguments);
+  const result2 = IsGeneric(type) ? IsTailCall(state, name) ? CallConstruct(Ref(name), instantiatedArguments) : CallImmediate(context, state, Ref(name), type.parameters, type.expression, instantiatedArguments) : CallConstruct(target2, instantiatedArguments);
   return result2;
 }
 
 // node_modules/typebox/build/type/types/call.mjs
-function CallConstruct(target, arguments_) {
-  return memory_exports.Create({ ["~kind"]: "Call" }, { type: "call", target, arguments: arguments_ }, {});
+function CallConstruct(target2, arguments_) {
+  return memory_exports.Create({ ["~kind"]: "Call" }, { type: "call", target: target2, arguments: arguments_ }, {});
 }
-function Call(target, arguments_) {
-  return CallInstantiate({}, State([], []), target, arguments_);
+function Call(target2, arguments_) {
+  return CallInstantiate({}, State([], []), target2, arguments_);
 }
 function IsCall(value) {
   return IsKind(value, "Call");
@@ -22825,13 +24106,13 @@ function IsCall(value) {
 function RemoveImmutableOperation(type) {
   return memory_exports.Discard(type, ["~immutable"]);
 }
-function RemoveImmutableAction(type, options) {
-  const result2 = memory_exports.Update(RemoveImmutableOperation(type), {}, options);
+function RemoveImmutableAction(type, options2) {
+  const result2 = memory_exports.Update(RemoveImmutableOperation(type), {}, options2);
   return result2;
 }
-function RemoveImmutableInstantiate(context, state, type, options) {
+function RemoveImmutableInstantiate(context, state, type, options2) {
   const instantiatedType = InstantiateType(context, state, type);
-  return RemoveImmutableAction(instantiatedType, options);
+  return RemoveImmutableAction(instantiatedType, options2);
 }
 
 // node_modules/typebox/build/type/engine/intrinsics/mapping.mjs
@@ -22863,35 +24144,35 @@ function FromType7(mapping, type) {
 }
 
 // node_modules/typebox/build/type/action/capitalize.mjs
-function CapitalizeDeferred(type, options = {}) {
-  return Deferred("Capitalize", [type], options);
+function CapitalizeDeferred(type, options2 = {}) {
+  return Deferred("Capitalize", [type], options2);
 }
-function Capitalize(type, options = {}) {
-  return CapitalizeAction(type, options);
+function Capitalize(type, options2 = {}) {
+  return CapitalizeAction(type, options2);
 }
 
 // node_modules/typebox/build/type/action/lowercase.mjs
-function LowercaseDeferred(type, options = {}) {
-  return Deferred("Lowercase", [type], options);
+function LowercaseDeferred(type, options2 = {}) {
+  return Deferred("Lowercase", [type], options2);
 }
-function Lowercase(type, options = {}) {
-  return LowercaseAction(type, options);
+function Lowercase(type, options2 = {}) {
+  return LowercaseAction(type, options2);
 }
 
 // node_modules/typebox/build/type/action/uncapitalize.mjs
-function UncapitalizeDeferred(type, options = {}) {
-  return Deferred("Uncapitalize", [type], options);
+function UncapitalizeDeferred(type, options2 = {}) {
+  return Deferred("Uncapitalize", [type], options2);
 }
-function Uncapitalize(type, options = {}) {
-  return UncapitalizeAction(type, options);
+function Uncapitalize(type, options2 = {}) {
+  return UncapitalizeAction(type, options2);
 }
 
 // node_modules/typebox/build/type/action/uppercase.mjs
-function UppercaseDeferred(type, options = {}) {
-  return Deferred("Uppercase", [type], options);
+function UppercaseDeferred(type, options2 = {}) {
+  return Deferred("Uppercase", [type], options2);
 }
-function Uppercase(type, options = {}) {
-  return UppercaseAction(type, options);
+function Uppercase(type, options2 = {}) {
+  return UppercaseAction(type, options2);
 }
 
 // node_modules/typebox/build/type/engine/intrinsics/instantiate.mjs
@@ -22899,45 +24180,45 @@ var CapitalizeMapping = (input) => input[0].toUpperCase() + input.slice(1);
 var LowercaseMapping = (input) => input.toLowerCase();
 var UncapitalizeMapping = (input) => input[0].toLowerCase() + input.slice(1);
 var UppercaseMapping = (input) => input.toUpperCase();
-function CapitalizeAction(type, options) {
-  const result2 = CanInstantiate([type]) ? memory_exports.Update(FromType7(CapitalizeMapping, type), {}, options) : CapitalizeDeferred(type, options);
+function CapitalizeAction(type, options2) {
+  const result2 = CanInstantiate([type]) ? memory_exports.Update(FromType7(CapitalizeMapping, type), {}, options2) : CapitalizeDeferred(type, options2);
   return result2;
 }
-function LowercaseAction(type, options) {
-  const result2 = CanInstantiate([type]) ? memory_exports.Update(FromType7(LowercaseMapping, type), {}, options) : LowercaseDeferred(type, options);
+function LowercaseAction(type, options2) {
+  const result2 = CanInstantiate([type]) ? memory_exports.Update(FromType7(LowercaseMapping, type), {}, options2) : LowercaseDeferred(type, options2);
   return result2;
 }
-function UncapitalizeAction(type, options) {
-  const result2 = CanInstantiate([type]) ? memory_exports.Update(FromType7(UncapitalizeMapping, type), {}, options) : UncapitalizeDeferred(type, options);
+function UncapitalizeAction(type, options2) {
+  const result2 = CanInstantiate([type]) ? memory_exports.Update(FromType7(UncapitalizeMapping, type), {}, options2) : UncapitalizeDeferred(type, options2);
   return result2;
 }
-function UppercaseAction(type, options) {
-  const result2 = CanInstantiate([type]) ? memory_exports.Update(FromType7(UppercaseMapping, type), {}, options) : UppercaseDeferred(type, options);
+function UppercaseAction(type, options2) {
+  const result2 = CanInstantiate([type]) ? memory_exports.Update(FromType7(UppercaseMapping, type), {}, options2) : UppercaseDeferred(type, options2);
   return result2;
 }
-function CapitalizeInstantiate(context, state, type, options) {
+function CapitalizeInstantiate(context, state, type, options2) {
   const instantiatedType = InstantiateType(context, state, type);
-  return CapitalizeAction(instantiatedType, options);
+  return CapitalizeAction(instantiatedType, options2);
 }
-function LowercaseInstantiate(context, state, type, options) {
+function LowercaseInstantiate(context, state, type, options2) {
   const instantiatedType = InstantiateType(context, state, type);
-  return LowercaseAction(instantiatedType, options);
+  return LowercaseAction(instantiatedType, options2);
 }
-function UncapitalizeInstantiate(context, state, type, options) {
+function UncapitalizeInstantiate(context, state, type, options2) {
   const instantiatedType = InstantiateType(context, state, type);
-  return UncapitalizeAction(instantiatedType, options);
+  return UncapitalizeAction(instantiatedType, options2);
 }
-function UppercaseInstantiate(context, state, type, options) {
+function UppercaseInstantiate(context, state, type, options2) {
   const instantiatedType = InstantiateType(context, state, type);
-  return UppercaseAction(instantiatedType, options);
+  return UppercaseAction(instantiatedType, options2);
 }
 
 // node_modules/typebox/build/type/action/conditional.mjs
-function ConditionalDeferred(left, right, true_, false_, options = {}) {
-  return Deferred("Conditional", [left, right, true_, false_], options);
+function ConditionalDeferred(left, right, true_, false_, options2 = {}) {
+  return Deferred("Conditional", [left, right, true_, false_], options2);
 }
-function Conditional(left, right, true_, false_, options = {}) {
-  return ConditionalAction({}, State([], []), left, right, true_, false_, options);
+function Conditional(left, right, true_, false_, options2 = {}) {
+  return ConditionalAction({}, State([], []), left, right, true_, false_, options2);
 }
 
 // node_modules/typebox/build/type/engine/conditional/instantiate.mjs
@@ -22945,22 +24226,22 @@ function ConditionalOperation(context, state, left, right, true_, false_) {
   const extendsResult = Extends(context, left, right);
   return result_exports.IsExtendsUnion(extendsResult) ? Union([InstantiateType(extendsResult.inferred, state, true_), InstantiateType(context, state, false_)]) : result_exports.IsExtendsTrue(extendsResult) ? InstantiateType(extendsResult.inferred, state, true_) : InstantiateType(context, state, false_);
 }
-function ConditionalAction(context, state, left, right, true_, false_, options) {
-  const result2 = CanInstantiate([left, right]) ? memory_exports.Update(ConditionalOperation(context, state, left, right, true_, false_), {}, options) : ConditionalDeferred(left, right, true_, false_, options);
+function ConditionalAction(context, state, left, right, true_, false_, options2) {
+  const result2 = CanInstantiate([left, right]) ? memory_exports.Update(ConditionalOperation(context, state, left, right, true_, false_), {}, options2) : ConditionalDeferred(left, right, true_, false_, options2);
   return result2;
 }
-function ConditionalInstantiate(context, state, left, right, true_, false_, options) {
+function ConditionalInstantiate(context, state, left, right, true_, false_, options2) {
   const instantiatedLeft = InstantiateType(context, state, left);
   const instantiatedRight = InstantiateType(context, state, right);
-  return ConditionalAction(context, state, instantiatedLeft, instantiatedRight, true_, false_, options);
+  return ConditionalAction(context, state, instantiatedLeft, instantiatedRight, true_, false_, options2);
 }
 
 // node_modules/typebox/build/type/action/constructor_parameters.mjs
-function ConstructorParametersDeferred(type, options = {}) {
-  return Deferred("ConstructorParameters", [type], options);
+function ConstructorParametersDeferred(type, options2 = {}) {
+  return Deferred("ConstructorParameters", [type], options2);
 }
-function ConstructorParameters(type, options = {}) {
-  return ConstructorParametersAction(type, options);
+function ConstructorParameters(type, options2 = {}) {
+  return ConstructorParametersAction(type, options2);
 }
 
 // node_modules/typebox/build/type/engine/constructor_parameters/instantiate.mjs
@@ -22970,40 +24251,40 @@ function ConstructorParametersOperation(type) {
   const result2 = Tuple(instantiatedParameters);
   return result2;
 }
-function ConstructorParametersAction(type, options) {
-  const result2 = CanInstantiate([type]) ? memory_exports.Update(ConstructorParametersOperation(type), {}, options) : ConstructorParametersDeferred(type, options);
+function ConstructorParametersAction(type, options2) {
+  const result2 = CanInstantiate([type]) ? memory_exports.Update(ConstructorParametersOperation(type), {}, options2) : ConstructorParametersDeferred(type, options2);
   return result2;
 }
-function ConstructorParametersInstantiate(context, state, type, options) {
+function ConstructorParametersInstantiate(context, state, type, options2) {
   const instantiatedType = InstantiateType(context, state, type);
-  return ConstructorParametersAction(instantiatedType, options);
+  return ConstructorParametersAction(instantiatedType, options2);
 }
 
 // node_modules/typebox/build/type/action/exclude.mjs
-function ExcludeDeferred(left, right, options = {}) {
-  return Deferred("Exclude", [left, right], options);
+function ExcludeDeferred(left, right, options2 = {}) {
+  return Deferred("Exclude", [left, right], options2);
 }
-function Exclude(left, right, options = {}) {
-  return ExcludeAction(left, right, options);
+function Exclude(left, right, options2 = {}) {
+  return ExcludeAction(left, right, options2);
 }
 
 // node_modules/typebox/build/type/engine/exclude/instantiate.mjs
-function ExcludeAction(left, right, options) {
-  const result2 = CanInstantiate([left, right]) ? memory_exports.Update(ExcludeOperation(left, right), {}, options) : ExcludeDeferred(left, right, options);
+function ExcludeAction(left, right, options2) {
+  const result2 = CanInstantiate([left, right]) ? memory_exports.Update(ExcludeOperation(left, right), {}, options2) : ExcludeDeferred(left, right, options2);
   return result2;
 }
-function ExcludeInstantiate(context, state, left, right, options) {
+function ExcludeInstantiate(context, state, left, right, options2) {
   const instantiatedLeft = InstantiateType(context, state, left);
   const instantiatedRight = InstantiateType(context, state, right);
-  return ExcludeAction(instantiatedLeft, instantiatedRight, options);
+  return ExcludeAction(instantiatedLeft, instantiatedRight, options2);
 }
 
 // node_modules/typebox/build/type/action/extract.mjs
-function ExtractDeferred(left, right, options = {}) {
-  return Deferred("Extract", [left, right], options);
+function ExtractDeferred(left, right, options2 = {}) {
+  return Deferred("Extract", [left, right], options2);
 }
-function Extract(left, right, options = {}) {
-  return ExtractAction(left, right, options);
+function Extract(left, right, options2 = {}) {
+  return ExtractAction(left, right, options2);
 }
 
 // node_modules/typebox/build/type/engine/extract/operation.mjs
@@ -23024,14 +24305,14 @@ function ExtractOperation(left, right) {
 }
 
 // node_modules/typebox/build/type/engine/extract/instantiate.mjs
-function ExtractAction(left, right, options) {
-  const result2 = CanInstantiate([left, right]) ? memory_exports.Update(ExtractOperation(left, right), {}, options) : ExtractDeferred(left, right, options);
+function ExtractAction(left, right, options2) {
+  const result2 = CanInstantiate([left, right]) ? memory_exports.Update(ExtractOperation(left, right), {}, options2) : ExtractDeferred(left, right, options2);
   return result2;
 }
-function ExtractInstantiate(context, state, left, right, options) {
+function ExtractInstantiate(context, state, left, right, options2) {
   const instantiatedLeft = InstantiateType(context, state, left);
   const instantiatedRight = InstantiateType(context, state, right);
-  return ExtractAction(instantiatedLeft, instantiatedRight, options);
+  return ExtractAction(instantiatedLeft, instantiatedRight, options2);
 }
 
 // node_modules/typebox/build/type/engine/helpers/keys_to_indexer.mjs
@@ -23047,18 +24328,18 @@ function KeysToIndexer(keys) {
 }
 
 // node_modules/typebox/build/type/action/indexed.mjs
-function IndexDeferred(type, indexer, options = {}) {
-  return Deferred("Index", [type, indexer], options);
+function IndexDeferred(type, indexer, options2 = {}) {
+  return Deferred("Index", [type, indexer], options2);
 }
-function Index(type, indexer_or_keys, options = {}) {
+function Index(type, indexer_or_keys, options2 = {}) {
   const indexer = guard_exports.IsArray(indexer_or_keys) ? KeysToIndexer(indexer_or_keys) : indexer_or_keys;
-  return IndexAction(type, indexer, options);
+  return IndexAction(type, indexer, options2);
 }
 
 // node_modules/typebox/build/type/engine/object/from_cyclic.mjs
 function FromCyclic(defs, ref) {
-  const target = CyclicTarget(defs, ref);
-  const result2 = FromType8(target);
+  const target2 = CyclicTarget(defs, ref);
+  const result2 = FromType8(target2);
   return result2;
 }
 
@@ -23155,8 +24436,8 @@ function FromArray3(type, indexer) {
 
 // node_modules/typebox/build/type/engine/indexable/from_cyclic.mjs
 function FromCyclic2(defs, ref) {
-  const target = CyclicTarget(defs, ref);
-  const result2 = FromType9(target);
+  const target2 = CyclicTarget(defs, ref);
+  const result2 = FromType9(target2);
   return result2;
 }
 
@@ -23301,43 +24582,43 @@ function NormalizeType(type) {
   const result2 = IsCyclic(type) || IsDependent(type) || IsIntersect(type) || IsUnion(type) ? CollapseToObject(type) : type;
   return result2;
 }
-function IndexAction(type, indexer, options) {
-  const result2 = CanInstantiate([type, indexer]) ? memory_exports.Update(FromType11(NormalizeType(type), indexer), {}, options) : IndexDeferred(type, indexer, options);
+function IndexAction(type, indexer, options2) {
+  const result2 = CanInstantiate([type, indexer]) ? memory_exports.Update(FromType11(NormalizeType(type), indexer), {}, options2) : IndexDeferred(type, indexer, options2);
   return result2;
 }
-function IndexInstantiate(context, state, type, indexer, options) {
+function IndexInstantiate(context, state, type, indexer, options2) {
   const instantiatedType = InstantiateType(context, state, type);
   const instantiatedIndexer = InstantiateType(context, state, indexer);
-  return IndexAction(instantiatedType, instantiatedIndexer, options);
+  return IndexAction(instantiatedType, instantiatedIndexer, options2);
 }
 
 // node_modules/typebox/build/type/action/instance_type.mjs
-function InstanceTypeDeferred(type, options = {}) {
-  return Deferred("InstanceType", [type], options);
+function InstanceTypeDeferred(type, options2 = {}) {
+  return Deferred("InstanceType", [type], options2);
 }
-function InstanceType(type, options = {}) {
-  return InstanceTypeAction(type, options);
+function InstanceType(type, options2 = {}) {
+  return InstanceTypeAction(type, options2);
 }
 
 // node_modules/typebox/build/type/engine/instance_type/instantiate.mjs
 function InstanceTypeOperation(type) {
   return IsConstructor2(type) ? type["instanceType"] : Never();
 }
-function InstanceTypeAction(type, options) {
-  const result2 = CanInstantiate([type]) ? memory_exports.Update(InstanceTypeOperation(type), {}, options) : InstanceTypeDeferred(type, options);
+function InstanceTypeAction(type, options2) {
+  const result2 = CanInstantiate([type]) ? memory_exports.Update(InstanceTypeOperation(type), {}, options2) : InstanceTypeDeferred(type, options2);
   return result2;
 }
-function InstanceTypeInstantiate(context, state, type, options = {}) {
+function InstanceTypeInstantiate(context, state, type, options2 = {}) {
   const instantiatedType = InstantiateType(context, state, type);
-  return InstanceTypeAction(instantiatedType, options);
+  return InstanceTypeAction(instantiatedType, options2);
 }
 
 // node_modules/typebox/build/type/action/keyof.mjs
-function KeyOfDeferred(type, options = {}) {
-  return Deferred("KeyOf", [type], options);
+function KeyOfDeferred(type, options2 = {}) {
+  return Deferred("KeyOf", [type], options2);
 }
-function KeyOf2(type, options = {}) {
-  return KeyOfAction(type, options);
+function KeyOf2(type, options2 = {}) {
+  return KeyOfAction(type, options2);
 }
 
 // node_modules/typebox/build/type/engine/keyof/from_any.mjs
@@ -23385,20 +24666,20 @@ function NormalizeType2(type) {
   const result2 = IsCyclic(type) || IsDependent(type) || IsIntersect(type) || IsUnion(type) ? CollapseToObject(type) : type;
   return result2;
 }
-function KeyOfAction(type, options) {
-  return CanInstantiate([type]) ? memory_exports.Update(FromType12(NormalizeType2(type)), {}, options) : KeyOfDeferred(type, options);
+function KeyOfAction(type, options2) {
+  return CanInstantiate([type]) ? memory_exports.Update(FromType12(NormalizeType2(type)), {}, options2) : KeyOfDeferred(type, options2);
 }
-function KeyOfInstantiate(context, state, type, options) {
+function KeyOfInstantiate(context, state, type, options2) {
   const instantiatedType = InstantiateType(context, state, type);
-  return KeyOfAction(instantiatedType, options);
+  return KeyOfAction(instantiatedType, options2);
 }
 
 // node_modules/typebox/build/type/action/mapped.mjs
-function MappedDeferred(identifier, type, as, property, options = {}) {
-  return Deferred("Mapped", [identifier, type, as, property], options);
+function MappedDeferred(identifier, type, as, property, options2 = {}) {
+  return Deferred("Mapped", [identifier, type, as, property], options2);
 }
-function Mapped(identifier, type, as, property, options = {}) {
-  return MappedAction({}, State([], []), identifier, type, as, property, options);
+function Mapped(identifier, type, as, property, options2 = {}) {
+  return MappedAction({}, State([], []), identifier, type, as, property, options2);
 }
 
 // node_modules/typebox/build/type/engine/mapped/mapped_variants.mjs
@@ -23461,13 +24742,13 @@ function MappedOperation(context, state, identifier, type, as, property) {
 }
 
 // node_modules/typebox/build/type/engine/mapped/instantiate.mjs
-function MappedAction(context, state, identifier, type, as, property, options) {
-  const result2 = CanInstantiate([type]) ? memory_exports.Update(MappedOperation(context, state, identifier, type, as, property), {}, options) : MappedDeferred(identifier, type, as, property, options);
+function MappedAction(context, state, identifier, type, as, property, options2) {
+  const result2 = CanInstantiate([type]) ? memory_exports.Update(MappedOperation(context, state, identifier, type, as, property), {}, options2) : MappedDeferred(identifier, type, as, property, options2);
   return result2;
 }
-function MappedInstantiate(context, state, identifier, type, as, property, options) {
+function MappedInstantiate(context, state, identifier, type, as, property, options2) {
   const instantiatedType = InstantiateType(context, state, type);
-  return MappedAction(context, state, identifier, instantiatedType, as, property, options);
+  return MappedAction(context, state, identifier, instantiatedType, as, property, options2);
 }
 
 // node_modules/typebox/build/type/engine/module/instantiate.mjs
@@ -23485,24 +24766,24 @@ function InstantiateNonCyclics(context, declarations, cyclicKeys) {
     return { ...result2, [key]: InstantiateType(declarationContext, State([], []), declarations[key]) };
   }, {});
 }
-function InstantiateModule(context, declarations, options) {
+function InstantiateModule(context, declarations, options2) {
   const cyclicCandidates = CyclicCandidates(declarations);
   const instantiatedCyclics = InstantiateCyclics(context, declarations, cyclicCandidates);
   const instantiatedNonCyclics = InstantiateNonCyclics(context, declarations, cyclicCandidates);
   const instantiatedModule = { ...instantiatedCyclics, ...instantiatedNonCyclics };
-  return memory_exports.Update(instantiatedModule, {}, options);
+  return memory_exports.Update(instantiatedModule, {}, options2);
 }
-function ModuleInstantiate(context, _state, declarations, options) {
-  const instantiatedModule = InstantiateModule(context, declarations, options);
+function ModuleInstantiate(context, _state, declarations, options2) {
+  const instantiatedModule = InstantiateModule(context, declarations, options2);
   return instantiatedModule;
 }
 
 // node_modules/typebox/build/type/action/non_nullable.mjs
-function NonNullableDeferred(type, options = {}) {
-  return Deferred("NonNullable", [type], options);
+function NonNullableDeferred(type, options2 = {}) {
+  return Deferred("NonNullable", [type], options2);
 }
-function NonNullable(type, options = {}) {
-  return NonNullableAction(type, options);
+function NonNullable(type, options2 = {}) {
+  return NonNullableAction(type, options2);
 }
 
 // node_modules/typebox/build/type/engine/non_nullable/instantiate.mjs
@@ -23510,22 +24791,22 @@ function NonNullableOperation(type) {
   const excluded = Union([Null(), Undefined()]);
   return ExcludeAction(type, excluded, {});
 }
-function NonNullableAction(type, options) {
-  const result2 = CanInstantiate([type]) ? memory_exports.Update(NonNullableOperation(type), {}, options) : NonNullableDeferred(type, options);
+function NonNullableAction(type, options2) {
+  const result2 = CanInstantiate([type]) ? memory_exports.Update(NonNullableOperation(type), {}, options2) : NonNullableDeferred(type, options2);
   return result2;
 }
-function NonNullableInstantiate(context, state, type, options) {
+function NonNullableInstantiate(context, state, type, options2) {
   const instantiatedType = InstantiateType(context, state, type);
-  return NonNullableAction(instantiatedType, options);
+  return NonNullableAction(instantiatedType, options2);
 }
 
 // node_modules/typebox/build/type/action/omit.mjs
-function OmitDeferred(type, indexer, options = {}) {
-  return Deferred("Omit", [type, indexer], options);
+function OmitDeferred(type, indexer, options2 = {}) {
+  return Deferred("Omit", [type, indexer], options2);
 }
-function Omit(type, indexer_or_keys, options = {}) {
+function Omit(type, indexer_or_keys, options2 = {}) {
   const indexer = guard_exports.IsArray(indexer_or_keys) ? KeysToIndexer(indexer_or_keys) : indexer_or_keys;
-  return OmitAction(type, indexer, options);
+  return OmitAction(type, indexer, options2);
 }
 
 // node_modules/typebox/build/type/engine/indexable/to_indexable.mjs
@@ -23551,22 +24832,22 @@ function FromType14(type, indexer) {
 }
 
 // node_modules/typebox/build/type/engine/omit/instantiate.mjs
-function OmitAction(type, indexer, options) {
-  const result2 = CanInstantiate([type, indexer]) ? memory_exports.Update(FromType14(type, indexer), {}, options) : OmitDeferred(type, indexer, options);
+function OmitAction(type, indexer, options2) {
+  const result2 = CanInstantiate([type, indexer]) ? memory_exports.Update(FromType14(type, indexer), {}, options2) : OmitDeferred(type, indexer, options2);
   return result2;
 }
-function OmitInstantiate(context, state, type, indexer, options) {
+function OmitInstantiate(context, state, type, indexer, options2) {
   const instantiatedType = InstantiateType(context, state, type);
   const instantiatedIndexer = InstantiateType(context, state, indexer);
-  return OmitAction(instantiatedType, instantiatedIndexer, options);
+  return OmitAction(instantiatedType, instantiatedIndexer, options2);
 }
 
 // node_modules/typebox/build/type/action/parameters.mjs
-function ParametersDeferred(type, options = {}) {
-  return Deferred("Parameters", [type], options);
+function ParametersDeferred(type, options2 = {}) {
+  return Deferred("Parameters", [type], options2);
 }
-function Parameters(type, options = {}) {
-  return ParametersAction(type, options);
+function Parameters(type, options2 = {}) {
+  return ParametersAction(type, options2);
 }
 
 // node_modules/typebox/build/type/engine/parameters/instantiate.mjs
@@ -23576,27 +24857,27 @@ function ParametersOperation(type) {
   const result2 = Tuple(instantiatedParameters);
   return result2;
 }
-function ParametersAction(type, options) {
-  const result2 = CanInstantiate([type]) ? memory_exports.Update(ParametersOperation(type), {}, options) : ParametersDeferred(type, options);
+function ParametersAction(type, options2) {
+  const result2 = CanInstantiate([type]) ? memory_exports.Update(ParametersOperation(type), {}, options2) : ParametersDeferred(type, options2);
   return result2;
 }
-function ParametersInstantiate(context, state, type, options) {
+function ParametersInstantiate(context, state, type, options2) {
   const instantiatedType = InstantiateType(context, state, type);
-  return ParametersAction(instantiatedType, options);
+  return ParametersAction(instantiatedType, options2);
 }
 
 // node_modules/typebox/build/type/action/partial.mjs
-function PartialDeferred(type, options = {}) {
-  return Deferred("Partial", [type], options);
+function PartialDeferred(type, options2 = {}) {
+  return Deferred("Partial", [type], options2);
 }
-function Partial(type, options = {}) {
-  return PartialAction(type, options);
+function Partial(type, options2 = {}) {
+  return PartialAction(type, options2);
 }
 
 // node_modules/typebox/build/type/engine/partial/from_cyclic.mjs
 function FromCyclic3(defs, ref) {
-  const target = CyclicTarget(defs, ref);
-  const partial2 = FromType15(target);
+  const target2 = CyclicTarget(defs, ref);
+  const partial2 = FromType15(target2);
   const result2 = Cyclic(memory_exports.Assign(defs, { [ref]: partial2 }), ref);
   return result2;
 }
@@ -23636,22 +24917,22 @@ function FromType15(type) {
 }
 
 // node_modules/typebox/build/type/engine/partial/instantiate.mjs
-function PartialAction(type, options) {
-  const result2 = CanInstantiate([type]) ? memory_exports.Update(FromType15(type), {}, options) : PartialDeferred(type, options);
+function PartialAction(type, options2) {
+  const result2 = CanInstantiate([type]) ? memory_exports.Update(FromType15(type), {}, options2) : PartialDeferred(type, options2);
   return result2;
 }
-function PartialInstantiate(context, state, type, options) {
+function PartialInstantiate(context, state, type, options2) {
   const instantiatedType = InstantiateType(context, state, type);
-  return PartialAction(instantiatedType, options);
+  return PartialAction(instantiatedType, options2);
 }
 
 // node_modules/typebox/build/type/action/pick.mjs
-function PickDeferred(type, indexer, options = {}) {
-  return Deferred("Pick", [type, indexer], options);
+function PickDeferred(type, indexer, options2 = {}) {
+  return Deferred("Pick", [type, indexer], options2);
 }
-function Pick(type, indexer_or_keys, options = {}) {
+function Pick(type, indexer_or_keys, options2 = {}) {
   const indexer = guard_exports.IsArray(indexer_or_keys) ? KeysToIndexer(indexer_or_keys) : indexer_or_keys;
-  return PickAction(type, indexer, options);
+  return PickAction(type, indexer, options2);
 }
 
 // node_modules/typebox/build/type/engine/pick/from_type.mjs
@@ -23670,22 +24951,22 @@ function FromType16(type, indexer) {
 }
 
 // node_modules/typebox/build/type/engine/pick/instantiate.mjs
-function PickAction(type, indexer, options) {
-  const result2 = CanInstantiate([type, indexer]) ? memory_exports.Update(FromType16(type, indexer), {}, options) : PickDeferred(type, indexer, options);
+function PickAction(type, indexer, options2) {
+  const result2 = CanInstantiate([type, indexer]) ? memory_exports.Update(FromType16(type, indexer), {}, options2) : PickDeferred(type, indexer, options2);
   return result2;
 }
-function PickInstantiate(context, state, type, indexer, options) {
+function PickInstantiate(context, state, type, indexer, options2) {
   const instantiatedType = InstantiateType(context, state, type);
   const instantiatedIndexer = InstantiateType(context, state, indexer);
-  return PickAction(instantiatedType, instantiatedIndexer, options);
+  return PickAction(instantiatedType, instantiatedIndexer, options2);
 }
 
 // node_modules/typebox/build/type/action/readonly_object.mjs
-function ReadonlyObjectDeferred(type, options = {}) {
-  return Deferred("ReadonlyObject", [type], options);
+function ReadonlyObjectDeferred(type, options2 = {}) {
+  return Deferred("ReadonlyObject", [type], options2);
 }
-function ReadonlyObject(type, options = {}) {
-  return ReadonlyObjectAction(type, options);
+function ReadonlyObject(type, options2 = {}) {
+  return ReadonlyObjectAction(type, options2);
 }
 var ReadonlyType = ReadonlyObject;
 
@@ -23697,8 +24978,8 @@ function FromArray5(type) {
 
 // node_modules/typebox/build/type/engine/readonly_object/from_cyclic.mjs
 function FromCyclic4(defs, ref) {
-  const target = CyclicTarget(defs, ref);
-  const partial2 = FromType17(target);
+  const target2 = CyclicTarget(defs, ref);
+  const partial2 = FromType17(target2);
   const result2 = Cyclic(memory_exports.Assign(defs, { [ref]: partial2 }), ref);
   return result2;
 }
@@ -23744,13 +25025,13 @@ function FromType17(type) {
 }
 
 // node_modules/typebox/build/type/engine/readonly_object/instantiate.mjs
-function ReadonlyObjectAction(type, options) {
-  const result2 = CanInstantiate([type]) ? memory_exports.Update(FromType17(type), {}, options) : ReadonlyObjectDeferred(type);
+function ReadonlyObjectAction(type, options2) {
+  const result2 = CanInstantiate([type]) ? memory_exports.Update(FromType17(type), {}, options2) : ReadonlyObjectDeferred(type);
   return result2;
 }
-function ReadonlyObjectInstantiate(context, state, type, options) {
+function ReadonlyObjectInstantiate(context, state, type, options2) {
   const instantiatedType = InstantiateType(context, state, type);
-  return ReadonlyObjectAction(instantiatedType, options);
+  return ReadonlyObjectAction(instantiatedType, options2);
 }
 
 // node_modules/typebox/build/type/engine/ref/instantiate.mjs
@@ -23760,8 +25041,8 @@ function RefInstantiate(context, state, type, ref) {
 
 // node_modules/typebox/build/type/engine/required/from_cyclic.mjs
 function FromCyclic5(defs, ref) {
-  const target = CyclicTarget(defs, ref);
-  const partial2 = FromType18(target);
+  const target2 = CyclicTarget(defs, ref);
+  const partial2 = FromType18(target2);
   const result2 = Cyclic(memory_exports.Assign(defs, { [ref]: partial2 }), ref);
   return result2;
 }
@@ -23801,60 +25082,60 @@ function FromType18(type) {
 }
 
 // node_modules/typebox/build/type/action/required.mjs
-function RequiredDeferred(type, options = {}) {
-  return Deferred("Required", [type], options);
+function RequiredDeferred(type, options2 = {}) {
+  return Deferred("Required", [type], options2);
 }
-function Required(type, options = {}) {
-  return RequiredAction(type, options);
+function Required(type, options2 = {}) {
+  return RequiredAction(type, options2);
 }
 
 // node_modules/typebox/build/type/engine/required/instantiate.mjs
-function RequiredAction(type, options) {
-  const result2 = CanInstantiate([type]) ? memory_exports.Update(FromType18(type), {}, options) : RequiredDeferred(type, options);
+function RequiredAction(type, options2) {
+  const result2 = CanInstantiate([type]) ? memory_exports.Update(FromType18(type), {}, options2) : RequiredDeferred(type, options2);
   return result2;
 }
-function RequiredInstantiate(context, state, type, options) {
+function RequiredInstantiate(context, state, type, options2) {
   const instaniatedType = InstantiateType(context, state, type);
-  return RequiredAction(instaniatedType, options);
+  return RequiredAction(instaniatedType, options2);
 }
 
 // node_modules/typebox/build/type/action/return_type.mjs
-function ReturnTypeDeferred(type, options = {}) {
-  return Deferred("ReturnType", [type], options);
+function ReturnTypeDeferred(type, options2 = {}) {
+  return Deferred("ReturnType", [type], options2);
 }
-function ReturnType(type, options = {}) {
-  return ReturnTypeAction(type, options);
+function ReturnType(type, options2 = {}) {
+  return ReturnTypeAction(type, options2);
 }
 
 // node_modules/typebox/build/type/engine/return_type/instantiate.mjs
 function ReturnTypeOperation(type) {
   return IsFunction2(type) ? type["returnType"] : Never();
 }
-function ReturnTypeAction(type, options) {
-  const result2 = CanInstantiate([type]) ? memory_exports.Update(ReturnTypeOperation(type), {}, options) : ReturnTypeDeferred(type, options);
+function ReturnTypeAction(type, options2) {
+  const result2 = CanInstantiate([type]) ? memory_exports.Update(ReturnTypeOperation(type), {}, options2) : ReturnTypeDeferred(type, options2);
   return result2;
 }
-function ReturnTypeInstantiate(context, state, type, options = {}) {
+function ReturnTypeInstantiate(context, state, type, options2 = {}) {
   const instantiatedType = InstantiateType(context, state, type);
-  return ReturnTypeAction(instantiatedType, options);
+  return ReturnTypeAction(instantiatedType, options2);
 }
 
 // node_modules/typebox/build/type/action/with.mjs
-function WithDeferred(type, options) {
-  return Deferred("With", [type, options], {});
+function WithDeferred(type, options2) {
+  return Deferred("With", [type, options2], {});
 }
-function With2(type, options) {
-  return WithAction(type, options);
+function With2(type, options2) {
+  return WithAction(type, options2);
 }
 
 // node_modules/typebox/build/type/engine/with/instantiate.mjs
-function WithAction(type, options) {
-  const result2 = CanInstantiate([type]) ? memory_exports.Update(type, {}, options) : WithDeferred(type, options);
+function WithAction(type, options2) {
+  const result2 = CanInstantiate([type]) ? memory_exports.Update(type, {}, options2) : WithDeferred(type, options2);
   return result2;
 }
-function WithInstantiate(context, state, type, options) {
+function WithInstantiate(context, state, type, options2) {
   const instaniatedType = InstantiateType(context, state, type);
-  return WithAction(instaniatedType, options);
+  return WithAction(instaniatedType, options2);
 }
 
 // node_modules/typebox/build/type/engine/rest/spread.mjs
@@ -23895,12 +25176,12 @@ function WithModifiers(type, instantiatedType) {
   const withImmutable = IsImmutable(type) ? AddImmutableAction(withReadonly, {}) : withReadonly;
   return withImmutable;
 }
-function InstantiateDeferred(context, state, action, parameters, options) {
+function InstantiateDeferred(context, state, action, parameters, options2) {
   return (
     // Modifiers
-    guard_exports.IsEqual(action, "AddImmutable") ? AddImmutableInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "RemoveImmutable") ? RemoveImmutableInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "AddReadonly") ? AddReadonlyInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "RemoveReadonly") ? RemoveReadonlyInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "AddOptional") ? AddOptionalInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "RemoveOptional") ? RemoveOptionalInstantiate(context, state, parameters[0], options) : (
+    guard_exports.IsEqual(action, "AddImmutable") ? AddImmutableInstantiate(context, state, parameters[0], options2) : guard_exports.IsEqual(action, "RemoveImmutable") ? RemoveImmutableInstantiate(context, state, parameters[0], options2) : guard_exports.IsEqual(action, "AddReadonly") ? AddReadonlyInstantiate(context, state, parameters[0], options2) : guard_exports.IsEqual(action, "RemoveReadonly") ? RemoveReadonlyInstantiate(context, state, parameters[0], options2) : guard_exports.IsEqual(action, "AddOptional") ? AddOptionalInstantiate(context, state, parameters[0], options2) : guard_exports.IsEqual(action, "RemoveOptional") ? RemoveOptionalInstantiate(context, state, parameters[0], options2) : (
       // Actions
-      guard_exports.IsEqual(action, "Capitalize") ? CapitalizeInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "Conditional") ? ConditionalInstantiate(context, state, parameters[0], parameters[1], parameters[2], parameters[3], options) : guard_exports.IsEqual(action, "ConstructorParameters") ? ConstructorParametersInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "Evaluate") ? EvaluateInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "Exclude") ? ExcludeInstantiate(context, state, parameters[0], parameters[1], options) : guard_exports.IsEqual(action, "Extract") ? ExtractInstantiate(context, state, parameters[0], parameters[1], options) : guard_exports.IsEqual(action, "Index") ? IndexInstantiate(context, state, parameters[0], parameters[1], options) : guard_exports.IsEqual(action, "InstanceType") ? InstanceTypeInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "Interface") ? InterfaceInstantiate(context, state, parameters[0], parameters[1], options) : guard_exports.IsEqual(action, "KeyOf") ? KeyOfInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "Lowercase") ? LowercaseInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "Mapped") ? MappedInstantiate(context, state, parameters[0], parameters[1], parameters[2], parameters[3], options) : guard_exports.IsEqual(action, "Module") ? ModuleInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "NonNullable") ? NonNullableInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "Pick") ? PickInstantiate(context, state, parameters[0], parameters[1], options) : guard_exports.IsEqual(action, "Parameters") ? ParametersInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "Partial") ? PartialInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "Omit") ? OmitInstantiate(context, state, parameters[0], parameters[1], options) : guard_exports.IsEqual(action, "ReadonlyObject") ? ReadonlyObjectInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "Record") ? RecordInstantiate(context, state, parameters[0], parameters[1], options) : guard_exports.IsEqual(action, "Required") ? RequiredInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "ReturnType") ? ReturnTypeInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "TemplateLiteral") ? TemplateLiteralInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "Uncapitalize") ? UncapitalizeInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "Uppercase") ? UppercaseInstantiate(context, state, parameters[0], options) : guard_exports.IsEqual(action, "With") ? WithInstantiate(context, state, parameters[0], parameters[1]) : Deferred(action, parameters, options)
+      guard_exports.IsEqual(action, "Capitalize") ? CapitalizeInstantiate(context, state, parameters[0], options2) : guard_exports.IsEqual(action, "Conditional") ? ConditionalInstantiate(context, state, parameters[0], parameters[1], parameters[2], parameters[3], options2) : guard_exports.IsEqual(action, "ConstructorParameters") ? ConstructorParametersInstantiate(context, state, parameters[0], options2) : guard_exports.IsEqual(action, "Evaluate") ? EvaluateInstantiate(context, state, parameters[0], options2) : guard_exports.IsEqual(action, "Exclude") ? ExcludeInstantiate(context, state, parameters[0], parameters[1], options2) : guard_exports.IsEqual(action, "Extract") ? ExtractInstantiate(context, state, parameters[0], parameters[1], options2) : guard_exports.IsEqual(action, "Index") ? IndexInstantiate(context, state, parameters[0], parameters[1], options2) : guard_exports.IsEqual(action, "InstanceType") ? InstanceTypeInstantiate(context, state, parameters[0], options2) : guard_exports.IsEqual(action, "Interface") ? InterfaceInstantiate(context, state, parameters[0], parameters[1], options2) : guard_exports.IsEqual(action, "KeyOf") ? KeyOfInstantiate(context, state, parameters[0], options2) : guard_exports.IsEqual(action, "Lowercase") ? LowercaseInstantiate(context, state, parameters[0], options2) : guard_exports.IsEqual(action, "Mapped") ? MappedInstantiate(context, state, parameters[0], parameters[1], parameters[2], parameters[3], options2) : guard_exports.IsEqual(action, "Module") ? ModuleInstantiate(context, state, parameters[0], options2) : guard_exports.IsEqual(action, "NonNullable") ? NonNullableInstantiate(context, state, parameters[0], options2) : guard_exports.IsEqual(action, "Pick") ? PickInstantiate(context, state, parameters[0], parameters[1], options2) : guard_exports.IsEqual(action, "Parameters") ? ParametersInstantiate(context, state, parameters[0], options2) : guard_exports.IsEqual(action, "Partial") ? PartialInstantiate(context, state, parameters[0], options2) : guard_exports.IsEqual(action, "Omit") ? OmitInstantiate(context, state, parameters[0], parameters[1], options2) : guard_exports.IsEqual(action, "ReadonlyObject") ? ReadonlyObjectInstantiate(context, state, parameters[0], options2) : guard_exports.IsEqual(action, "Record") ? RecordInstantiate(context, state, parameters[0], parameters[1], options2) : guard_exports.IsEqual(action, "Required") ? RequiredInstantiate(context, state, parameters[0], options2) : guard_exports.IsEqual(action, "ReturnType") ? ReturnTypeInstantiate(context, state, parameters[0], options2) : guard_exports.IsEqual(action, "TemplateLiteral") ? TemplateLiteralInstantiate(context, state, parameters[0], options2) : guard_exports.IsEqual(action, "Uncapitalize") ? UncapitalizeInstantiate(context, state, parameters[0], options2) : guard_exports.IsEqual(action, "Uppercase") ? UppercaseInstantiate(context, state, parameters[0], options2) : guard_exports.IsEqual(action, "With") ? WithInstantiate(context, state, parameters[0], parameters[1]) : Deferred(action, parameters, options2)
     )
   );
 }
@@ -23921,37 +25202,37 @@ function Instantiate(context, type) {
 function AddImmutableOperation(type) {
   return memory_exports.Update(type, { "~immutable": true }, {});
 }
-function AddImmutableAction(type, options) {
-  const result2 = memory_exports.Update(AddImmutableOperation(type), {}, options);
+function AddImmutableAction(type, options2) {
+  const result2 = memory_exports.Update(AddImmutableOperation(type), {}, options2);
   return result2;
 }
-function AddImmutableInstantiate(context, state, type, options) {
+function AddImmutableInstantiate(context, state, type, options2) {
   const instantiatedType = InstantiateType(context, state, type);
-  return AddImmutableAction(instantiatedType, options);
+  return AddImmutableAction(instantiatedType, options2);
 }
 
 // node_modules/typebox/build/type/action/_add_immutable.mjs
-function AddImmutableDeferred(type, options = {}) {
-  return Deferred("AddImmutable", [type], options);
+function AddImmutableDeferred(type, options2 = {}) {
+  return Deferred("AddImmutable", [type], options2);
 }
-function AddImmutable(type, options = {}) {
-  return AddImmutableAction(type, options);
+function AddImmutable(type, options2 = {}) {
+  return AddImmutableAction(type, options2);
 }
 
 // node_modules/typebox/build/type/action/evaluate.mjs
-function EvaluateDeferred(type, options = {}) {
-  return Deferred("Evaluate", [type], options);
+function EvaluateDeferred(type, options2 = {}) {
+  return Deferred("Evaluate", [type], options2);
 }
-function Evaluate(type, options = {}) {
-  return EvaluateAction(type, options);
+function Evaluate(type, options2 = {}) {
+  return EvaluateAction(type, options2);
 }
 
 // node_modules/typebox/build/type/action/module.mjs
-function ModuleDeferred(declarations, options = {}) {
-  return Deferred("Module", [declarations], options);
+function ModuleDeferred(declarations, options2 = {}) {
+  return Deferred("Module", [declarations], options2);
 }
-function Module2(declarations, options = {}) {
-  return ModuleInstantiate({}, State([], []), declarations, options);
+function Module2(declarations, options2 = {}) {
+  return ModuleInstantiate({}, State([], []), declarations, options2);
 }
 
 // node_modules/typebox/build/type/engine/priority/priority.mjs
@@ -23972,14 +25253,14 @@ function Priority(types) {
 
 // node_modules/typebox/build/type/script/script.mjs
 function Script2(...args) {
-  const [context, input, options] = arguments_exports.Match(args, {
-    2: (script, options2) => guard_exports.IsString(script) ? [{}, script, options2] : [script, options2, {}],
-    3: (context2, script, options2) => [context2, script, options2],
+  const [context, input, options2] = arguments_exports.Match(args, {
+    2: (script, options3) => guard_exports.IsString(script) ? [{}, script, options3] : [script, options3, {}],
+    3: (context2, script, options3) => [context2, script, options3],
     1: (script) => [{}, script, {}]
   });
   const result2 = Script(input);
   const parsed = guard_exports.IsArray(result2) && guard_exports.IsEqual(result2.length, 2) ? InstantiateType(context, State([], []), result2[0]) : Never();
-  return memory_exports.Update(parsed, {}, options);
+  return memory_exports.Update(parsed, {}, options2);
 }
 
 // node_modules/typebox/build/typebox.mjs
@@ -24105,12 +25386,12 @@ __export(typebox_exports, {
 });
 
 // src/typebox.ts
-function StringEnum(values, options) {
+function StringEnum(values, options2) {
   return typebox_exports.Unsafe({
     type: "string",
     enum: values,
-    ...options?.description && { description: options.description },
-    ...options?.default && { default: options.default }
+    ...options2?.description && { description: options2.description },
+    ...options2?.default && { default: options2.default }
   });
 }
 
@@ -24867,8 +26148,8 @@ function AbsoluteBase(base) {
 function CanonicalHref(url) {
   return url.href.split("#")[0];
 }
-function Base2(schema, base, target) {
-  return SearchBase(schema, AbsoluteBase(base), target);
+function Base2(schema, base, target2) {
+  return SearchBase(schema, AbsoluteBase(base), target2);
 }
 function RefRoot(stack, ref) {
   return ref.$ref.startsWith("#") || stack.enteredResource ? stack.lexicalSchema : stack.schema;
@@ -24889,19 +26170,19 @@ function SearchDynamicAnchor(schema, name) {
   }
   return void 0;
 }
-function SearchBase(schema, base, target) {
-  if (guard_exports.IsEqual(schema, target))
+function SearchBase(schema, base, target2) {
+  if (guard_exports.IsEqual(schema, target2))
     return base.href;
   const nextBase = RelativeBase(schema, base);
   if (guard_exports.IsArray(schema)) {
     for (const item of schema) {
-      const result2 = SearchBase(item, nextBase, target);
+      const result2 = SearchBase(item, nextBase, target2);
       if (!guard_exports.IsUndefined(result2))
         return result2;
     }
   } else if (guard_exports.IsObject(schema)) {
     for (const key of guard_exports.Keys(schema)) {
-      const result2 = SearchBase(schema[key], nextBase, target);
+      const result2 = SearchBase(schema[key], nextBase, target2);
       if (!guard_exports.IsUndefined(result2))
         return result2;
     }
@@ -25027,8 +26308,8 @@ function RefInternalWithRemote(context, base, ref) {
 }
 function RefInternal(context, schema, base, ref) {
   const absoluteBase = AbsoluteBase(base);
-  const target = NextUri(ref, absoluteBase.href);
-  return RefInternalWithContext(context, ref) ?? RefInternalWithLocal(schema, absoluteBase, target) ?? RefInternalWithRemote(context, absoluteBase, target);
+  const target2 = NextUri(ref, absoluteBase.href);
+  return RefInternalWithContext(context, ref) ?? RefInternalWithLocal(schema, absoluteBase, target2) ?? RefInternalWithRemote(context, absoluteBase, target2);
 }
 function RefNextStackDeferred(stack, deferredResource) {
   if (!deferredResource)
@@ -25090,14 +26371,14 @@ function DynamicRef(stack, dynamicRef) {
 
 // node_modules/typebox/build/schema/engine/dynamicRef.mjs
 function CheckDynamicRef(stack, context, schema, value) {
-  const target = resolve_exports.DynamicRef(stack, schema) ?? false;
-  const nextStack = target ? { ...stack, pendingResource: true } : stack;
-  return IsSchema2(target) && CheckSchema(nextStack, context, target, value);
+  const target2 = resolve_exports.DynamicRef(stack, schema) ?? false;
+  const nextStack = target2 ? { ...stack, pendingResource: true } : stack;
+  return IsSchema2(target2) && CheckSchema(nextStack, context, target2, value);
 }
 function ErrorDynamicRef(stack, context, _schemaPath, instancePath, schema, value) {
-  const target = resolve_exports.DynamicRef(stack, schema) ?? false;
-  const nextStack = target ? { ...stack, pendingResource: true } : stack;
-  return IsSchema2(target) && ErrorSchema(nextStack, context, "#", instancePath, target, value);
+  const target2 = resolve_exports.DynamicRef(stack, schema) ?? false;
+  const nextStack = target2 ? { ...stack, pendingResource: true } : stack;
+  return IsSchema2(target2) && ErrorSchema(nextStack, context, "#", instancePath, target2, value);
 }
 
 // node_modules/typebox/build/schema/engine/enum.mjs
@@ -25996,31 +27277,31 @@ function ErrorPropertyNames(stack, context, schemaPath, instancePath, schema, va
 
 // node_modules/typebox/build/schema/engine/recursiveRef.mjs
 function CheckRecursiveRef(stack, context, schema, value) {
-  const target = resolve_exports.RecursiveRef(stack, schema) ?? false;
-  const nextStack = target ? { ...stack, pendingResource: true } : stack;
-  return IsSchema2(target) && CheckSchema(nextStack, context, target, value);
+  const target2 = resolve_exports.RecursiveRef(stack, schema) ?? false;
+  const nextStack = target2 ? { ...stack, pendingResource: true } : stack;
+  return IsSchema2(target2) && CheckSchema(nextStack, context, target2, value);
 }
 function ErrorRecursiveRef(stack, context, _schemaPath, instancePath, schema, value) {
-  const target = resolve_exports.RecursiveRef(stack, schema) ?? false;
-  const nextStack = target ? { ...stack, pendingResource: true } : stack;
-  return IsSchema2(target) && ErrorSchema(nextStack, context, "#", instancePath, target, value);
+  const target2 = resolve_exports.RecursiveRef(stack, schema) ?? false;
+  const nextStack = target2 ? { ...stack, pendingResource: true } : stack;
+  return IsSchema2(target2) && ErrorSchema(nextStack, context, "#", instancePath, target2, value);
 }
 
 // node_modules/typebox/build/schema/engine/ref.mjs
 function CheckRef(stack, context, schema, value) {
   const result2 = resolve_exports.Ref(stack, schema);
-  const target = result2.schema ?? false;
+  const target2 = result2.schema ?? false;
   const nextContext = new CheckContext();
-  const valid = IsSchema2(target) && CheckSchema(result2.stack, nextContext, target, value);
+  const valid = IsSchema2(target2) && CheckSchema(result2.stack, nextContext, target2, value);
   if (valid)
     context.Merge([nextContext]);
   return valid;
 }
 function ErrorRef(stack, context, _schemaPath, instancePath, schema, value) {
   const result2 = resolve_exports.Ref(stack, schema);
-  const target = result2.schema ?? false;
+  const target2 = result2.schema ?? false;
   const nextContext = new ErrorContext();
-  const valid = IsSchema2(target) && ErrorSchema(result2.stack, nextContext, "#", instancePath, target, value);
+  const valid = IsSchema2(target2) && ErrorSchema(result2.stack, nextContext, "#", instancePath, target2, value);
   if (valid)
     context.Merge([nextContext]);
   if (!valid)
@@ -27230,17 +28511,17 @@ async function privateDirectory(path) {
   const info = await lstat5(absolute2);
   if ((info.mode & 63) !== 0 || process.getuid && info.uid !== process.getuid()) throw new Error("Search diagnostic directory must be private and owned by this user");
 }
-async function recordSearch(root, query, outcome, options = {}) {
+async function recordSearch(root, query, outcome, options2 = {}) {
   const directory2 = join11(root, "search-diagnostics");
   await privateDirectory(root);
   await privateDirectory(directory2);
-  const now = options.now ?? /* @__PURE__ */ new Date();
+  const now = options2.now ?? /* @__PURE__ */ new Date();
   const id2 = randomUUID4();
   const record3 = {
     schemaVersion: 1,
     id: id2,
     at: now.toISOString(),
-    ...options.toolCallId ? { toolCallId: options.toolCallId.slice(0, 512) } : {},
+    ...options2.toolCallId ? { toolCallId: options2.toolCallId.slice(0, 512) } : {},
     query: { name: normalizeSearchName(query.name), ...query.os ? { os: query.os } : {} }
   };
   if ("result" in outcome) {
@@ -27361,8 +28642,8 @@ var IMAGE_PRESENTATION_POLICY = Object.freeze({
 });
 var PresentationUnavailableError = class extends Error {
   code = "presentation-unavailable";
-  constructor(message2, options) {
-    super(message2, options);
+  constructor(message2, options2) {
+    super(message2, options2);
     this.name = "PresentationUnavailableError";
   }
 };
@@ -27922,8 +29203,8 @@ function verifyOriginal(bytes, descriptor) {
   if (bytes.length !== descriptor.bytes || hash(bytes) !== descriptor.sha256) fail("integrity-failed", "Original bytes conflict with their image reference.");
 }
 var ImageStore = class {
-  constructor(options) {
-    this.options = options;
+  constructor(options2) {
+    this.options = options2;
   }
   get binding() {
     const o = this.options;
@@ -27972,19 +29253,19 @@ var ImageStore = class {
     } else fail("integrity-failed", "Unknown image source.");
     return record3;
   }
-  async register(descriptor, recording, remote, approvedRoot, options, fileName) {
+  async register(descriptor, recording, remote, approvedRoot, options2, fileName) {
     const imageId = this.identity(descriptor, fileName);
-    const existing = await optional2(() => readBounded(this.options.catalogRoot, join12(this.options.catalogRoot, `${imageId}.json`), MAX_METADATA, options.signal));
-    if (existing) return this.load(imageId, options.signal);
+    const existing = await optional2(() => readBounded(this.options.catalogRoot, join12(this.options.catalogRoot, `${imageId}.json`), MAX_METADATA, options2.signal));
+    if (existing) return this.load(imageId, options2.signal);
     const record3 = { descriptor: { ...descriptor, imageId }, ...fileName ? { fileName } : {}, recording, remote, approvedRoot, local: join12(recording, "host", "images", imageId, `original${extension(descriptor.mimeType)}`) };
-    await publish(this.options.catalogRoot, join12(this.options.catalogRoot, `${imageId}.json`), Buffer.from(canonical({ ...record3, binding: this.binding })), options.signal);
+    await publish(this.options.catalogRoot, join12(this.options.catalogRoot, `${imageId}.json`), Buffer.from(canonical({ ...record3, binding: this.binding })), options2.signal);
     return record3;
   }
-  async metadata(relative6, recording, options, extraPaths = []) {
+  async metadata(relative6, recording, options2, extraPaths = []) {
     const cached2 = join12(recording.path, "host", "image-evidence", relative6);
     let local;
     for (const path2 of [...extraPaths, join12(recording.path, "state", relative6), cached2]) {
-      const value2 = await optional2(() => readMetadata(recording.path, path2, options.signal));
+      const value2 = await optional2(() => readMetadata(recording.path, path2, options2.signal));
       if (value2 !== void 0) {
         if (local !== void 0 && canonical(local) !== canonical(value2)) fail("integrity-failed", "Retained image metadata conflicts.");
         local = value2;
@@ -27992,14 +29273,14 @@ var ImageStore = class {
     }
     if (local !== void 0) return local;
     if (!recording.guestState) fail("capture-unknown", "This recording has no available retained metadata or supported guest evidence location.");
-    await this.options.ensureGuest(options.signal, options.deadline);
-    guard(options.signal);
+    await this.options.ensureGuest(options2.signal, options2.deadline);
+    guard(options2.signal);
     const path = join12(recording.path, "host", "image-metadata", randomUUID5(), "metadata.json");
-    const bytes = await this.options.transfer.pullImageMetadata(join12(recording.guestState, relative6), path, recording.guestState, recording.path, options);
-    guard(options.signal);
+    const bytes = await this.options.transfer.pullImageMetadata(join12(recording.guestState, relative6), path, recording.guestState, recording.path, options2);
+    guard(options2.signal);
     if (bytes.length > MAX_METADATA) fail("integrity-failed", "Image metadata exceeds its bound.");
     const value = parseMetadata(bytes);
-    await publish(recording.path, cached2, Buffer.from(canonical(value)), options.signal);
+    await publish(recording.path, cached2, Buffer.from(canonical(value)), options2.signal);
     return value;
   }
   journalCorroborates(bytes, request, sn) {
@@ -28022,28 +29303,28 @@ var ImageStore = class {
     if (completions.some((e) => events.indexOf(e) <= events.indexOf(capture))) fail("integrity-failed", "Saved capture is outside its action interval.");
     return true;
   }
-  async corroborateJournal(recording, request, sn, options) {
+  async corroborateJournal(recording, request, sn, options2) {
     const cached2 = join12(recording.path, "host", "image-evidence", "journals", `${sn.actionId}.jsonl`);
     let corroborated = false;
     for (const path of [join12(recording.path, "state", "journal", "events.jsonl"), cached2]) {
-      const bytes2 = await optional2(() => readBounded(recording.path, path, MAX_METADATA, options.signal));
+      const bytes2 = await optional2(() => readBounded(recording.path, path, MAX_METADATA, options2.signal));
       if (bytes2 && this.journalCorroborates(bytes2, request, sn)) corroborated = true;
     }
     if (corroborated) return;
     if (!recording.guestState) fail("integrity-failed", "Missing reverse references have no available corroborating capture journal.");
-    await this.options.ensureGuest(options.signal, options.deadline);
-    guard(options.signal);
+    await this.options.ensureGuest(options2.signal, options2.deadline);
+    guard(options2.signal);
     const local = join12(recording.path, "host", "image-metadata", randomUUID5(), "journal.jsonl");
     let bytes;
     try {
-      bytes = await this.options.transfer.pullImageMetadata(join12(recording.guestState, "journal", "events.jsonl"), local, recording.guestState, recording.path, { ...options, metadataFormat: "jsonl" });
+      bytes = await this.options.transfer.pullImageMetadata(join12(recording.guestState, "journal", "events.jsonl"), local, recording.guestState, recording.path, { ...options2, metadataFormat: "jsonl" });
     } catch (error2) {
       if (error2.code === "image-missing") fail("integrity-failed", "Missing reverse references have no authoritative capture journal.");
       throw error2;
     }
-    guard(options.signal);
+    guard(options2.signal);
     if (bytes.length > MAX_METADATA || !this.journalCorroborates(bytes, request, sn)) fail("integrity-failed", "Saved capture journal does not establish the selected image.");
-    await publish(recording.path, cached2, bytes, options.signal);
+    await publish(recording.path, cached2, bytes, options2.signal);
   }
   checkReferences(snapshots2, sn) {
     if (snapshots2 === void 0) return false;
@@ -28052,17 +29333,17 @@ var ImageStore = class {
     if (matches.length > 1 || matches.length === 1 && !sameSnapshot(matches[0], sn)) fail("integrity-failed", "Saved reverse snapshot reference contradicts the capture.");
     return matches.length === 1;
   }
-  async display(target, options) {
-    if (!safeId2(target.sessionId) || !safeId2(target.executionId) || !["before", "after"].includes(target.phase)) fail("unauthorized-reference", "Invalid display identity.");
-    const recording = this.recordings.find((r) => r.sessionId === target.sessionId);
+  async display(target2, options2) {
+    if (!safeId2(target2.sessionId) || !safeId2(target2.executionId) || !["before", "after"].includes(target2.phase)) fail("unauthorized-reference", "Invalid display identity.");
+    const recording = this.recordings.find((r) => r.sessionId === target2.sessionId);
     if (!recording) fail("unauthorized-reference", "Recording does not belong to this enclosure.");
-    const request = await optional2(() => readMetadata(recording.path, join12(recording.path, "host", "requests", `${target.executionId}.json`), options.signal));
+    const request = await optional2(() => readMetadata(recording.path, join12(recording.path, "host", "requests", `${target2.executionId}.json`), options2.signal));
     if (!request) fail("unauthorized-reference", "Execution does not belong to this enclosure.");
-    if (request.sessionId !== target.sessionId || request.executionId !== target.executionId) fail("integrity-failed", "Execution identity does not match its recording.");
+    if (request.sessionId !== target2.sessionId || request.executionId !== target2.executionId) fail("integrity-failed", "Execution identity does not match its recording.");
     const group = request.snapshots?.group;
-    const requested = !request.diagnostic && (target.phase === "before" ? !group || group.phase === "first" : !group || group.phase === "last");
+    const requested = !request.diagnostic && (target2.phase === "before" ? !group || group.phase === "first" : !group || group.phase === "last");
     if (!requested) return { status: "not-requested", diagnostic: "The declared snapshot plan does not capture this phase." };
-    const receipt = await this.metadata(join12("receiver", "receipts", `${target.executionId}.json`), recording, options, [join12(recording.path, "host", "receiver-receipts", `${target.executionId}.json`)]);
+    const receipt = await this.metadata(join12("receiver", "receipts", `${target2.executionId}.json`), recording, options2, [join12(recording.path, "host", "receiver-receipts", `${target2.executionId}.json`)]);
     if (receipt?.executionId !== request.executionId) fail("integrity-failed", "Receipt execution identity mismatch.");
     const evidence = receipt.imageEvidence;
     if (!evidence) return { status: "capture-unknown", diagnostic: "Recording predates saved-image descriptors; no input was replayed." };
@@ -28071,73 +29352,73 @@ var ImageStore = class {
     } catch {
       fail("integrity-failed", "Saved image evidence does not match its request.");
     }
-    const matches = evidence.snapshots.filter((s) => s.phase === target.phase);
+    const matches = evidence.snapshots.filter((s) => s.phase === target2.phase);
     if (!matches.length) return { status: evidence.status === "capture-failed" ? "capture-failed" : "capture-unknown", diagnostic: "No saved image is established for the requested phase." };
     const sn = matches[0];
     let action;
     try {
-      action = await this.metadata(join12("records", "action", `${sn.actionId}.json`), recording, options);
+      action = await this.metadata(join12("records", "action", `${sn.actionId}.json`), recording, options2);
     } catch (error2) {
       if (error2.code === "image-missing") fail("integrity-failed", "Receipt cites a missing authoritative action.");
       throw error2;
     }
     if (!action || action.actionId !== sn.actionId || action.sessionId !== request.sessionId || action.executionId !== request.executionId || action.attemptId !== request.attemptId || action.groupId !== group?.groupId || action.stepId !== request.step?.id || action.snapshotRole !== void 0 && action.snapshotRole !== (group?.phase ?? "single")) fail("integrity-failed", "Saved action identity does not corroborate the image.");
-    if (!this.checkReferences(action.snapshots, sn)) await this.corroborateJournal(recording, request, sn, options);
+    if (!this.checkReferences(action.snapshots, sn)) await this.corroborateJournal(recording, request, sn, options2);
     const descriptor = { source: "display", enclosure: this.options.enclosure, sessionId: sn.sessionId, executionId: sn.executionId, actionId: sn.actionId, ...sn.stepId ? { stepId: sn.stepId } : {}, phase: sn.phase, capturedAt: sn.capturedAt, ...sn.groupId ? { groupId: sn.groupId } : {}, sha256: sn.sha256, bytes: sn.bytes, mimeType: sn.mimeType };
     const state = recording.guestState ?? join12(this.options.guestRoot, "state");
-    return this.register(descriptor, recording.path, join12(state, "snapshots", recording.sessionId, sn.fileName), state, options, sn.fileName);
+    return this.register(descriptor, recording.path, join12(state, "snapshots", recording.sessionId, sn.fileName), state, options2, sn.fileName);
   }
-  async application(target, options) {
-    const declaration = this.options.declarations.find((d) => d.name === target.name);
+  async application(target2, options2) {
+    const declaration = this.options.declarations.find((d) => d.name === target2.name);
     if (!declaration) fail("unauthorized-reference", "Application image is not declared.");
     const root = join12(this.options.guestRoot, "workspace");
     let remote;
     try {
       const declared = within(root, declaration.path);
-      remote = target.path === void 0 ? declared : within(declared, target.path);
+      remote = target2.path === void 0 ? declared : within(declared, target2.path);
     } catch {
       return fail("unsafe-path", "Application image requires a confined relative path.");
     }
     const mimeType = mime(remote);
-    await this.options.ensureGuest(options.signal, options.deadline);
-    guard(options.signal);
-    const fact = await this.options.transfer.imageFact(remote, root, options);
-    return this.register({ source: "application", enclosure: this.options.enclosure, name: target.name, ...target.path === void 0 ? {} : { path: target.path }, sha256: fact.sha256, bytes: fact.bytes, mimeType }, this.options.hostRoot, remote, root, options);
+    await this.options.ensureGuest(options2.signal, options2.deadline);
+    guard(options2.signal);
+    const fact = await this.options.transfer.imageFact(remote, root, options2);
+    return this.register({ source: "application", enclosure: this.options.enclosure, name: target2.name, ...target2.path === void 0 ? {} : { path: target2.path }, sha256: fact.sha256, bytes: fact.bytes, mimeType }, this.options.hostRoot, remote, root, options2);
   }
-  async original(record3, options) {
-    let bytes = await optional2(() => readBounded(record3.recording, record3.local, MAX_IMAGE, options.signal));
+  async original(record3, options2) {
+    let bytes = await optional2(() => readBounded(record3.recording, record3.local, MAX_IMAGE, options2.signal));
     if (bytes) {
       verifyOriginal(bytes, record3.descriptor);
       return bytes;
     }
     if (record3.descriptor.source === "display") {
       const path = join12(record3.recording, "state", "snapshots", record3.descriptor.sessionId, record3.fileName);
-      bytes = await optional2(() => readBounded(record3.recording, path, MAX_IMAGE, options.signal));
+      bytes = await optional2(() => readBounded(record3.recording, path, MAX_IMAGE, options2.signal));
       if (bytes) {
         verifyOriginal(bytes, record3.descriptor);
-        await publish(record3.recording, record3.local, bytes, options.signal);
+        await publish(record3.recording, record3.local, bytes, options2.signal);
         return bytes;
       }
       if (!this.recordings.find((r) => r.path === record3.recording && r.sessionId === record3.descriptor.sessionId)?.guestState) fail("stale-reference", "The original is unavailable in retained host evidence and its guest recording is no longer addressable.");
     }
-    await this.options.ensureGuest(options.signal, options.deadline);
-    guard(options.signal);
-    return this.options.transfer.pullImage(record3.remote, record3.local, record3.approvedRoot, record3.recording, record3.descriptor, options);
+    await this.options.ensureGuest(options2.signal, options2.deadline);
+    guard(options2.signal);
+    return this.options.transfer.pullImage(record3.remote, record3.local, record3.approvedRoot, record3.recording, record3.descriptor, options2);
   }
-  async get(target, signal, requestedDeadline = Date.now() + imageCapability.deadlineMs) {
+  async get(target2, signal, requestedDeadline = Date.now() + imageCapability.deadlineMs) {
     const deadline = Math.min(requestedDeadline, Date.now() + imageCapability.deadlineMs);
     if (!Number.isFinite(deadline)) return imageFailure(new ImageError("transfer-failed", "Invalid image deadline."));
     if (Date.now() >= deadline) return imageFailure(new ImageError("transfer-failed", "Image delivery deadline exceeded."));
     const boundedSignal = AbortSignal.any([AbortSignal.timeout(Math.max(1, Math.ceil(deadline - Date.now()))), ...signal ? [signal] : []]);
-    const options = { signal: boundedSignal, deadline, attemptBudget: { remaining: imageCapability.transferAttempts } };
+    const options2 = { signal: boundedSignal, deadline, attemptBudget: { remaining: imageCapability.transferAttempts } };
     let record3;
     try {
       return await bounded2(async () => {
-        const selected = target.source === "reference" ? await this.load(target.imageId, boundedSignal) : target.source === "display" ? await this.display(target, options) : await this.application(target, options);
+        const selected = target2.source === "reference" ? await this.load(target2.imageId, boundedSignal) : target2.source === "display" ? await this.display(target2, options2) : await this.application(target2, options2);
         guard(boundedSignal);
         if ("status" in selected) return selected;
         record3 = selected;
-        const bytes = await this.original(record3, options);
+        const bytes = await this.original(record3, options2);
         guard(boundedSignal);
         const presentation = await bounded2(() => prepareImage(bytes, record3.descriptor.mimeType), boundedSignal);
         const image = { ...record3.descriptor, originalPath: record3.local, ...record3.descriptor.source === "application" ? { retrievedAt: (/* @__PURE__ */ new Date()).toISOString() } : {} };
@@ -28275,11 +29556,11 @@ async function refreshEvidenceState(incoming, destination, archiveRoot) {
   await mkdir8(destination);
   const copy = async (source, tree) => {
     for (const [path, kind] of tree) {
-      const target = join13(destination, path);
-      if (kind === "directory") await directory(target, true);
+      const target2 = join13(destination, path);
+      if (kind === "directory") await directory(target2, true);
       else {
-        await directory(dirname8(target), true);
-        await copyFile(join13(source, path), target, constants5.COPYFILE_EXCL);
+        await directory(dirname8(target2), true);
+        await copyFile(join13(source, path), target2, constants5.COPYFILE_EXCL);
       }
     }
   };
@@ -28287,26 +29568,153 @@ async function refreshEvidenceState(incoming, destination, archiveRoot) {
   if (archived) await copy(archived, retained);
 }
 
+// src/targets.ts
+import { createHash as createHash6 } from "node:crypto";
+import { mkdir as mkdir9, readFile as readFile10, rename as rename5, writeFile as writeFile4 } from "node:fs/promises";
+import { join as join14 } from "node:path";
+import { randomUUID as randomUUID6 } from "node:crypto";
+var TARGETS = ["cua", "playwright", "chrome-devtools"];
+var TARGET_PACKAGES = {
+  playwright: {
+    entry: "@playwright/mcp/cli.js",
+    packages: [
+      { name: "@playwright/mcp", version: "0.0.82", integrity: "sha512-OCqftfb8H4dnqm/njbTBRk3seUvUPttOlJUxCtEzXGETYOlRH5Qt3bbXIjmZIuWAxD9RF+yg1ASrPeXvm0y5cA==" },
+      { name: "playwright", version: "1.64.0-alpha-1789764292000", integrity: "sha512-3Ngs4ERGdC912uW3srEDtNVey4u1wSaQ/EFcKhxMpz0by0K6nidaJgM087pLpJc1osytiVnL7ack5gvgPArPNw==" },
+      { name: "playwright-core", version: "1.64.0-alpha-1789764292000", integrity: "sha512-ZgRaybFv4rRy7QMGnYprEGFdNJnvapNqcaER2w96bDQA+40BWIle1el1Yh9KHD3E6XYmieMB+r+UxFTCauTGGQ==" }
+    ]
+  },
+  "chrome-devtools": {
+    entry: "chrome-devtools-mcp/build/src/bin/chrome-devtools-mcp.js",
+    packages: [
+      { name: "chrome-devtools-mcp", version: "1.10.1", integrity: "sha512-Klw6HWDqHC/XS1JwZldd2r49aUhbUJN9m9Mvcx4SEueIPXtzuQX+QelxAViobv8YUkDZ7HWDrmViR6LeYK0wAw==" }
+    ]
+  }
+};
+var DEFAULT_AFTER_INTERVAL_MS = { cua: 500, playwright: 300, "chrome-devtools": 300, command: 500 };
+function targetLaunches(context) {
+  const entry = (target2) => join14(context.packagesRoot, "node_modules", TARGET_PACKAGES[target2].entry);
+  const executable = context.browserExecutable;
+  return {
+    cua: { command: context.cuaDriver, args: ["mcp"], cwd: context.workspace },
+    playwright: {
+      command: context.node,
+      args: [entry("playwright"), "--isolated", "--output-dir", join14(context.outputDir, "playwright", "files"), ...executable ? ["--executable-path", executable] : []],
+      cwd: context.workspace
+    },
+    "chrome-devtools": {
+      command: context.node,
+      args: [entry("chrome-devtools"), "--isolated", "--no-usage-statistics", "--no-performance-crux", "--no-page-id-routing", "--workspace", context.workspace, ...executable ? ["--executablePath", executable] : []],
+      cwd: context.workspace,
+      env: { CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: "1" }
+    }
+  };
+}
+function tarballName(pin) {
+  return `${pin.name.replace(/^@/, "").replace("/", "-")}-${pin.version}.tgz`;
+}
+function tarballUrl(pin, registry2 = process.env.MCP_VM_RELAY_NPM_REGISTRY ?? "https://registry.npmjs.org") {
+  return `${registry2.replace(/\/+$/, "")}/${pin.name}/-/${pin.name.split("/").at(-1)}-${pin.version}.tgz`;
+}
+function integrityMatches(bytes, integrity) {
+  const [algorithm, expected] = integrity.split("-", 2);
+  return algorithm === "sha512" && !!expected && createHash6("sha512").update(bytes).digest("base64") === expected;
+}
+var registrySource = async (pin, signal) => {
+  const response = await fetch(tarballUrl(pin), { signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(12e4)]) : AbortSignal.timeout(12e4) });
+  if (!response.ok) throw new Error(`Fetching ${pin.name}@${pin.version} failed: HTTP ${response.status}`);
+  return Buffer.from(await response.arrayBuffer());
+};
+async function cachedTarball(cacheRoot, pin, source = registrySource, signal) {
+  const path = join14(cacheRoot, tarballName(pin));
+  try {
+    const bytes2 = await readFile10(path);
+    if (integrityMatches(bytes2, pin.integrity)) return { path, sha256: createHash6("sha256").update(bytes2).digest("hex") };
+  } catch (error2) {
+    if (error2.code !== "ENOENT") throw error2;
+  }
+  const bytes = await source(pin, signal);
+  if (!integrityMatches(bytes, pin.integrity)) throw new Error(`${pin.name}@${pin.version} does not match its pinned integrity; nothing was staged`);
+  await mkdir9(cacheRoot, { recursive: true, mode: 448 });
+  const temporary = `${path}.${randomUUID6()}.tmp`;
+  await writeFile4(temporary, bytes, { mode: 384 });
+  await rename5(temporary, path);
+  return { path, sha256: createHash6("sha256").update(bytes).digest("hex") };
+}
+
+// src/json-schema.ts
+var import_ajv2 = __toESM(require_ajv(), 1);
+var import__ = __toESM(require__(), 1);
+var import__2 = __toESM(require__2(), 1);
+var import_ajv_formats2 = __toESM(require_dist(), 1);
+var addFormats = import_ajv_formats2.default.default ?? import_ajv_formats2.default;
+var options = { strict: false, allErrors: true, validateSchema: false, validateFormats: true };
+var draft7;
+var draft2019;
+var draft2020;
+var compiled = /* @__PURE__ */ new Map();
+function engine(schema) {
+  const dialect = typeof schema.$schema === "string" ? schema.$schema : "";
+  if (dialect.includes("2020-12")) {
+    if (!draft2020) {
+      draft2020 = new import__2.Ajv2020(options);
+      addFormats(draft2020);
+    }
+    return draft2020;
+  }
+  if (dialect.includes("2019-09")) {
+    if (!draft2019) {
+      draft2019 = new import__.Ajv2019(options);
+      addFormats(draft2019);
+    }
+    return draft2019;
+  }
+  if (!draft7) {
+    draft7 = new import_ajv2.Ajv(options);
+    addFormats(draft7);
+  }
+  return draft7;
+}
+function checkArguments(schema, args) {
+  if (!schema || typeof schema !== "object" || Array.isArray(schema)) return { valid: false, errors: ["The target tool has no usable input schema."] };
+  const key = JSON.stringify(schema);
+  let validate2 = compiled.get(key);
+  if (!validate2) {
+    try {
+      const { $id: _id, ...plain } = schema;
+      validate2 = engine(plain).compile(plain);
+    } catch (error2) {
+      return { valid: false, errors: [`The target tool's input schema could not be compiled: ${error2 instanceof Error ? error2.message : String(error2)}`] };
+    }
+    if (compiled.size > 512) compiled.clear();
+    compiled.set(key, validate2);
+  }
+  if (validate2(args)) return { valid: true };
+  const errors = (validate2.errors ?? []).slice(0, 20).map((error2) => `${error2.instancePath || "(arguments)"} ${error2.message ?? "is invalid"}${error2.params && Object.keys(error2.params).length ? ` ${JSON.stringify(error2.params)}` : ""}`);
+  return { valid: false, errors: errors.length ? errors : ["Arguments do not match the input schema."] };
+}
+
 // src/manager.ts
-var BROWSER_CAPTURES = "browser-captures";
-var instructions = "This server offers nineteen tools for one interruptive VM enclosure: relay_search, relay_probe, relay_acquisition_capabilities, relay_acquire, relay_stage, the run tools relay_exec/relay_script/relay_code/relay_cua/relay_browser, relay_image, relay_extract, relay_finish, relay_release, relay_console_resolve, relay_console_open, relay_console_cancel, relay_status and relay_trajectory. Relay only interruptive computer-use or browser-use that would otherwise take over a real desktop or browser, judged for yourself from relay_probe facts; unknown is not idle, and non-disruptive or headless work stays with local tools. One task gets one enclosure: call relay_acquire once per task, never reused for a second task. Work an enclosure in order: relay_probe, then relay_acquire, then relay_stage, then one or more run tools, then relay_image or relay_extract as needed, then relay_finish or relay_release. Always call relay_finish or relay_release explicitly before you return an answer; ending the session only pauses lease renewal, it does not destroy the VM, and the backend's own expiry is the last-resort safeguard. A refused, uncertain or nonzero operation keeps the VM so you can diagnose and submit a corrected operation; never replay input whose effect is uncertain. A tool result, an attached image or a verified evidence package, is evidence for a human reviewer, never the review itself. The relay never targets a physical or local display and offers no video or spawn API. Every tool's text result is capped at 50 KiB / 2000 lines; a larger result is retained whole in a local file the result names.";
+var RELAY_RUN_OUTPUTS = "relay-run";
+var MCP_START_ALLOWANCE_MS = 6e4;
+var MAX_TOOL_IMAGES = 4;
+var instructions = "This server offers nineteen tools for one interruptive VM enclosure: relay_search, relay_probe, relay_acquisition_capabilities, relay_acquire, relay_stage, relay_run, relay_tools, the command tools relay_exec/relay_script/relay_code, relay_image, relay_extract, relay_finish, relay_release, relay_console_resolve, relay_console_open, relay_console_cancel, relay_status and relay_trajectory. relay_run sends the cua-driver, Playwright MCP or Chrome DevTools MCP tool calls you already know to that server inside the VM; evidence is automatic. Relay only interruptive computer-use or browser-use that would otherwise take over a real desktop or browser, judged for yourself from relay_probe facts; unknown is not idle, and non-disruptive or headless work stays with local tools. One task gets one enclosure: call relay_acquire once per task, never reused for a second task. Work an enclosure in order: relay_probe, then relay_acquire, then relay_stage, then relay_run or the command tools, then relay_image or relay_extract as needed, then relay_finish or relay_release. Always call relay_finish or relay_release explicitly before you return an answer; ending the session only pauses lease renewal, it does not destroy the VM, and the backend's own expiry is the last-resort safeguard. A refused, uncertain or nonzero operation keeps the VM so you can diagnose and submit a corrected operation; never replay input whose effect is uncertain. A tool result, an attached image or a verified evidence package, is evidence for a human reviewer, never the review itself. The relay never targets a physical or local display and offers no video or spawn API. Every tool's text result is capped at 50 KiB / 2000 lines; a larger result is retained whole in a local file the result names.";
 var RelayManager = class {
-  constructor(options) {
-    this.options = options;
-    this.environment = options.environment ?? selectedEnvironment();
-    this.tartHome = this.environment?.profile.tartHome ?? canonicalPath(options.tartHome ?? process.env.TART_HOME ?? join14(process.env.HOME ?? homedir4(), ".tart"));
-    this.tartPath = this.environment?.profile.tartPath ?? options.tartPath ?? process.env.TART ?? "tart";
-    if (this.environment && (options.stateRoot && canonicalPath(options.stateRoot) !== this.environment.profile.relayStateDir || options.tartHome && canonicalPath(options.tartHome) !== this.tartHome || options.tartPath && canonicalPath(options.tartPath) !== this.tartPath)) throw new Error("Injected paths conflict with the selected environment");
-    this.vm = options.vm ?? new VmService({ baseUrl: this.environment?.profile.vmServiceUrl ?? process.env.MCP_VM_RELAY_URL, environment: this.environment });
-    this.registry = options.registry ?? new Registry(this.environment ? { managedRoot: this.environment.profile.relayStateDir } : {});
-    this.root = join14(this.environment?.profile.relayStateDir ?? options.stateRoot ?? relayStateRoot(), hash(options.sessionId).slice(0, 32));
+  constructor(options2) {
+    this.options = options2;
+    this.environment = options2.environment ?? selectedEnvironment();
+    this.tartHome = this.environment?.profile.tartHome ?? canonicalPath(options2.tartHome ?? process.env.TART_HOME ?? join15(process.env.HOME ?? homedir4(), ".tart"));
+    this.tartPath = this.environment?.profile.tartPath ?? options2.tartPath ?? process.env.TART ?? "tart";
+    if (this.environment && (options2.stateRoot && canonicalPath(options2.stateRoot) !== this.environment.profile.relayStateDir || options2.tartHome && canonicalPath(options2.tartHome) !== this.tartHome || options2.tartPath && canonicalPath(options2.tartPath) !== this.tartPath)) throw new Error("Injected paths conflict with the selected environment");
+    this.vm = options2.vm ?? new VmService({ baseUrl: this.environment?.profile.vmServiceUrl ?? process.env.MCP_VM_RELAY_URL, environment: this.environment });
+    this.registry = options2.registry ?? new Registry(this.environment ? { managedRoot: this.environment.profile.relayStateDir } : {});
+    this.root = join15(this.environment?.profile.relayStateDir ?? options2.stateRoot ?? relayStateRoot(), hash(options2.sessionId).slice(0, 32));
     this.channel = {
-      exec: async (name, argv2, timeoutMs2 = 18e4, options2) => {
-        const result2 = await this.vm.exec(name, { argv: argv2, timeout: Math.ceil(timeoutMs2 / 1e3) }, { timeoutMs: options2?.timeoutMs ?? timeoutMs2 + 3e4, signal: options2?.signal });
+      exec: async (name, argv2, timeoutMs2 = 18e4, options3) => {
+        const result2 = await this.vm.exec(name, { argv: argv2, timeout: Math.ceil(timeoutMs2 / 1e3) }, { timeoutMs: options3?.timeoutMs ?? timeoutMs2 + 3e4, signal: options3?.signal });
         return { stdout: result2.output, stderr: result2.output, code: result2.rc };
       },
       push: (name, local_path, remote_path) => this.vm.push(name, { local_path, remote_path }),
-      pull: (name, remote_path, local_path, options2) => this.vm.pull(name, { remote_path, local_path }, options2)
+      pull: (name, remote_path, local_path, options3) => this.vm.pull(name, { remote_path, local_path }, options3)
     };
   }
   vm;
@@ -28336,11 +29744,11 @@ var RelayManager = class {
   }
   async init(hostOnly = false) {
     if (this.initialized) return;
-    await mkdir9(this.root, { recursive: true, mode: 448 });
+    await mkdir10(this.root, { recursive: true, mode: 448 });
     if (!this.ownerLock) {
-      this.ownerLock = await acquireOwnerLock(join14(this.root, "owner.lock"));
+      this.ownerLock = await acquireOwnerLock(join15(this.root, "owner.lock"));
       try {
-        this.enclosure = JSON.parse(await readFile10(join14(this.root, "lease.json"), "utf8"));
+        this.enclosure = JSON.parse(await readFile11(join15(this.root, "lease.json"), "utf8"));
       } catch (e) {
         if (e.code !== "ENOENT") {
           await this.unlock();
@@ -28375,7 +29783,7 @@ var RelayManager = class {
       const expected = this.binding();
       return Object.keys(e.backend).length === Object.keys(expected).length && Object.entries(expected).every(([key, value]) => e.backend[key] === value);
     }
-    return !this.environment && new URL(this.vm.baseUrl).origin === "http://localhost:6240" && this.tartHome === canonicalPath(join14(process.env.HOME ?? homedir4(), ".tart"));
+    return !this.environment && new URL(this.vm.baseUrl).origin === "http://localhost:6240" && this.tartHome === canonicalPath(join15(process.env.HOME ?? homedir4(), ".tart"));
   }
   assertBinding() {
     if (this.enclosure && !this.bindingMatches(this.enclosure)) throw new Error("Owned lease belongs to a different or unknown VM environment; select its original environment before operating on it");
@@ -28387,7 +29795,7 @@ var RelayManager = class {
     if (!health.ok || !matchesEnvironment(health.environment, this.environment)) throw new Error("VM service environment identity mismatch; no lease operation was performed");
   }
   async save() {
-    await jsonFile(join14(this.root, "lease.json"), this.enclosure ?? null);
+    await jsonFile(join15(this.root, "lease.json"), this.enclosure ?? null);
   }
   async unlock() {
     if (this.ownerLock) {
@@ -28443,8 +29851,8 @@ var RelayManager = class {
   async attach() {
     const e = this.current();
     if (!e.sessionId || !e.node) throw new Error("Persisted staged session lacks runtime identity");
-    const relay = Relay.open(join14(e.hostRoot, "host", "submissions"));
-    this.transport = new VmTransport(this.transfer(), e.guestRoot, join14(e.hostRoot, "host"), e.cuaDriver);
+    const relay = Relay.open(join15(e.hostRoot, "host", "submissions"));
+    this.transport = new VmTransport(this.transfer(), e.guestRoot, join15(e.hostRoot, "host"), e.cuaDriver);
     this.session = await relay.attach(e.sessionId, this.transport);
   }
   search(query, signal, toolCallId) {
@@ -28476,7 +29884,8 @@ var RelayManager = class {
               checks.push({ name, ready: false, diagnostic: String(error2) });
             }
           }
-          const facts2 = { scope, observedAt: (/* @__PURE__ */ new Date()).toISOString(), owned: this.status(), checks, captureVerified: false, browserVerified: false };
+          const targets = await this.targetAvailability(e, checks);
+          const facts2 = { scope, observedAt: (/* @__PURE__ */ new Date()).toISOString(), owned: this.status(), checks, targets, captureVerified: false, browserVerified: false };
           await this.log("guest-readiness", void 0, facts2);
           return facts2;
         });
@@ -28490,7 +29899,7 @@ var RelayManager = class {
         relay = { reachable: false, diagnostic: String(error2) };
       }
       const facts = { scope: "host", local, relay, environment: this.environment?.identity, owned: this.status(), capabilities: { image: imageCapability } };
-      await jsonFile(join14(this.root, "probes", `${Date.now()}-${randomUUID6()}.json`), facts);
+      await jsonFile(join15(this.root, "probes", `${Date.now()}-${randomUUID7()}.json`), facts);
       await this.log("probe", void 0, facts);
       return facts;
     });
@@ -28598,12 +30007,12 @@ var RelayManager = class {
   transfer() {
     const e = this.current();
     if (!e.node) throw new Error("Stage runtime first");
-    return new Transfer(this.channel, e.lease.vm, e.node, { guestRoot: e.guestRoot, hostTempRoot: join14(this.root, "transfer-tmp"), onRetry: (event) => this.log("transfer-retry", void 0, event) });
+    return new Transfer(this.channel, e.lease.vm, e.node, { guestRoot: e.guestRoot, hostTempRoot: join15(this.root, "transfer-tmp"), onRetry: (event) => this.log("transfer-retry", void 0, event) });
   }
   async log(kind, because, details = {}) {
     if (because !== void 0) this.reason(because);
     const e = this.enclosure;
-    if (e) await jsonFile(e.delivered ? join14(`${e.hostRoot}.lifecycle-events`, `${Date.now()}-${randomUUID6()}.json`) : join14(e.hostRoot, "host", "events", `${Date.now()}-${randomUUID6()}.json`), { kind, because, at: (/* @__PURE__ */ new Date()).toISOString(), details });
+    if (e) await jsonFile(e.delivered ? join15(`${e.hostRoot}.lifecycle-events`, `${Date.now()}-${randomUUID7()}.json`) : join15(e.hostRoot, "host", "events", `${Date.now()}-${randomUUID7()}.json`), { kind, because, at: (/* @__PURE__ */ new Date()).toISOString(), details });
   }
   acquire(input, signal) {
     return this.serialized(async () => {
@@ -28619,7 +30028,7 @@ var RelayManager = class {
         within("/workspace", extraction.path);
         if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,100}$/.test(extraction.name) || names.has(extraction.name)) throw new Error("Extraction names must be unique safe basenames");
         if (extraction.name === "full-workspace") throw new Error("full-workspace is a reserved extraction name");
-        if (extraction.name === BROWSER_CAPTURES && extraction.path !== BROWSER_CAPTURES) throw new Error(`${BROWSER_CAPTURES} is reserved for the guest browser's page captures at workspace/${BROWSER_CAPTURES}`);
+        if (extraction.name === RELAY_RUN_OUTPUTS && extraction.path !== RELAY_RUN_OUTPUTS) throw new Error(`${RELAY_RUN_OUTPUTS} is reserved for relay_run results at workspace/${RELAY_RUN_OUTPUTS}`);
         names.add(extraction.name);
       }
       const ttlHours = input.ttlHours ?? 4;
@@ -28631,10 +30040,10 @@ var RelayManager = class {
         const capabilities = await this.readAcquisitionCapabilities(signal);
         if (!capabilities.options.vnc.backends[images.images[input.image].kind].available) throw new Error("VNC backend unavailable for this image OS; ordinary acquisition was not attempted");
       }
-      const purpose = `relay-${input.task}-${randomUUID6().slice(0, 8)}`;
+      const purpose = `relay-${input.task}-${randomUUID7().slice(0, 8)}`;
       const startedAt = (/* @__PURE__ */ new Date()).toISOString();
       const stamp = startedAt.slice(0, 19).replace(/[T:]/g, "-") + "-Z";
-      const hostRoot = join14(this.options.outputRoot ?? resolve9(this.options.project, "relay-evidence"), purpose);
+      const hostRoot = join15(this.options.outputRoot ?? resolve9(this.options.project, "relay-evidence"), purpose);
       const row = { machine: this.environment ? `${this.environment.profile.vmServiceUrl} (${this.environment.profile.id}; ${purpose})` : `127.0.0.1 (vm-service ${purpose})`, os: input.image, taskName: purpose, agent: `mcp-vm-relay ${this.options.sessionId}`, project: resolve9(this.options.project), startDate: stamp };
       this.enclosure = { backend: this.binding(), purpose, task: input.task, image: input.image, project: this.options.project, startedAt, guestRoot: `/var/tmp/${stamp}-mcp-vm-relay-${purpose}`, hostRoot, ttlHours, extractions: input.extractions, fullWorkspace: input.fullWorkspace ?? false, row, staged: false };
       await this.save();
@@ -28642,7 +30051,7 @@ var RelayManager = class {
         await this.registry.add(row);
         await this.log("acquire-intent", void 0, input);
         try {
-          await cp(join14(this.root, "probes"), join14(hostRoot, "host", "probes"), { recursive: true, errorOnExist: true, force: false });
+          await cp(join15(this.root, "probes"), join15(hostRoot, "host", "probes"), { recursive: true, errorOnExist: true, force: false });
         } catch (error2) {
           if (error2.code !== "ENOENT") throw error2;
         }
@@ -28666,7 +30075,7 @@ var RelayManager = class {
         this.enclosure.expiresAt = this.enclosure.lease.ttl_expires_at;
         this.startHeartbeat();
         await this.save();
-        return { ...this.status(), guestRoot: this.enclosure.guestRoot, workspace: join14(this.enclosure.guestRoot, "workspace"), declarations: input.extractions };
+        return { ...this.status(), guestRoot: this.enclosure.guestRoot, workspace: join15(this.enclosure.guestRoot, "workspace"), declarations: input.extractions };
       } catch (error2) {
         await this.fail(error2);
         throw error2;
@@ -28737,54 +30146,41 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
       const e = this.current();
       if (e.delivered) throw new Error("Evidence already sealed; release this VM explicitly");
       if (input.resetRecording || e.pendingReset) await this.resetRecording();
-      if (e.staged && (input.workspace || input.files?.length || input.browser)) throw new Error("Runtime already staged; use diagnostic exec for repairs or stage with only corrected executable paths");
+      if (e.staged && (input.workspace || input.files?.length)) throw new Error("Runtime already staged; use diagnostic exec for repairs or stage with only corrected executable paths");
       const bundle = this.options.runtimeBundle ?? fileURLToPath(new URL("../dist/receiver.mjs", import.meta.url));
       await access(bundle);
       const node2 = input.nodePath ?? e.node ?? "node";
-      const transfer = new Transfer(this.channel, e.lease.vm, node2, { guestRoot: e.guestRoot, hostTempRoot: join14(this.root, "transfer-tmp"), onRetry: (event) => this.log("transfer-retry", void 0, event) });
+      const transfer = new Transfer(this.channel, e.lease.vm, node2, { guestRoot: e.guestRoot, hostTempRoot: join15(this.root, "transfer-tmp"), onRetry: (event) => this.log("transfer-retry", void 0, event) });
       await transfer.checked([node2, "--version"]);
+      const launchChanged = e.mcpHost && (input.nodePath !== void 0 && input.nodePath !== e.node || input.cuaDriver !== void 0 && input.cuaDriver !== e.cuaDriver || input.browserExecutable !== void 0 && input.browserExecutable !== e.browserExecutable);
       e.node = node2;
       e.cuaDriver = input.cuaDriver ?? e.cuaDriver ?? (e.lease.image_kind === "macos" ? "/Applications/CuaDriver.app/Contents/MacOS/cua-driver" : "cua-driver");
+      if (input.browserExecutable !== void 0) e.browserExecutable = input.browserExecutable;
       await this.save();
+      if (launchChanged) await this.stopMcpHost("corrected executable paths");
       if (e.staged) {
         await this.session?.close();
         await this.attach();
-        return { staged: true, workspace: join14(e.guestRoot, "workspace"), owned: this.status(), files: [], extractions: e.extractions };
+        return { staged: true, workspace: join15(e.guestRoot, "workspace"), owned: this.status(), files: [], extractions: e.extractions };
       }
-      await transfer.checked(["/bin/mkdir", "-p", join14(e.guestRoot, "workspace"), join14(e.guestRoot, "state")]);
-      const staged = [await transfer.pushFile(bundle, join14(e.guestRoot, "receiver.mjs"))];
-      for (const file of input.files ?? []) staged.push(await transfer.pushFile(resolve9(this.options.project, file.local), within(join14(e.guestRoot, "support"), file.path), file.local.startsWith("/") ? dirname9(resolve9(file.local)) : resolve9(this.options.project)));
-      if (input.workspace) staged.push(...await transfer.pushTree(resolve9(this.options.project, input.workspace), join14(e.guestRoot, "workspace"), input.workspace.startsWith("/") ? resolve9(input.workspace) : resolve9(this.options.project)));
-      if (input.browser && !e.browser) {
-        const browserBundle = fileURLToPath(new URL("../dist/browser.mjs", import.meta.url));
-        staged.push(await transfer.pushFile(browserBundle, join14(e.guestRoot, "browser.mjs")));
-        if (!e.extractions.some((item) => item.name === BROWSER_CAPTURES)) {
-          e.extractions.push({ path: BROWSER_CAPTURES, name: BROWSER_CAPTURES });
-          await this.save();
-        }
-        const config2 = { stateDir: join14(e.guestRoot, "browser"), workspace: join14(e.guestRoot, "workspace"), captureDir: join14(e.guestRoot, "workspace", BROWSER_CAPTURES), settleTimeoutMs: input.browser.settleTimeoutMs, playwrightModule: input.browser.playwrightModule };
-        const localConfig = join14(e.hostRoot, "host", "browser-config.json");
-        await jsonFile(localConfig, config2);
-        await transfer.pushFile(localConfig, join14(e.guestRoot, "browser-config.json"));
-        await transfer.checked([node2, join14(e.guestRoot, "browser.mjs"), "start", join14(e.guestRoot, "browser-config.json")], 9e4);
-        e.browser = true;
-        e.browserConfig = input.browser;
-        await this.save();
-      }
+      await transfer.checked(["/bin/mkdir", "-p", join15(e.guestRoot, "workspace"), join15(e.guestRoot, "state")]);
+      const staged = [await transfer.pushFile(bundle, join15(e.guestRoot, "receiver.mjs"))];
+      for (const file of input.files ?? []) staged.push(await transfer.pushFile(resolve9(this.options.project, file.local), within(join15(e.guestRoot, "support"), file.path), file.local.startsWith("/") ? dirname9(resolve9(file.local)) : resolve9(this.options.project)));
+      if (input.workspace) staged.push(...await transfer.pushTree(resolve9(this.options.project, input.workspace), join15(e.guestRoot, "workspace"), input.workspace.startsWith("/") ? resolve9(input.workspace) : resolve9(this.options.project)));
       await this.log("stage", void 0, { files: staged, extractions: e.extractions });
-      const relay = Relay.open(join14(e.hostRoot, "host", "submissions"));
-      this.transport = new VmTransport(transfer, e.guestRoot, join14(e.hostRoot, "host"), e.cuaDriver);
+      const relay = Relay.open(join15(e.hostRoot, "host", "submissions"));
+      this.transport = new VmTransport(transfer, e.guestRoot, join15(e.hostRoot, "host"), e.cuaDriver);
       relay.useTransport(() => this.transport);
       this.session = await relay.start({ taskId: e.purpose, target: `vm-service:${e.lease.vm}` });
       e.sessionId = this.session.sessionId;
       e.staged = true;
       await this.save();
-      return { staged: true, workspace: join14(e.guestRoot, "workspace"), files: staged, extractions: e.extractions, capabilities: { image: imageCapability } };
+      return { staged: true, workspace: join15(e.guestRoot, "workspace"), files: staged, extractions: e.extractions, capabilities: { image: imageCapability } };
     }));
   }
   run(input, signal) {
     return this.serialized(() => {
-      this.reason(input.because);
+      if (input.because !== void 0) this.reason(input.because);
       return this.guarded(signal, async () => {
         const e = this.current();
         const timeoutMs2 = input.timeoutMs ?? 12e4;
@@ -28793,53 +30189,261 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
         if (e.delivered) throw new Error("Evidence already sealed; release this VM explicitly");
         if (input.diagnostic) return this.diagnostic(input, timeoutMs2);
         if (e.pendingReset) throw new Error("Recording reset is pending; retry stage to reconcile it, or use diagnostic exec");
-        if (!e.staged || !this.session || !this.transport) throw new Error("Use relay action=stage before action=run, or exec diagnostic=true for setup diagnosis and repair");
-        if (!input.step?.id?.trim() || !input.step.title?.trim() || !input.step.expected?.trim()) throw new Error("step id, title and expected result are required");
-        if (!input.snapshots || typeof input.snapshots !== "object") throw new Error("snapshots with an agent-supplied interval is required");
-        const interval2 = input.snapshots.group?.afterIntervalMs ?? input.snapshots.afterIntervalMs;
-        if ((!input.snapshots.group || input.snapshots.group.phase === "last") && (!Number.isFinite(interval2) || interval2 < 0 || interval2 > 3e5)) throw new Error("Supply afterIntervalMs between 0 and 300000; no default");
-        this.transport.because = input.because;
-        this.transport.timeoutMs = timeoutMs2;
-        this.transport.diagnostic = input.diagnostic ?? false;
-        const options = { step: input.step, snapshots: input.snapshots, cwd: join14(e.guestRoot, "workspace") };
+        if (!e.staged || !this.session || !this.transport) throw new Error("Use relay_stage before a run, or relay_exec diagnostic=true for setup diagnosis and repair");
+        let argv2, callTimeoutMs = timeoutMs2;
+        if (input.kind === "mcp") {
+          if (!input.target || !input.tool) throw new Error("relay_run requires target and tool");
+          const refusal = await this.prepareMcp(e, input.target, input.tool, input.args ?? {}, signal);
+          if (refusal) return { ...refusal, timeoutMs: timeoutMs2, evidencePath: e.hostRoot, leaseReleased: false, imageDelivery: { status: "not-requested", diagnostic: "Nothing was sent, so no snapshot was taken." } };
+          callTimeoutMs = Math.min(timeoutMs2, 36e5 - MCP_START_ALLOWANCE_MS - 15e3);
+          argv2 = [e.node, join15(e.guestRoot, "mcp-host.mjs"), "call", join15(e.guestRoot, "mcp"), input.target, input.tool, JSON.stringify(input.args ?? {}), String(callTimeoutMs), String(MCP_START_ALLOWANCE_MS)];
+        }
+        const record3 = this.derive(e, input);
+        await this.save();
+        this.transport.because = record3.because;
+        this.transport.timeoutMs = input.kind === "mcp" ? callTimeoutMs + MCP_START_ALLOWANCE_MS + 15e3 : timeoutMs2;
+        this.transport.diagnostic = false;
+        const options2 = { step: record3.step, snapshots: record3.snapshots, cwd: join15(e.guestRoot, "workspace") };
         let result2;
-        if (input.kind === "exec") {
-          if (!input.argv?.length) throw new Error("exec requires argv");
-          result2 = await this.session.exec(input.argv, options);
-        } else if (input.kind === "cua") {
-          if (!input.tool) throw new Error("cua requires tool");
-          const directAccessibility = input.tool === "set_value" || e.lease.image_kind === "macos" && input.tool === "type_text" || ["click", "double_click", "right_click", "press_key"].includes(input.tool) && input.args?.element_index !== void 0;
-          if (directAccessibility && input.step.inputMode !== "accessibility") throw new Error("This CUA form directly uses accessibility APIs. Use real pixel/keyboard input for ordinary tests, or explicitly label inputMode accessibility.");
-          result2 = await this.session.exec([e.cuaDriver, "call", input.tool, "--json", JSON.stringify(input.args ?? {})], options);
-        } else if (input.kind === "browser") {
-          if (!e.browser || !input.browser) throw new Error("Enable browser support in relay action=stage and supply a browser operation");
-          const { action: type, ...args } = input.browser;
-          result2 = await this.session.exec([e.node, join14(e.guestRoot, "browser.mjs"), "call", join14(e.guestRoot, "browser"), JSON.stringify({ type, ...args }), String(timeoutMs2)], options);
+        if (input.kind === "exec" || input.kind === "mcp") {
+          argv2 ??= input.argv;
+          if (!argv2?.length) throw new Error("exec requires argv");
+          result2 = await this.session.exec(argv2, options2);
         } else if (input.kind === "script") {
           if (!input.localPath || !input.language) throw new Error("script requires localPath and language");
           await assertHostPath(input.localPath.startsWith("/") ? dirname9(input.localPath) : resolve9(this.options.project), resolve9(this.options.project, input.localPath));
-          result2 = await this.session.runScript(resolve9(this.options.project, input.localPath), join14(e.guestRoot, "scripts", `${randomUUID6()}.${input.language === "python" ? "py" : input.language === "typescript" ? "ts" : "js"}`), input.language, options);
+          result2 = await this.session.runScript(resolve9(this.options.project, input.localPath), join15(e.guestRoot, "scripts", `${randomUUID7()}.${input.language === "python" ? "py" : input.language === "typescript" ? "ts" : "js"}`), input.language, options2);
         } else if (input.kind === "code") {
           if (typeof input.code !== "string" || !input.language) throw new Error("code requires code and language");
-          result2 = await this.session.runCode(input.code, input.language, options);
+          result2 = await this.session.runCode(input.code, input.language, options2);
         } else throw new Error("Unknown operation kind");
         const outcome = result2.outcome;
         if (outcome.kind !== "completed" || outcome.exitStatus.code !== 0 || outcome.exitStatus.signal) {
-          await this.log("execution-failed", input.because, result2);
+          await this.log("execution-failed", record3.because, result2);
           await this.fail(new Error(`Execution ${result2.executionId}: ${JSON.stringify(outcome)}`));
         }
         const imageDelivery = await this.imageStore().get({ source: "display", sessionId: e.sessionId, executionId: result2.executionId, phase: "after" }, signal);
-        let browser;
-        if (input.kind === "browser" && typeof this.transport?.response?.stdout === "string") {
-          try {
-            const parsed = JSON.parse(this.transport.response.stdout.trim().split("\n").at(-1) ?? "");
-            if (parsed && typeof parsed === "object" && parsed.ok === true) browser = parsed.result;
-          } catch {
-          }
-        }
-        return { ...result2, ...this.transport?.response, ...browser !== void 0 ? { browser } : {}, timeoutMs: timeoutMs2, evidencePath: e.hostRoot, leaseReleased: !this.enclosure, owned: this.status(), imageDelivery };
+        const common2 = { step: record3.step, snapshots: record3.snapshots, timeoutMs: timeoutMs2, evidencePath: e.hostRoot, leaseReleased: !this.enclosure, owned: this.status(), imageDelivery };
+        if (input.kind === "mcp") return { ...result2, ...await this.mcpResult(e, input.target, input.tool, outcome, signal), ...common2 };
+        return { ...result2, ...this.transport?.response, ...common2 };
       });
     });
+  }
+  /**
+   * The step record for a run, from the call itself: a title such as
+   * `playwright.browser_click`, an expected result, an input mode, a default
+   * after-snapshot wait and a reason. Anything the caller gave overrides it.
+   */
+  derive(e, input) {
+    const seq = e.runSeq = (e.runSeq ?? 0) + 1;
+    const stepId = (prefix) => `${prefix.replace(/[^A-Za-z0-9_.-]+/g, "-").replace(/^[^A-Za-z0-9]+/, "").slice(0, 100) || "run"}-${seq}`;
+    if (input.kind === "mcp") {
+      const title2 = `${input.target}.${input.tool}`.slice(0, 500);
+      const args = input.args ?? {};
+      const accessibility = input.target === "cua" && (input.tool === "set_value" || e.lease.image_kind === "macos" && input.tool === "type_text" || ["click", "double_click", "right_click", "press_key"].includes(input.tool) && args.element_index !== void 0);
+      return {
+        because: input.because ?? `Relay ${title2} (no reason given)`,
+        step: { id: stepId(title2), title: title2, expected: input.expected ?? `${title2} returns without a tool error`, inputMode: accessibility ? "accessibility" : "ordinary" },
+        snapshots: { afterIntervalMs: input.afterIntervalMs ?? DEFAULT_AFTER_INTERVAL_MS[input.target] }
+      };
+    }
+    const title = input.step?.title ?? (input.kind === "exec" ? `exec ${(input.argv ?? []).map((arg, index) => index === 0 ? arg.split("/").at(-1) : arg).join(" ")}` : input.kind === "script" ? `script ${input.localPath?.split("/").at(-1) ?? ""}` : `code (${input.language ?? "unknown"})`).slice(0, 500);
+    const snapshots2 = { ...input.snapshots ?? {} };
+    const group = snapshots2.group;
+    if (!group ? snapshots2.afterIntervalMs === void 0 : group.phase === "last" && group.afterIntervalMs === void 0 && snapshots2.afterIntervalMs === void 0) Object.assign(snapshots2, { afterIntervalMs: DEFAULT_AFTER_INTERVAL_MS.command });
+    return {
+      because: input.because ?? `Relay ${title} (no reason given)`.slice(0, 4e3),
+      step: { id: input.step?.id ?? stepId(input.kind), title: title || input.kind, expected: input.step?.expected ?? "Exits with status 0", inputMode: input.step?.inputMode ?? "ordinary" },
+      snapshots: snapshots2
+    };
+  }
+  /** Stage what a target needs, start the guest MCP host, and check the call against the target's real tool schema. Returns a refusal when nothing may be sent. */
+  async prepareMcp(e, target2, tool, args, signal) {
+    const transfer = this.transfer();
+    await this.ensureMcpHost(e, transfer);
+    await this.ensureTargetPackages(e, target2, transfer, signal);
+    const tools = await this.toolList(e, target2, transfer);
+    const refuse = async (diagnostic, extra) => {
+      await this.log("relay-run-refused", void 0, { target: target2, tool, diagnostic, ...extra });
+      return { executionId: null, outcome: { kind: "refused", diagnostic }, relayOutcome: "refused", sent: false, target: target2, tool, ...extra, owned: this.status() };
+    };
+    const definition = tools.find((item) => item.name === tool);
+    if (!definition) return refuse(`${target2} has no tool named ${tool}; nothing was sent. Use relay_tools to see its tools.`, { tools: tools.map((item) => item.name) });
+    const check = checkArguments(definition.inputSchema, args);
+    if (!check.valid) return refuse(`args do not match ${target2}.${tool}'s input schema; nothing was sent`, { errors: check.errors, inputSchema: definition.inputSchema });
+    if (Buffer.byteLength(JSON.stringify(args)) > 64 * 1024) return refuse("args exceed 64 KiB; nothing was sent", {});
+    return void 0;
+  }
+  /** Map the guest MCP host's answer to the run result: the target's own text and images pass through, bounded; the full result stays in the workspace. */
+  async mcpResult(e, target2, tool, outcome, signal) {
+    const response = this.transport?.response;
+    let summary2;
+    try {
+      const parsed = JSON.parse(String(response?.stdout ?? "").trim().split("\n").at(-1) ?? "");
+      if (parsed?.relayRun === 1) summary2 = parsed;
+    } catch {
+    }
+    if (summary2?.hostUnavailable) {
+      e.mcpHost = false;
+      this.toolLists.clear();
+      await this.save();
+    }
+    const relayOutcome = outcome.kind !== "completed" ? outcome.kind : outcome.exitStatus?.code === 0 ? "completed" : outcome.exitStatus?.code === 3 ? "completed-with-tool-error" : "completed-nonzero";
+    const passthrough = [];
+    const toolImages = [];
+    const content = [];
+    let lines = 0;
+    const resultFile = summary2?.resultFile ? `workspace/${RELAY_RUN_OUTPUTS}/${summary2.resultFile}` : void 0;
+    for (const block of summary2?.content ?? []) {
+      if (typeof block.text === "string") {
+        const kept = block.text.split("\n").slice(0, Math.max(0, 2e3 - lines));
+        lines += kept.length;
+        const text4 = kept.join("\n"), cut = block.truncated || text4.length < block.text.length;
+        passthrough.push({ type: "text", text: cut ? `${text4}
+[Truncated. Full result: ${resultFile}]` : text4 });
+        content.push({ type: block.type, ...block.uri ? { uri: block.uri } : {}, chars: block.text.length, ...cut ? { truncated: true } : {} });
+      } else if (block.type === "image" && block.path) {
+        if (!["image/png", "image/jpeg", "image/webp"].includes(block.mimeType ?? "")) toolImages.push({ status: "presentation-unavailable", path: block.path, mimeType: block.mimeType, diagnostic: "Only PNG, JPEG and WebP images are delivered inline." });
+        else if (toolImages.length >= MAX_TOOL_IMAGES) toolImages.push({ status: "not-requested", path: block.path, diagnostic: `Beyond ${MAX_TOOL_IMAGES} inline images; retrieve with relay_image source=application name=${RELAY_RUN_OUTPUTS} path=${block.path}.` });
+        else {
+          const { content: image, ...delivery } = await this.imageStore().get({ source: "application", name: RELAY_RUN_OUTPUTS, path: block.path }, signal);
+          toolImages.push({ ...delivery, path: block.path });
+          if (image) passthrough.push(image);
+        }
+        content.push({ type: "image", path: block.path, mimeType: block.mimeType, bytes: block.bytes });
+      } else content.push(block);
+    }
+    return {
+      relayOutcome,
+      target: target2,
+      tool,
+      ...summary2 ? { toolOutcome: summary2.outcome, sent: summary2.sent, ...summary2.diagnostic ? { toolDiagnostic: summary2.diagnostic } : {}, ...summary2.errors ? { errors: summary2.errors } : {}, content, ...summary2.structuredContent !== void 0 ? { structuredContent: summary2.structuredContent } : {}, ...summary2.structuredContentOmitted ? { structuredContentOmitted: true } : {}, ...resultFile ? { resultFile } : {}, toolImages } : { toolOutcome: "unknown", stdout: response?.stdout, stderr: response?.stderr },
+      ...response?.stderr ? { stderr: response.stderr } : {},
+      ...response?.terminationConfirmed !== void 0 ? { terminationConfirmed: response.terminationConfirmed } : {},
+      passthrough
+    };
+  }
+  toolLists = /* @__PURE__ */ new Map();
+  /** A target's real `tools/list`, from the in-guest server, pulled home hash-checked and kept in the host evidence. */
+  async toolList(e, target2, transfer) {
+    const cached2 = this.toolLists.get(target2);
+    if (cached2) return cached2;
+    const stateDir = join15(e.guestRoot, "mcp");
+    await transfer.checked([e.node, join15(e.guestRoot, "mcp-host.mjs"), "tools", stateDir, target2], MCP_START_ALLOWANCE_MS * 2 + 2e4);
+    const bytes = await transfer.pullFrame(join15(stateDir, "tools", `${target2}.json`), join15(e.hostRoot, "host", "mcp-tools", `${target2}-${Date.now()}-${randomUUID7().slice(0, 8)}.json`), e.guestRoot, e.hostRoot);
+    const parsed = JSON.parse(bytes.toString("utf8"));
+    if (parsed?.target !== target2 || !Array.isArray(parsed.tools)) throw new Error(`Malformed tool list from ${target2}`);
+    const tools = parsed.tools.filter((item) => typeof item?.name === "string" && item.inputSchema && typeof item.inputSchema === "object").map((item) => ({ name: item.name, ...typeof item.description === "string" ? { description: item.description } : {}, inputSchema: item.inputSchema }));
+    this.toolLists.set(target2, tools);
+    return tools;
+  }
+  /** Push and start the guest MCP host once per launch configuration. It starts each target's server on first use. */
+  async ensureMcpHost(e, transfer) {
+    if (!e.extractions.some((item) => item.name === RELAY_RUN_OUTPUTS)) {
+      e.extractions.push({ path: RELAY_RUN_OUTPUTS, name: RELAY_RUN_OUTPUTS });
+      await this.save();
+    }
+    if (e.mcpHost) return;
+    const bundle = this.options.mcpHostBundle ?? fileURLToPath(new URL("../dist/mcp-host.mjs", import.meta.url));
+    const entry = join15(e.guestRoot, "mcp-host.mjs");
+    const staged = await transfer.pushFile(bundle, entry);
+    const context = { node: e.node, cuaDriver: e.cuaDriver, packagesRoot: join15(e.guestRoot, "mcp", "packages"), workspace: join15(e.guestRoot, "workspace"), outputDir: join15(e.guestRoot, "workspace", RELAY_RUN_OUTPUTS), ...e.browserExecutable ? { browserExecutable: e.browserExecutable } : {} };
+    const config2 = { stateDir: join15(e.guestRoot, "mcp"), outputDir: context.outputDir, targets: (this.options.targetLaunches ?? targetLaunches)(context), startTimeoutMs: MCP_START_ALLOWANCE_MS };
+    const local = join15(e.hostRoot, "host", "mcp-host-config.json");
+    await jsonFile(local, config2);
+    await transfer.pushFile(local, join15(e.guestRoot, "mcp-host-config.json"), e.hostRoot);
+    const answer = await transfer.checked([e.node, entry, "start", join15(e.guestRoot, "mcp-host-config.json")], 6e4);
+    e.mcpHost = true;
+    this.toolLists.clear();
+    await this.save();
+    await this.log("mcp-host-start", void 0, { bundle: staged, config: config2, answer: answer.trim().slice(0, 2e3) });
+  }
+  /** Stage a browser target's pinned packages: host-verified tarballs, pushed hash-checked, unpacked in the guest. */
+  async ensureTargetPackages(e, target2, transfer, signal) {
+    if (target2 === "cua" || e.mcpPackages?.includes(target2)) return;
+    const closure = this.options.targetPackages?.[target2] ?? TARGET_PACKAGES[target2];
+    const cache = this.options.packageCache ?? join15(dirname9(this.root), "mcp-packages");
+    const specs = [], staged = [];
+    for (const pin of closure.packages) {
+      const local = await cachedTarball(cache, pin, this.options.tarballSource, signal);
+      const remote = join15(e.guestRoot, "mcp", "tarballs", tarballName(pin));
+      staged.push({ ...pin, ...await transfer.pushFile(local.path, remote, cache) });
+      specs.push(`${pin.name}=${remote}=${local.sha256}`);
+    }
+    if (specs.length) await transfer.checked([e.node, join15(e.guestRoot, "mcp-host.mjs"), "install", join15(e.guestRoot, "mcp", "packages", "node_modules"), ...specs], 18e4);
+    e.mcpPackages = [...e.mcpPackages ?? [], target2];
+    await this.save();
+    await this.log("mcp-target-staged", void 0, { target: target2, packages: staged });
+  }
+  /** Stop the guest MCP host and its servers. Best effort: destroying the VM remains the final cleanup. */
+  async stopMcpHost(reason2) {
+    const e = this.enclosure;
+    if (!e?.mcpHost || !e.node || !e.lease) return;
+    try {
+      const result2 = await this.channel.exec(e.lease.vm, [e.node, join15(e.guestRoot, "mcp-host.mjs"), "stop", join15(e.guestRoot, "mcp")], 3e4);
+      await this.log("mcp-host-stop", void 0, { reason: reason2, code: result2.code, output: result2.stdout.slice(0, 2e3) });
+    } catch (error2) {
+      await this.log("mcp-host-stop-failed", void 0, { reason: reason2, error: String(error2) }).catch(() => {
+      });
+    }
+    e.mcpHost = false;
+    this.toolLists.clear();
+    await this.save();
+  }
+  /** relay_tools: a target's real tools (names, descriptions, input schemas), optionally one. */
+  tools(target2, tool, signal) {
+    return this.serialized(() => this.guarded(signal, async () => {
+      const e = this.current();
+      if (e.delivered) throw new Error("Evidence already sealed; release this VM explicitly");
+      if (!e.staged) throw new Error("Use relay_stage before relay_tools");
+      const transfer = this.transfer();
+      await this.ensureMcpHost(e, transfer);
+      await this.ensureTargetPackages(e, target2, transfer, signal);
+      const tools = await this.toolList(e, target2, transfer);
+      const selected = tool === void 0 ? tools : tools.filter((item) => item.name === tool);
+      if (tool !== void 0 && !selected.length) throw new Error(`${target2} has no tool named ${tool}; it has: ${tools.map((item) => item.name).join(", ")}`);
+      await this.log("tools", void 0, { target: target2, tool, count: selected.length });
+      return { target: target2, count: selected.length, tools: selected };
+    }));
+  }
+  /** Per-target facts for probe scope=guest, without installing or starting anything. */
+  async targetAvailability(e, checks) {
+    const node2 = checks.find((check) => check.name === "node")?.ready ?? false;
+    const driver = checks.find((check) => check.name === "cuaDriver")?.ready ?? false;
+    const candidates = e.browserExecutable ? [e.browserExecutable] : e.lease.image_kind === "macos" ? ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"] : ["/opt/google/chrome/chrome", "/usr/bin/google-chrome", "/usr/bin/google-chrome-stable"];
+    let browser = { path: null };
+    if (node2) {
+      try {
+        const r = await this.channel.exec(e.lease.vm, [e.node ?? "node", "-e", 'const fs=require("fs");console.log(JSON.stringify({path:process.argv.slice(1).find(p=>{try{fs.accessSync(p,fs.constants.X_OK);return true}catch{return false}})??null}))', ...candidates], 1e4);
+        browser = JSON.parse(r.stdout.trim().split("\n").at(-1) ?? "{}");
+      } catch (error2) {
+        browser = { path: null, diagnostic: String(error2) };
+      }
+    }
+    let servers = {};
+    if (e.mcpHost && node2) {
+      try {
+        const r = await this.channel.exec(e.lease.vm, [e.node ?? "node", join15(e.guestRoot, "mcp-host.mjs"), "status", join15(e.guestRoot, "mcp")], 1e4);
+        servers = JSON.parse(r.stdout.trim().split("\n").at(-1) ?? "{}").targets ?? {};
+      } catch (error2) {
+        servers = { diagnostic: String(error2) };
+      }
+    }
+    const browserTarget = (target2) => ({
+      available: node2 && !!browser.path,
+      node: node2,
+      browserExecutable: browser.path,
+      browserCandidates: candidates,
+      packages: e.mcpPackages?.includes(target2) ? "staged" : "staged from the host cache on first use",
+      pinned: TARGET_PACKAGES[target2].packages.map((pin) => `${pin.name}@${pin.version}`),
+      server: servers[target2] ?? { state: "not-started" }
+    });
+    return {
+      cua: { available: driver, launch: [e.cuaDriver ?? "cua-driver", "mcp"], ...e.lease.image_kind === "macos" ? {} : { requires: "cua-driver serve --no-overlay running on native X11" }, server: servers.cua ?? { state: "not-started" } },
+      playwright: browserTarget("playwright"),
+      "chrome-devtools": browserTarget("chrome-devtools"),
+      note: "Availability means the executables exist; it never proves a browser renders on the display or that capture works."
+    };
   }
   imageStore() {
     const e = this.current();
@@ -28847,7 +30451,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
       owner: this.options.sessionId,
       enclosure: e.purpose,
       backend: e.backend,
-      catalogRoot: join14(this.root, "image-catalog", e.purpose),
+      catalogRoot: join15(this.root, "image-catalog", e.purpose),
       hostRoot: e.hostRoot,
       guestRoot: e.guestRoot,
       sessionId: e.sessionId,
@@ -28855,13 +30459,13 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
       declarations: e.extractions,
       transfer: this.transfer(),
       ensureGuest: async (signal, deadline) => {
-        const options = { signal, timeoutMs: Math.max(1, Math.min(1e4, deadline - Date.now())) };
+        const options2 = { signal, timeoutMs: Math.max(1, Math.min(1e4, deadline - Date.now())) };
         if (this.environment) {
-          const health = await this.vm.health(options);
+          const health = await this.vm.health(options2);
           if (!health.ok || !matchesEnvironment(health.environment, this.environment)) throw Object.assign(new Error("Selected backend identity changed."), { code: "unauthorized-reference" });
         }
         try {
-          const lease = await this.vm.get(e.lease.vm, options);
+          const lease = await this.vm.get(e.lease.vm, options2);
           if (lease.purpose !== e.purpose) throw Object.assign(new Error("Lease ownership identity changed."), { code: "unauthorized-reference" });
         } catch (error2) {
           if (error2 instanceof VmServiceError && error2.status === 404) throw Object.assign(new Error("Saved image guest is no longer available."), { code: "stale-reference" });
@@ -28870,7 +30474,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
       }
     });
   }
-  image(target, signal) {
+  image(target2, signal) {
     const deadline = Date.now() + 9e4;
     const bounded3 = AbortSignal.any([...signal ? [signal] : [], AbortSignal.timeout(9e4)]);
     return this.serialized(async () => {
@@ -28879,26 +30483,26 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
       this.assertBinding();
       if (bounded3.aborted) return { status: "transfer-failed", diagnostic: "Image delivery cancelled or deadline exceeded while loading ownership." };
       if (!this.enclosure || this.enclosure.released || this.enclosure.delivered) return { status: "stale-reference", diagnostic: "Enclosure is closed or sealed; inspect delivered originals with the host read tool." };
-      return this.imageStore().get(target, bounded3, deadline);
+      return this.imageStore().get(target2, bounded3, deadline);
     });
   }
   async resetRecording() {
     const e = this.current();
     if (!e.staged || !e.sessionId) throw new Error("Recording reset requires a staged recording");
     if (!e.pendingReset) {
-      const id2 = randomUUID6();
+      const id2 = randomUUID7();
       e.pendingReset = { id: id2, from: e.hostRoot, fromSession: e.sessionId, to: `${e.hostRoot}-recording-${id2.slice(0, 8)}` };
       await this.save();
     }
     const reset = e.pendingReset;
     const transfer = this.transfer();
-    const archive = join14(e.guestRoot, "recordings", reset.id);
+    const archive = join15(e.guestRoot, "recordings", reset.id);
     const marker = await transfer.checked([e.node, "-e", 'const fs=require("fs"),p=require("path");console.log(fs.existsSync(p.join(process.argv[1],"recordings",process.argv[2]))?"archived":"current");', e.guestRoot, reset.id]);
     const attempts = `${reset.from}.reset-attempts`;
-    const incoming = join14(attempts, randomUUID6(), "state");
-    await transfer.pullVerified(marker.trim() === "archived" ? archive : join14(e.guestRoot, "state"), incoming, e.guestRoot, attempts);
+    const incoming = join15(attempts, randomUUID7(), "state");
+    await transfer.pullVerified(marker.trim() === "archived" ? archive : join15(e.guestRoot, "state"), incoming, e.guestRoot, attempts);
     await this.imageStore().materializeDisplayOriginals(reset.from);
-    await refreshEvidenceState(incoming, join14(reset.from, "state"), join14(attempts, "previous"));
+    await refreshEvidenceState(incoming, join15(reset.from, "state"), join15(attempts, "previous"));
     await this.log("recording-reset-intent", void 0, reset);
     await transfer.checked([e.node, "-e", `const fs=require('fs'),p=require('path');const [root,id]=process.argv.slice(1);if(fs.existsSync(p.join(root,'.receiver-lock')))throw Error('Receiver lock exists; diagnose active execution before recording reset');const state=p.join(root,'state'),archive=p.join(root,'recordings',id),marker=p.join(root,'.recording-reset-'+id+'.json');if(!fs.existsSync(marker)){fs.mkdirSync(p.dirname(archive),{recursive:true});if(!fs.existsSync(archive))fs.renameSync(state,archive);else if(fs.existsSync(state)&&fs.readdirSync(state).length)throw Error('Reset destination is not empty');fs.mkdirSync(state,{recursive:true});fs.writeFileSync(marker,JSON.stringify({id,archive}),{flag:'wx'});}console.log('recording archived');`, e.guestRoot, reset.id]);
     await this.session?.close();
@@ -28918,11 +30522,11 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
     for (const name of names) {
       const declaration = e.extractions.find((item) => item.name === name);
       if (!declaration) throw new Error(`Undeclared extraction: ${name}`);
-      const destination = join14(e.hostRoot, "extractions", name, randomUUID6());
-      const facts = await transfer.pullVerified(within(join14(e.guestRoot, "workspace"), declaration.path), destination, join14(e.guestRoot, "workspace"), e.hostRoot);
+      const destination = join15(e.hostRoot, "extractions", name, randomUUID7());
+      const facts = await transfer.pullVerified(within(join15(e.guestRoot, "workspace"), declaration.path), destination, join15(e.guestRoot, "workspace"), e.hostRoot);
       results.push({ ...declaration, destination, facts });
     }
-    await jsonFile(join14(e.hostRoot, "host", "extractions", `${randomUUID6()}.json`), { extractions: results });
+    await jsonFile(join15(e.hostRoot, "host", "extractions", `${randomUUID7()}.json`), { extractions: results });
     return results;
   }
   extract(names, signal) {
@@ -28944,7 +30548,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
     }
     if (e.fullWorkspace) {
       try {
-        await this.transfer().pullVerified(join14(e.guestRoot, "workspace"), join14(e.hostRoot, "extractions", "full-workspace", randomUUID6()), e.guestRoot, e.hostRoot);
+        await this.transfer().pullVerified(join15(e.guestRoot, "workspace"), join15(e.hostRoot, "extractions", "full-workspace", randomUUID7()), e.guestRoot, e.hostRoot);
       } catch (error2) {
         await this.log("workspace-incomplete", void 0, { error: String(error2) }).catch(() => {
         });
@@ -28955,10 +30559,10 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
     const e = this.current();
     if (!e.staged || !e.sessionId) throw new Error("No staged session to package");
     const attempts = `${e.hostRoot}.finalization-attempts`;
-    const incoming = join14(attempts, randomUUID6(), "state");
-    await this.transfer().pullVerified(join14(e.guestRoot, "state"), incoming, e.guestRoot, attempts);
+    const incoming = join15(attempts, randomUUID7(), "state");
+    await this.transfer().pullVerified(join15(e.guestRoot, "state"), incoming, e.guestRoot, attempts);
     await this.imageStore().materializeDisplayOriginals(e.hostRoot);
-    await refreshEvidenceState(incoming, join14(e.hostRoot, "state"), join14(attempts, "previous"));
+    await refreshEvidenceState(incoming, join15(e.hostRoot, "state"), join15(attempts, "previous"));
     const result2 = await deliverPackage(e.hostRoot, { packageId: `pkg-${e.purpose}`, sessionId: e.sessionId, taskId: e.purpose });
     e.delivered = result2;
     await this.save();
@@ -28969,8 +30573,9 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
       const e = this.current();
       await this.log("finish");
       if (!e.delivered) {
+        await this.stopMcpHost("finish");
         await this.extractInternal(e.extractions.map((item) => item.name));
-        if (e.fullWorkspace) await this.transfer().pullVerified(join14(e.guestRoot, "workspace"), join14(e.hostRoot, "extractions", "full-workspace", randomUUID6()), e.guestRoot, e.hostRoot);
+        if (e.fullWorkspace) await this.transfer().pullVerified(join15(e.guestRoot, "workspace"), join15(e.hostRoot, "extractions", "full-workspace", randomUUID7()), e.guestRoot, e.hostRoot);
       }
       const result2 = e.delivered ?? await this.packageInternal();
       await this.releaseInternal("finished");
@@ -28986,20 +30591,20 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
   }
   async diagnostic(input, timeoutMs2) {
     const e = this.current();
-    if (!input.argv?.length || input.snapshots.group) throw new Error("Diagnostic exec requires argv and cannot join a snapshot group");
-    const executionId = `diagnostic-${randomUUID6()}`;
+    if (!input.argv?.length || input.snapshots?.group) throw new Error("Diagnostic exec requires argv and cannot join a snapshot group");
+    const executionId = `diagnostic-${randomUUID7()}`;
     const request = { executionId, at: (/* @__PURE__ */ new Date()).toISOString(), evidenceMode: "diagnostic", timeoutMs: timeoutMs2, ...input };
-    await jsonFile(join14(e.hostRoot, "host", "diagnostics", `${executionId}.request.json`), request);
+    await jsonFile(join15(e.hostRoot, "host", "diagnostics", `${executionId}.request.json`), request);
     let result2;
     try {
-      const argv2 = e.staged ? ["/bin/sh", "-c", 'cd "$1" || exit; shift; exec "$@"', "relay-diagnostic", join14(e.guestRoot, "workspace"), ...input.argv] : input.argv;
+      const argv2 = e.staged ? ["/bin/sh", "-c", 'cd "$1" || exit; shift; exec "$@"', "relay-diagnostic", join15(e.guestRoot, "workspace"), ...input.argv] : input.argv;
       const r = await this.channel.exec(e.lease.vm, argv2, timeoutMs2);
       result2 = { executionId, outcome: { kind: "completed", exitStatus: { code: r.code, signal: null } }, stdout: r.stdout, stderr: r.stderr };
     } catch (error2) {
       result2 = { executionId, outcome: { kind: "uncertain", diagnostic: String(error2) }, stdout: "", stderr: String(error2) };
     }
     const response = { ...result2, timeoutMs: timeoutMs2, evidenceMode: "diagnostic", screenshotEvidence: false, imageDelivery: { status: "not-requested", diagnostic: "Diagnostic execution has no screenshot evidence." }, evidencePath: e.hostRoot, leaseReleased: false, owned: this.status() };
-    await jsonFile(join14(e.hostRoot, "host", "diagnostics", `${executionId}.receipt.json`), response);
+    await jsonFile(join15(e.hostRoot, "host", "diagnostics", `${executionId}.receipt.json`), response);
     if (result2.outcome.kind !== "completed" || result2.outcome.exitStatus.code !== 0) await this.fail(new Error(JSON.stringify(result2.outcome)));
     return response;
   }
@@ -29011,6 +30616,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
       try {
         await this.log("release");
         if (this.enclosure?.staged && !this.enclosure.delivered) {
+          await this.stopMcpHost("release");
           await this.extractAvailable();
           await this.packageInternal();
         }
@@ -29122,13 +30728,14 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
 // src/schema.ts
 var closed2 = { additionalProperties: false };
 var reason = typebox_exports.String({ minLength: 1, maxLength: 4e3, pattern: "\\S", description: "Intent of this execution. Retained as evidence, never identity, authorization or a retry key." });
-var interval = typebox_exports.Number({ minimum: 0, maximum: 3e5, description: "Agent-chosen wait in milliseconds from dispatch completion to after-capture. Required per event or on group last. No default or stability polling; choose for text echo, dialog or game semantics." });
+var optionalReason = typebox_exports.Optional(typebox_exports.String({ minLength: 1, maxLength: 4e3, pattern: "\\S", description: "Optional intent, retained as evidence. Default: derived from the call." }));
+var interval = typebox_exports.Number({ minimum: 0, maximum: 3e5, description: "Wait in milliseconds from the end of the call to the after-snapshot. Optional; the relay has a default." });
 var id = typebox_exports.String({ pattern: "^[A-Za-z0-9][A-Za-z0-9_.-]{0,119}$" });
 var snapshots = typebox_exports.Object({
   afterIntervalMs: typebox_exports.Optional(interval),
   group: typebox_exports.Optional(typebox_exports.Object({ groupId: id, phase: StringEnum(["first", "member", "last"]), afterIntervalMs: typebox_exports.Optional(interval) }, closed2))
-}, { ...closed2, description: "Standalone event requires afterIntervalMs. Explicit consecutive text group uses first/member/last; last requires an interval. No inferred groups." });
-var step = typebox_exports.Object({ id, title: typebox_exports.String({ minLength: 1, maxLength: 500 }), expected: typebox_exports.String({ minLength: 1, maxLength: 4e3 }), inputMode: StringEnum(["ordinary", "accessibility"]) }, closed2);
+}, { ...closed2, description: "Optional. Consecutive keystrokes may form an explicit text group (first/member/last); only first gets a before-snapshot and only last an after-snapshot." });
+var step = typebox_exports.Object({ id: typebox_exports.Optional(id), title: typebox_exports.Optional(typebox_exports.String({ minLength: 1, maxLength: 500 })), expected: typebox_exports.Optional(typebox_exports.String({ minLength: 1, maxLength: 4e3 })), inputMode: typebox_exports.Optional(StringEnum(["ordinary", "accessibility"])) }, { ...closed2, description: "Optional step record overrides; any field left out is derived from the call." });
 var imageTarget = typebox_exports.Union([
   typebox_exports.Object({ source: typebox_exports.Literal("display"), sessionId: id, executionId: typebox_exports.String({ pattern: "^[A-Za-z0-9][A-Za-z0-9_.-]{0,159}$" }), phase: StringEnum(["before", "after"]) }, closed2),
   typebox_exports.Object({ source: typebox_exports.Literal("application"), name: typebox_exports.String({ minLength: 1, maxLength: 101 }), path: typebox_exports.Optional(typebox_exports.String({ minLength: 1, maxLength: 4096 })) }, closed2),
@@ -29137,15 +30744,8 @@ var imageTarget = typebox_exports.Union([
 var argv = typebox_exports.Array(typebox_exports.String(), { minItems: 1, maxItems: 256 });
 var language = StringEnum(["javascript", "typescript", "python"]);
 var timeoutMs = typebox_exports.Optional(typebox_exports.Integer({ minimum: 1, maximum: 36e5, description: "Execution timeout in milliseconds, default 120000, maximum 3600000. Independent of snapshot delay and lease TTL." }));
-var runBase = { action: typebox_exports.Literal("run"), reason, step, snapshots, timeoutMs };
-var browserEvent = typebox_exports.Union([
-  typebox_exports.Object({ action: typebox_exports.Literal("navigate"), url: typebox_exports.String({ minLength: 1 }) }, closed2),
-  typebox_exports.Object({ action: typebox_exports.Literal("click"), selector: typebox_exports.String({ minLength: 1 }) }, closed2),
-  typebox_exports.Object({ action: typebox_exports.Literal("type"), selector: typebox_exports.String({ minLength: 1 }), text: typebox_exports.String() }, closed2),
-  typebox_exports.Object({ action: typebox_exports.Literal("press"), key: typebox_exports.String({ minLength: 1 }), selector: typebox_exports.String({ minLength: 1 }) }, closed2),
-  typebox_exports.Object({ action: typebox_exports.Literal("read"), selector: typebox_exports.String({ minLength: 1 }) }, closed2),
-  typebox_exports.Object({ action: typebox_exports.Literal("snapshot"), name: typebox_exports.Optional(typebox_exports.String({ pattern: "^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$", description: "Short safe name for this page capture." })) }, { ...closed2, description: "Capture the live page now: settle-waited PNG plus a record with the console lines since the last capture." })
-]);
+var runBase = { action: typebox_exports.Literal("run"), reason: optionalReason, step: typebox_exports.Optional(step), snapshots: typebox_exports.Optional(snapshots), timeoutMs };
+var target = StringEnum(TARGETS, { description: "cua (cua-driver), playwright (Playwright MCP) or chrome-devtools (Chrome DevTools MCP)." });
 var relayContract = typebox_exports.Union([
   typebox_exports.Object({ action: typebox_exports.Literal("search"), name: typebox_exports.String({ minLength: 1, maxLength: 256, pattern: "\\S" }), os: typebox_exports.Optional(StringEnum(["linux", "macos"])) }, closed2),
   typebox_exports.Object({ action: typebox_exports.Literal("acquisition-capabilities") }, closed2),
@@ -29170,13 +30770,23 @@ var relayContract = typebox_exports.Union([
     files: typebox_exports.Optional(typebox_exports.Array(typebox_exports.Object({ local: typebox_exports.String(), path: typebox_exports.String({ description: "Relative destination under guest support/." }) }, closed2))),
     nodePath: typebox_exports.Optional(typebox_exports.String({ description: "Guest Node executable, default node; use image nvm path if needed." })),
     cuaDriver: typebox_exports.Optional(typebox_exports.String({ description: "Guest CUA executable; OS default when omitted." })),
-    browser: typebox_exports.Optional(typebox_exports.Object({ playwrightModule: typebox_exports.Optional(typebox_exports.String({ description: "Guest Playwright module path; default resolution from workspace. No install or CDP attachment." })), settleTimeoutMs: typebox_exports.Optional(typebox_exports.Number({ minimum: 0, maximum: 6e4, description: "Longest wait for the page to settle (load, network idle, fonts, two frames) before each page capture; default 5000." })) }, { ...closed2, description: "Enable fresh persistent guest Chromium; empty object enables defaults." }))
+    browserExecutable: typebox_exports.Optional(typebox_exports.String({ description: "Guest browser executable for the playwright and chrome-devtools targets; default is installed Google Chrome." }))
   }, closed2),
   typebox_exports.Object({ ...runBase, kind: typebox_exports.Literal("exec"), argv, diagnostic: typebox_exports.Optional(typebox_exports.Boolean({ description: "Explicit command diagnosis or repair without screenshot evidence, including before staging. Commands and outcomes remain recorded. Never claim visual verification." })) }, closed2),
   typebox_exports.Object({ ...runBase, kind: typebox_exports.Literal("script"), localPath: typebox_exports.String({ minLength: 1 }), language }, closed2),
   typebox_exports.Object({ ...runBase, kind: typebox_exports.Literal("code"), code: typebox_exports.String({ maxLength: 1048576 }), language }, closed2),
-  typebox_exports.Object({ ...runBase, kind: typebox_exports.Literal("cua"), tool: typebox_exports.String({ minLength: 1 }), args: typebox_exports.Optional(typebox_exports.Record(typebox_exports.String(), typebox_exports.Unknown())) }, closed2),
-  typebox_exports.Object({ ...runBase, kind: typebox_exports.Literal("browser"), browser: browserEvent }, closed2),
+  typebox_exports.Object({
+    action: typebox_exports.Literal("run"),
+    kind: typebox_exports.Literal("mcp"),
+    target,
+    tool: typebox_exports.String({ minLength: 1, maxLength: 200, description: "The target server's own tool name." }),
+    args: typebox_exports.Optional(typebox_exports.Record(typebox_exports.String(), typebox_exports.Unknown(), { description: "The tool's own arguments, forwarded unchanged." })),
+    reason: optionalReason,
+    expected: typebox_exports.Optional(typebox_exports.String({ minLength: 1, maxLength: 4e3, description: "Optional expected result for the step record." })),
+    afterIntervalMs: typebox_exports.Optional(interval),
+    timeoutMs
+  }, closed2),
+  typebox_exports.Object({ action: typebox_exports.Literal("tools"), target, tool: typebox_exports.Optional(typebox_exports.String({ minLength: 1, maxLength: 200, description: "Optional: return only this tool." })) }, closed2),
   typebox_exports.Object({ action: typebox_exports.Literal("image"), target: imageTarget }, closed2),
   typebox_exports.Object({ action: typebox_exports.Literal("extract"), names: typebox_exports.Array(typebox_exports.String()) }, closed2),
   typebox_exports.Object({ action: typebox_exports.Literal("finish") }, closed2),
@@ -29191,9 +30801,9 @@ for (const branch of relayContract.anyOf) {
   }
 }
 var parameterObject = typebox_exports.Object({
-  action: StringEnum(["search", "probe", "acquire", "stage", "run", "image", "extract", "finish", "release", "acquisition-capabilities", "console-resolve", "console-open", "console-cancel"]),
+  action: StringEnum(["search", "probe", "acquire", "stage", "run", "tools", "image", "extract", "finish", "release", "acquisition-capabilities", "console-resolve", "console-open", "console-cancel"]),
   ...projected
-}, { ...closed2, anyOf: relayContract.anyOf, description: "Select exactly one action. Each closed branch defines allowed fields. Run requires reason and selects a kind; console-open requires reason, expected and userRequested=true. Other actions reject reason. No default action." });
+}, { ...closed2, anyOf: relayContract.anyOf, description: "Select exactly one action. Each closed branch defines allowed fields. Run selects a kind; console-open requires reason, expected and userRequested=true. No default action." });
 var relayParameters = typebox_exports.Unsafe(parameterObject);
 function branchFor(action, kind) {
   const found = relayContract.anyOf.find((branch) => {
@@ -29211,23 +30821,18 @@ function toolInputSchema(action, kind) {
   return { type: raw.type, properties, ...required2.length ? { required: required2 } : {}, additionalProperties: raw.additionalProperties ?? false };
 }
 function validateRelayInput(value) {
-  if (!Check2(relayContract, value)) throw new Error("Invalid relay input: action is required; run and console-open require nonblank reason. Supply only the fields for the selected action and run kind.");
-  if (value.action === "run") {
-    const s = value.snapshots;
-    if (value.kind === "exec" && value.diagnostic && s.group) throw new Error("Diagnostic commands cannot join snapshot groups.");
-    if (!s.group && s.afterIntervalMs === void 0) throw new Error("Standalone run requires snapshots.afterIntervalMs; no default interval.");
-    if (s.group?.phase === "last" && s.group.afterIntervalMs === void 0 && s.afterIntervalMs === void 0) throw new Error("Last text-group member requires afterIntervalMs.");
-  }
+  if (!Check2(relayContract, value)) throw new Error("Invalid relay input: action is required; console-open requires nonblank reason. Supply only the fields for the selected action and run kind.");
+  if (value.action === "run" && value.kind === "exec" && value.diagnostic && value.snapshots?.group) throw new Error("Diagnostic commands cannot join snapshot groups.");
 }
 
 // src/surface.ts
-import { mkdir as mkdir10, writeFile as writeFile5 } from "node:fs/promises";
-import { join as join15 } from "node:path";
+import { mkdir as mkdir11, writeFile as writeFile6 } from "node:fs/promises";
+import { join as join16 } from "node:path";
 import { tmpdir as tmpdir2 } from "node:os";
-import { randomUUID as randomUUID7 } from "node:crypto";
+import { randomUUID as randomUUID8 } from "node:crypto";
 var readOnly = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
 var acts = (openWorld, destructive = false) => ({ readOnlyHint: false, destructiveHint: destructive, idempotentHint: false, openWorldHint: openWorld });
-var runShared = "Shares relay_exec's `reason`, `step`, `snapshots` and `timeoutMs` fields: one admitted operation per call, an explicit `snapshots.afterIntervalMs` chosen for this event (no default), and a result carrying the execution identity and outcome plus the saved after-image inline when the plan captured it. A refused, uncertain or nonzero result keeps the VM; never replay input whose effect is uncertain.";
+var runShared = "Evidence is automatic, as for relay_exec, whose optional `reason`, `step`, `snapshots` and `timeoutMs` it shares.";
 var relayTools = [
   {
     name: "relay_search",
@@ -29241,7 +30846,7 @@ var relayTools = [
     action: "probe",
     title: "Probe host and guest readiness",
     annotations: readOnly,
-    description: 'Read-only host and service facts, used to judge whether a task is interruptive and to pick an image; it reports current owned state on its own, so call it again after context compaction rather than trusting earlier messages. Default `scope: "host"` reports host permissions and activity, VM service availability, and this session\'s owned lifecycle state, not guest readiness; unknown is not idle. `scope: "guest"` (on an already-owned VM) checks only that Node and the CuaDriver executable exist on the guest, before staging or after a repair, without installing anything, and never claims capture or browser readiness. Relay only interruptive work judged from these facts; non-disruptive or headless work stays with local tools. Continue in order: relay_acquire, relay_stage, a run tool, relay_image/relay_extract, then relay_finish or relay_release, called explicitly before you return.'
+    description: 'Read-only host and service facts, used to judge whether a task is interruptive and to pick an image; it reports current owned state on its own, so call it again after context compaction rather than trusting earlier messages. Default `scope: "host"` reports host permissions and activity, VM service availability, and this session\'s owned lifecycle state, not guest readiness; unknown is not idle. `scope: "guest"` (on an already-owned VM) reports whether Node, CuaDriver and each relay_run target (`cua`, `playwright`, `chrome-devtools`) are available, without installing or starting anything, and never claims capture readiness. Relay only interruptive work judged from these facts; non-disruptive or headless work stays with local tools. Continue in order: relay_acquire, relay_stage, relay_run (or a command tool), relay_image/relay_extract, then relay_finish or relay_release, called explicitly before you return.'
   },
   {
     name: "relay_acquisition_capabilities",
@@ -29255,14 +30860,14 @@ var relayTools = [
     action: "acquire",
     title: "Acquire a VM",
     annotations: acts(false),
-    description: "Acquire one fresh VM for this task and start its ownership heartbeat. Requires `task` (a short slug), `image` (a key from relay_probe or relay_search) and `extractions`: every output you intend to bring home, declared before any work (`[]` is allowed; nothing is extracted automatically). Optional `ttlHours` (default 4), `env` (a credential pack, never baked into images), `fullWorkspace` (opt in to deliver the whole workspace) and `vnc` (default false; only prepares console-sharing capacity, never opens a viewer). One task per enclosure: call this once per task, not again for another task. Continue with relay_stage, a run tool, relay_image/relay_extract, then relay_finish or relay_release explicitly before you return; a failed step keeps the VM for repair rather than replaying uncertain input."
+    description: "Acquire one fresh VM for this task and start its ownership heartbeat. Requires `task` (a short slug), `image` (a key from relay_probe or relay_search) and `extractions`: every output you intend to bring home, declared before any work (`[]` is allowed; nothing is extracted automatically). Optional `ttlHours` (default 4), `env` (a credential pack, never baked into images), `fullWorkspace` (opt in to deliver the whole workspace) and `vnc` (default false; only prepares console-sharing capacity, never opens a viewer). One task per enclosure: call this once per task, not again for another task. Continue with relay_stage, relay_run (or a command tool), relay_image/relay_extract, then relay_finish or relay_release explicitly before you return; a failed step keeps the VM for repair rather than replaying uncertain input."
   },
   {
     name: "relay_stage",
     action: "stage",
     title: "Stage the guest runtime",
     annotations: acts(false),
-    description: "Push and hash-check the guest runtime, plus an optional workspace, support files and browser, onto an already-acquired VM. A failed stage can be retried with corrected paths; once staged, only corrected executable paths (`nodePath`, `cuaDriver`) may be resubmitted, and staging success does not prove capture readiness. The guest Node and CuaDriver executables must already exist; `files` land under `support/`. Linux guests need native X11 and `cua-driver serve --no-overlay`. `browser: {}` enables a fresh persistent guest Playwright page (default settle timeout 5000 ms, `settleTimeoutMs` up to 60000; `playwrightModule` overrides the guest module path), never downloads a browser or attaches over CDP, and declares the extraction `browser-captures` automatically. `resetRecording: true` explicitly archives the current recording's evidence and starts a fresh recording on the same VM, keeping prior evidence available; it refuses while an existing receiver lock is held. Use it after diagnosing damaged recording state, then stage again."
+    description: "Push and hash-check the guest runtime, plus an optional workspace and support files (`files`, landing under `support/`), onto an acquired VM. The guest Node and CuaDriver executables must already exist (`nodePath`, `cuaDriver`); Linux guests need native X11 and `cua-driver serve --no-overlay`. `browserExecutable` names the guest browser the `playwright` and `chrome-devtools` targets launch (default: installed Google Chrome); their pinned servers are staged on first use. A failed stage can be retried; once staged, only corrected executable paths may be resubmitted, and staging does not prove capture readiness. `resetRecording: true` archives the current recording's evidence and starts a fresh recording on the same VM; it refuses while a receiver lock is held."
   },
   {
     name: "relay_exec",
@@ -29270,7 +30875,7 @@ var relayTools = [
     kind: "exec",
     title: "Run a guest command",
     annotations: acts(true),
-    description: "Run one admitted guest command as a single recorded operation; never hide several interactions in one call. Requires `reason` (intent, retained as evidence, never authorization), `step` (`id`, `title`, `expected` result, `inputMode`: `ordinary` for real pointer/keyboard input or `accessibility` for direct accessibility APIs), `snapshots` (an explicit `afterIntervalMs` chosen for this event's semantics, e.g. ~100 ms for a text echo, ~500 ms for a dialog, ~16 ms for a game frame; there is no default or stability detection) and `argv`. Consecutive keystrokes may be declared as an explicit text group with `snapshots.group` (`first`/`member`/`last`); the group's `last` member needs its own `afterIntervalMs`. Optional `timeoutMs` bounds only command execution (default 120000, up to 3600000), independent of the snapshot delay. A refused, uncertain or nonzero result keeps the VM for a repair operation; never replay input whose effect is uncertain. The result carries the execution identity and outcome, the guest's bounded stdout/stderr, and, when the snapshot plan captured the after phase, the saved after-image as an inline image block; inspect it before choosing the next step. Set `diagnostic: true` to record a command's diagnosis or repair without screenshot evidence, including before relay_stage; it cannot join a snapshot group and is never visual verification."
+    description: "Run one guest command (`argv`) as one recorded operation; never hide several interactions in one call. Evidence is automatic: the relay snapshots the display before and after and records a step derived from the command. Optional `reason` (intent, never authorization), `step` (`id`, `title`, `expected`, `inputMode`) and `snapshots.afterIntervalMs` (default 500 ms) enrich or tune the record; consecutive keystrokes may form an explicit text group with `snapshots.group` (`first`/`member`/`last`). `timeoutMs` bounds execution (default 120000, up to 3600000). The result carries the outcome, bounded stdout/stderr and the after-snapshot inline. A refused, uncertain or nonzero result keeps the VM; never replay input whose effect is uncertain. `diagnostic: true` records a diagnosis or repair without snapshots, even before relay_stage; it is never visual verification."
   },
   {
     name: "relay_script",
@@ -29289,27 +30894,26 @@ var relayTools = [
     description: `Run inline guest code as this call's single recorded operation. ${runShared} Requires \`code\` (up to 1 MiB) and \`language\` (\`javascript\`, \`typescript\` or \`python\`).`
   },
   {
-    name: "relay_cua",
+    name: "relay_run",
     action: "run",
-    kind: "cua",
-    title: "Run a CUA driver call",
+    kind: "mcp",
+    title: "Run an MCP tool call in the VM",
     annotations: acts(true),
-    description: `Run one CUA driver call as this call's single recorded operation. ${runShared} Requires \`tool\` and optional \`args\`. A direct-accessibility form (\`set_value\`; \`type_text\` on macOS; or \`click\`/\`double_click\`/\`right_click\`/\`press_key\` with \`args.element_index\`) requires \`step.inputMode: "accessibility"\`; otherwise use ordinary pointer/keyboard tools for real input.`
+    description: "Send one tool call to an MCP server inside the VM. `target` is `cua` (cua-driver), `playwright` (Playwright MCP) or `chrome-devtools` (Chrome DevTools MCP); `tool` and `args` are that server's own tool name and arguments, forwarded unchanged. Use relay_tools to see a target's exact tools. Evidence is automatic: snapshots before and after, and a step record; `reason`, `expected` and `afterIntervalMs` are optional overrides. Never replay an uncertain call."
   },
   {
-    name: "relay_browser",
-    action: "run",
-    kind: "browser",
-    title: "Send a browser event",
-    annotations: acts(true),
-    description: `Send one browser event (\`navigate\`, \`click\`, \`type\`, \`press\`, \`read\` or \`snapshot\`) as this call's single recorded operation, to the persistent guest Playwright page relay_stage enabled. ${runShared} After every input event the guest waits for the page to settle (load, network idle, fonts, two frames), bounded by relay_stage's \`settleTimeoutMs\` (default 5000 ms) and by this call's own deadline; the settle facts return as \`settled\`. An event that changed the address gets a landing capture of where it arrived; \`snapshot\` captures the current settled page on demand with an optional \`name\`. Captures and their console-line records land in \`workspace/browser-captures\` and come home with relay_finish. An event that misses its deadline has its browser context closed; the next event opens a fresh page, and nothing already dispatched is replayed.`
+    name: "relay_tools",
+    action: "tools",
+    title: "List a target's tools",
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    description: "List a relay_run target's real tools from its server inside the VM: names, descriptions and input schemas; `tool` returns just one. Starts the server if needed, without sending it any tool call. Requires relay_stage."
   },
   {
     name: "relay_image",
     action: "image",
     title: "Retrieve a saved image",
     annotations: readOnly,
-    description: "Retrieve one already-saved image; never a new capture, input or directory export, and it never acquires a VM. `target` selects a display phase (`sessionId`/`executionId`/`phase`: `before`/`after`), a declared application file (`name`, plus a relative `path` for a directory declaration), or an immutable `reference` (`imageId`). PNG, JPEG and WebP only; originals up to 64 MiB and 40,000,000 decoded pixels; the delivered preview is at most 2000x2000 px and 4 MiB of base64 (PNG originals are resampled in-process; JPEG/WebP pass through only within bounds). Each delivery has a 90-second deadline and up to three transfer attempts. If a run's inline image did not arrive, recover it here with the same `imageId` or display selector, never by repeating the input or capturing again, and stop after at most two such recovery calls if it still cannot be inspected. A closed enclosure returns `stale-reference` for a display or reference target; its delivered originals stay readable with host file tools. An attached image proves only that the block was included, not that anyone inspected or reviewed it."
+    description: 'Retrieve one already-saved image; never a new capture, input or directory export, and it never acquires a VM. `target` selects a display phase (`sessionId`/`executionId`/`phase`: `before`/`after`), a declared application file (`name`, plus a relative `path` for a directory declaration), or an immutable `reference` (`imageId`). PNG, JPEG and WebP only; originals up to 64 MiB and 40,000,000 decoded pixels; the delivered preview is at most 2000x2000 px and 4 MiB of base64 (PNG originals are resampled in-process; JPEG/WebP pass through only within bounds). Each delivery has a 90-second deadline and up to three transfer attempts. A relay_run tool image is the application file `name: "relay-run"` at the `path` its result gives. If a run\'s inline image did not arrive, recover it here with the same `imageId` or display selector, never by repeating the input or capturing again, and stop after at most two such recovery calls if it still cannot be inspected. A closed enclosure returns `stale-reference` for a display or reference target; its delivered originals stay readable with host file tools. An attached image proves only that the block was included, not that anyone inspected or reviewed it.'
   },
   {
     name: "relay_extract",
@@ -29363,13 +30967,13 @@ function relayToolInput(name, args) {
   return { action: tool.action, ...tool.kind ? { kind: tool.kind } : {}, ...args };
 }
 var relayResultKind = "relay-image-result-v1";
-async function renderRelayResult(value, resultRoot = join15(tmpdir2(), "mcp-vm-relay-results")) {
-  const full = JSON.stringify(value, null, 2);
+async function renderRelayResult(value, resultRoot = join16(tmpdir2(), "mcp-vm-relay-results"), indent = 2) {
+  const full = JSON.stringify(value, null, indent);
   const text4 = new TextDecoder().decode(Buffer.from(full.split("\n").slice(0, 2e3).join("\n")).subarray(0, 50 * 1024), { stream: true });
   if (text4 !== full) {
-    await mkdir10(resultRoot, { recursive: true, mode: 448 });
-    const path = join15(resultRoot, `${randomUUID7()}.json`);
-    await writeFile5(path, full, { mode: 384 });
+    await mkdir11(resultRoot, { recursive: true, mode: 448 });
+    const path = join16(resultRoot, `${randomUUID8()}.json`);
+    await writeFile6(path, full, { mode: 384 });
     return { text: `${text4}
 [Truncated. Full result: ${path}]`, details: { resultPath: path }, resultPath: path };
   }
@@ -29377,7 +30981,7 @@ async function renderRelayResult(value, resultRoot = join15(tmpdir2(), "mcp-vm-r
 }
 async function imageResult(value, delivery, executionFailed = false) {
   const { content: image, ...imageDelivery } = delivery;
-  const { imageDelivery: _, ...rest } = value;
+  const { imageDelivery: _, passthrough, ...rest } = value;
   const rendered = await renderRelayResult(rest);
   const failed = executionFailed || !["attached", "not-requested"].includes(delivery.status);
   return {
@@ -29387,13 +30991,14 @@ ${rendered.text}`,
     ...rendered.resultPath ? { resultPath: rendered.resultPath } : {},
     isError: failed,
     imageDelivery,
-    ...image ? { image } : {}
+    ...image ? { image } : {},
+    ...passthrough?.length ? { content: passthrough } : {}
   };
 }
-async function relayCall(host, raw, options = {}) {
+async function relayCall(host, raw, options2 = {}) {
   validateRelayInput(raw);
   const manager = typeof host === "function" ? host() : host;
-  const { signal, toolCallId } = options;
+  const { signal, toolCallId } = options2;
   let value;
   switch (raw.action) {
     case "acquisition-capabilities":
@@ -29426,11 +31031,15 @@ async function relayCall(host, raw, options = {}) {
     }
     case "run": {
       const { action: _, reason: because, ...input } = raw;
-      const execution = await manager.run({ ...input, because }, signal);
+      const execution = await manager.run({ ...input, ...because === void 0 ? {} : { because } }, signal);
       const failed = execution.outcome.kind !== "completed" || execution.outcome.exitStatus.code !== 0 || !!execution.outcome.exitStatus.signal;
       if ("imageDelivery" in execution) return imageResult(execution, execution.imageDelivery, failed);
       const rendered = await renderRelayResult(execution);
       return { ...rendered, isError: failed };
+    }
+    case "tools": {
+      const listed = await manager.tools(raw.target, raw.tool, signal);
+      return { ...await renderRelayResult(listed, void 0, void 0), isError: false };
     }
     case "image":
       return imageResult({}, await manager.image(raw.target, signal));
@@ -29456,7 +31065,8 @@ var PLUGIN_TOOL_PREFIX = "mcp__plugin_mcp-vm-relay_relay__";
 var message = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var text3 = (value, isError = false) => ({ content: [{ type: "text", text: value }], isError });
 function relayContent(result2) {
-  return { content: [{ type: "text", text: result2.text }, ...result2.image ? [{ type: "image", data: result2.image.data, mimeType: result2.image.mimeType }] : []], isError: result2.isError };
+  const passthrough = (result2.content ?? []).map((block) => block.type === "text" ? { type: "text", text: block.text } : { type: "image", data: block.data, mimeType: block.mimeType });
+  return { content: [{ type: "text", text: result2.text }, ...passthrough, ...result2.image ? [{ type: "image", data: result2.image.data, mimeType: result2.image.mimeType }] : []], isError: result2.isError };
 }
 function projectDirectory(env = process.env, cwd = process.cwd()) {
   const given = env.MCP_VM_RELAY_PROJECT;
@@ -29490,11 +31100,11 @@ async function openInBrowser(url) {
   if (process.platform === "darwin") await run("/usr/bin/open", ["-a", "Google Chrome", url]);
   else await run("xdg-open", [url]);
 }
-function createRelayServer(options = {}) {
-  const sessionId = options.sessionId ?? process.env.MCP_VM_RELAY_SESSION ?? randomUUID8();
-  const project = options.project ?? projectDirectory();
+function createRelayServer(options2 = {}) {
+  const sessionId = options2.sessionId ?? process.env.MCP_VM_RELAY_SESSION ?? randomUUID9();
+  const project = options2.project ?? projectDirectory();
   let manager;
-  const get = options.manager ?? (() => {
+  const get = options2.manager ?? (() => {
     if (!manager) {
       const environment = selectedEnvironment();
       manager = new RelayManager({ sessionId, project, environment, registry: new Registry(environment ? { managedRoot: environment.profile.relayStateDir } : {}) });
@@ -29518,7 +31128,7 @@ function createRelayServer(options = {}) {
         const root = resolve10(project, directory2.trim());
         const verified = await verifyDeliveredPackage(root);
         if (!verified.deliveryVerified) throw new Error(`Package failed verification; refusing to open viewer: ${JSON.stringify(verified)}`);
-        await (options.open ?? openInBrowser)(pathToFileURL(join16(root, "index.html")).href);
+        await (options2.open ?? openInBrowser)(pathToFileURL(join17(root, "index.html")).href);
         return text3(`Opened verified package: ${root}. Human review remains pending.`);
       }
       if (relayTools.some((tool) => tool.name === name)) return relayContent(await relayCall(get, relayToolInput(name, args ?? {}), { signal: extra.signal, toolCallId: String(extra.requestId) }));
