@@ -33,6 +33,8 @@ export interface DispatchResult {
 export interface ReceiveOptions {
   root?: string;
   cuaDriver?: string;
+  /** The staged guest MCP host entry, whose `call` output is classified; default `RELAY_MCP_HOST`. */
+  mcpHost?: string;
   /** Test seam only: production always dispatches an argv with shell:false. */
   dispatch?: (argv: readonly string[], options: { cwd?: string; env: NodeJS.ProcessEnv; timeoutMs: number }) => Promise<DispatchResult>;
   capture?: SnapshotCaptureFn;
@@ -407,6 +409,22 @@ export async function receive(input: unknown, options: ReceiveOptions = {}): Pro
           const diagnostic = `CUA structured failure: ${JSON.stringify(value)}`;
           return await retain({ ...response(value.code === 'desktop_escalation_required' ? 'refused' : 'uncertain', diagnostic), stdout: bounded(outcome.stdout), stderr: bounded(outcome.stderr) });
         }
+      }
+      // A relay_run call is dispatched as `node mcp-host.mjs call ...`; its one
+      // JSON line says whether the guest MCP host sent the call. Only a call the
+      // host proves it never sent (or that the server refused before any input)
+      // is refused; a call that may have reached the server and has no answer is
+      // uncertain; a completed call keeps its exit status (0, or 3 for the
+      // target's own tool error). The raw output stays in the journal either way.
+      const mcpHost = options.mcpHost ?? process.env.RELAY_MCP_HOST;
+      if (request.kind === "exec" && mcpHost && argv[1] === mcpHost && argv[2] === "call" && !outcome.spawnError && !outcome.timedOut && !outcome.outputTruncated) {
+        let summary: { relayRun?: number; outcome?: string; diagnostic?: string } | undefined;
+        try { summary = JSON.parse((outcome.stdout ?? "").trim().split("\n").at(-1) ?? ""); } catch { /* unreadable: judged below */ }
+        const readable = !!summary && typeof summary === "object" && summary.relayRun === 1;
+        const kept = { stdout: bounded(outcome.stdout), stderr: bounded(outcome.stderr) };
+        if (readable && summary!.outcome === "not-sent") return await retain({ ...response("refused", `MCP call not sent: ${summary!.diagnostic ?? "no diagnostic"}`), ...kept });
+        if (readable && summary!.outcome === "uncertain") return await retain({ ...response("uncertain", `MCP call outcome unknown: ${summary!.diagnostic ?? "no diagnostic"}`), ...kept });
+        if (!readable && outcome.exitStatus.code !== 0) return await retain({ ...response("uncertain", `MCP call ended without a readable answer (exit ${outcome.exitStatus.code ?? outcome.exitStatus.signal}); it may have reached the server`), ...kept });
       }
       const result: GuestResponse = outcome.spawnError || outcome.timedOut || outcome.outputTruncated
         ? response("uncertain", outcome.spawnError ?? (outcome.timedOut ? "execution timed out" : "execution exceeded output bound"))
