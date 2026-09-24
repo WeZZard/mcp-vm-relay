@@ -21,7 +21,7 @@ const readOnly: RelayToolAnnotations = { readOnlyHint: true, destructiveHint: fa
 /** A tool that acts on the VM. `destructive` is true only for the two tools that destroy it; `openWorld` is true only for the tools that run guest code, which may reach the network. */
 const acts = (openWorld: boolean, destructive = false): RelayToolAnnotations => ({ readOnlyHint: false, destructiveHint: destructive, idempotentHint: false, openWorldHint: openWorld });
 
-const runShared = 'Shares relay_exec\'s `reason`, `step`, `snapshots` and `timeoutMs` fields: one admitted operation per call, an explicit `snapshots.afterIntervalMs` chosen for this event (no default), and a result carrying the execution identity and outcome plus the saved after-image inline when the plan captured it. A refused, uncertain or nonzero result keeps the VM; never replay input whose effect is uncertain.';
+const runShared = 'Evidence is automatic, as for relay_exec, whose optional `reason`, `step`, `snapshots` and `timeoutMs` it shares.';
 
 export const relayTools: readonly RelayTool[] = [
   {
@@ -30,7 +30,7 @@ export const relayTools: readonly RelayTool[] = [
   },
   {
     name: 'relay_probe', action: 'probe', title: 'Probe host and guest readiness', annotations: readOnly,
-    description: 'Read-only host and service facts, used to judge whether a task is interruptive and to pick an image; it reports current owned state on its own, so call it again after context compaction rather than trusting earlier messages. Default `scope: "host"` reports host permissions and activity, VM service availability, and this session\'s owned lifecycle state, not guest readiness; unknown is not idle. `scope: "guest"` (on an already-owned VM) checks only that Node and the CuaDriver executable exist on the guest, before staging or after a repair, without installing anything, and never claims capture or browser readiness. Relay only interruptive work judged from these facts; non-disruptive or headless work stays with local tools. Continue in order: relay_acquire, relay_stage, a run tool, relay_image/relay_extract, then relay_finish or relay_release, called explicitly before you return.',
+    description: 'Read-only host and service facts, used to judge whether a task is interruptive and to pick an image; it reports current owned state on its own, so call it again after context compaction rather than trusting earlier messages. Default `scope: "host"` reports host permissions and activity, VM service availability, and this session\'s owned lifecycle state, not guest readiness; unknown is not idle. `scope: "guest"` (on an already-owned VM) reports whether Node, CuaDriver and each relay_run target (`cua`, `playwright`, `chrome-devtools`) are available, without installing or starting anything, and never claims capture readiness. Relay only interruptive work judged from these facts; non-disruptive or headless work stays with local tools. Continue in order: relay_acquire, relay_stage, relay_run (or a command tool), relay_image/relay_extract, then relay_finish or relay_release, called explicitly before you return.',
   },
   {
     name: 'relay_acquisition_capabilities', action: 'acquisition-capabilities', title: 'Read acquisition capabilities', annotations: readOnly,
@@ -38,15 +38,15 @@ export const relayTools: readonly RelayTool[] = [
   },
   {
     name: 'relay_acquire', action: 'acquire', title: 'Acquire a VM', annotations: acts(false),
-    description: 'Acquire one fresh VM for this task and start its ownership heartbeat. Requires `task` (a short slug), `image` (a key from relay_probe or relay_search) and `extractions`: every output you intend to bring home, declared before any work (`[]` is allowed; nothing is extracted automatically). Optional `ttlHours` (default 4), `env` (a credential pack, never baked into images), `fullWorkspace` (opt in to deliver the whole workspace) and `vnc` (default false; only prepares console-sharing capacity, never opens a viewer). One task per enclosure: call this once per task, not again for another task. Continue with relay_stage, a run tool, relay_image/relay_extract, then relay_finish or relay_release explicitly before you return; a failed step keeps the VM for repair rather than replaying uncertain input.',
+    description: 'Acquire one fresh VM for this task and start its ownership heartbeat. Requires `task` (a short slug), `image` (a key from relay_probe or relay_search) and `extractions`: every output you intend to bring home, declared before any work (`[]` is allowed; nothing is extracted automatically). Optional `ttlHours` (default 4), `env` (a credential pack, never baked into images), `fullWorkspace` (opt in to deliver the whole workspace) and `vnc` (default false; only prepares console-sharing capacity, never opens a viewer). One task per enclosure: call this once per task, not again for another task. Continue with relay_stage, relay_run (or a command tool), relay_image/relay_extract, then relay_finish or relay_release explicitly before you return; a failed step keeps the VM for repair rather than replaying uncertain input.',
   },
   {
     name: 'relay_stage', action: 'stage', title: 'Stage the guest runtime', annotations: acts(false),
-    description: 'Push and hash-check the guest runtime, plus an optional workspace, support files and browser, onto an already-acquired VM. A failed stage can be retried with corrected paths; once staged, only corrected executable paths (`nodePath`, `cuaDriver`) may be resubmitted, and staging success does not prove capture readiness. The guest Node and CuaDriver executables must already exist; `files` land under `support/`. Linux guests need native X11 and `cua-driver serve --no-overlay`. `browser: {}` enables a fresh persistent guest Playwright page (default settle timeout 5000 ms, `settleTimeoutMs` up to 60000; `playwrightModule` overrides the guest module path), never downloads a browser or attaches over CDP, and declares the extraction `browser-captures` automatically. `resetRecording: true` explicitly archives the current recording\'s evidence and starts a fresh recording on the same VM, keeping prior evidence available; it refuses while an existing receiver lock is held. Use it after diagnosing damaged recording state, then stage again.',
+    description: 'Push and hash-check the guest runtime, plus an optional workspace and support files (`files`, landing under `support/`), onto an acquired VM. The guest Node and CuaDriver executables must already exist (`nodePath`, `cuaDriver`); Linux guests need native X11 and `cua-driver serve --no-overlay`. `browserExecutable` names the guest browser the `playwright` and `chrome-devtools` targets launch (default: installed Google Chrome); their pinned servers are staged on first use. A failed stage can be retried; once staged, only corrected executable paths may be resubmitted, and staging does not prove capture readiness. `resetRecording: true` archives the current recording\'s evidence and starts a fresh recording on the same VM; it refuses while a receiver lock is held.',
   },
   {
     name: 'relay_exec', action: 'run', kind: 'exec', title: 'Run a guest command', annotations: acts(true),
-    description: 'Run one admitted guest command as a single recorded operation; never hide several interactions in one call. Requires `reason` (intent, retained as evidence, never authorization), `step` (`id`, `title`, `expected` result, `inputMode`: `ordinary` for real pointer/keyboard input or `accessibility` for direct accessibility APIs), `snapshots` (an explicit `afterIntervalMs` chosen for this event\'s semantics, e.g. ~100 ms for a text echo, ~500 ms for a dialog, ~16 ms for a game frame; there is no default or stability detection) and `argv`. Consecutive keystrokes may be declared as an explicit text group with `snapshots.group` (`first`/`member`/`last`); the group\'s `last` member needs its own `afterIntervalMs`. Optional `timeoutMs` bounds only command execution (default 120000, up to 3600000), independent of the snapshot delay. A refused, uncertain or nonzero result keeps the VM for a repair operation; never replay input whose effect is uncertain. The result carries the execution identity and outcome, the guest\'s bounded stdout/stderr, and, when the snapshot plan captured the after phase, the saved after-image as an inline image block; inspect it before choosing the next step. Set `diagnostic: true` to record a command\'s diagnosis or repair without screenshot evidence, including before relay_stage; it cannot join a snapshot group and is never visual verification.',
+    description: 'Run one guest command (`argv`) as one recorded operation; never hide several interactions in one call. Evidence is automatic: the relay snapshots the display before and after and records a step derived from the command. Optional `reason` (intent, never authorization), `step` (`id`, `title`, `expected`, `inputMode`) and `snapshots.afterIntervalMs` (default 500 ms) enrich or tune the record; consecutive keystrokes may form an explicit text group with `snapshots.group` (`first`/`member`/`last`). `timeoutMs` bounds execution (default 120000, up to 3600000). The result carries the outcome, bounded stdout/stderr and the after-snapshot inline. A refused, uncertain or nonzero result keeps the VM; never replay input whose effect is uncertain. `diagnostic: true` records a diagnosis or repair without snapshots, even before relay_stage; it is never visual verification.',
   },
   {
     name: 'relay_script', action: 'run', kind: 'script', title: 'Run a guest script', annotations: acts(true),
@@ -57,16 +57,16 @@ export const relayTools: readonly RelayTool[] = [
     description: `Run inline guest code as this call's single recorded operation. ${runShared} Requires \`code\` (up to 1 MiB) and \`language\` (\`javascript\`, \`typescript\` or \`python\`).`,
   },
   {
-    name: 'relay_cua', action: 'run', kind: 'cua', title: 'Run a CUA driver call', annotations: acts(true),
-    description: `Run one CUA driver call as this call's single recorded operation. ${runShared} Requires \`tool\` and optional \`args\`. A direct-accessibility form (\`set_value\`; \`type_text\` on macOS; or \`click\`/\`double_click\`/\`right_click\`/\`press_key\` with \`args.element_index\`) requires \`step.inputMode: "accessibility"\`; otherwise use ordinary pointer/keyboard tools for real input.`,
+    name: 'relay_run', action: 'run', kind: 'mcp', title: 'Run an MCP tool call in the VM', annotations: acts(true),
+    description: 'Send one tool call to an MCP server inside the VM. `target` is `cua` (cua-driver), `playwright` (Playwright MCP) or `chrome-devtools` (Chrome DevTools MCP); `tool` and `args` are that server\'s own tool name and arguments, forwarded unchanged. Use relay_tools to see a target\'s exact tools. Evidence is automatic: snapshots before and after, and a step record; `reason`, `expected` and `afterIntervalMs` are optional overrides. Never replay an uncertain call.',
   },
   {
-    name: 'relay_browser', action: 'run', kind: 'browser', title: 'Send a browser event', annotations: acts(true),
-    description: `Send one browser event (\`navigate\`, \`click\`, \`type\`, \`press\`, \`read\` or \`snapshot\`) as this call's single recorded operation, to the persistent guest Playwright page relay_stage enabled. ${runShared} After every input event the guest waits for the page to settle (load, network idle, fonts, two frames), bounded by relay_stage's \`settleTimeoutMs\` (default 5000 ms) and by this call's own deadline; the settle facts return as \`settled\`. An event that changed the address gets a landing capture of where it arrived; \`snapshot\` captures the current settled page on demand with an optional \`name\`. Captures and their console-line records land in \`workspace/browser-captures\` and come home with relay_finish. An event that misses its deadline has its browser context closed; the next event opens a fresh page, and nothing already dispatched is replayed.`,
+    name: 'relay_tools', action: 'tools', title: 'List a target\'s tools', annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    description: 'List a relay_run target\'s real tools from its server inside the VM: names, descriptions and input schemas; `tool` returns just one. Starts the server if needed, without sending it any tool call. Requires relay_stage.',
   },
   {
     name: 'relay_image', action: 'image', title: 'Retrieve a saved image', annotations: readOnly,
-    description: 'Retrieve one already-saved image; never a new capture, input or directory export, and it never acquires a VM. `target` selects a display phase (`sessionId`/`executionId`/`phase`: `before`/`after`), a declared application file (`name`, plus a relative `path` for a directory declaration), or an immutable `reference` (`imageId`). PNG, JPEG and WebP only; originals up to 64 MiB and 40,000,000 decoded pixels; the delivered preview is at most 2000x2000 px and 4 MiB of base64 (PNG originals are resampled in-process; JPEG/WebP pass through only within bounds). Each delivery has a 90-second deadline and up to three transfer attempts. If a run\'s inline image did not arrive, recover it here with the same `imageId` or display selector, never by repeating the input or capturing again, and stop after at most two such recovery calls if it still cannot be inspected. A closed enclosure returns `stale-reference` for a display or reference target; its delivered originals stay readable with host file tools. An attached image proves only that the block was included, not that anyone inspected or reviewed it.',
+    description: 'Retrieve one already-saved image; never a new capture, input or directory export, and it never acquires a VM. `target` selects a display phase (`sessionId`/`executionId`/`phase`: `before`/`after`), a declared application file (`name`, plus a relative `path` for a directory declaration), or an immutable `reference` (`imageId`). PNG, JPEG and WebP only; originals up to 64 MiB and 40,000,000 decoded pixels; the delivered preview is at most 2000x2000 px and 4 MiB of base64 (PNG originals are resampled in-process; JPEG/WebP pass through only within bounds). Each delivery has a 90-second deadline and up to three transfer attempts. A relay_run tool image is the application file `name: "relay-run"` at the `path` its result gives. If a run\'s inline image did not arrive, recover it here with the same `imageId` or display selector, never by repeating the input or capturing again, and stop after at most two such recovery calls if it still cannot be inspected. A closed enclosure returns `stale-reference` for a display or reference target; its delivered originals stay readable with host file tools. An attached image proves only that the block was included, not that anyone inspected or reviewed it.',
   },
   {
     name: 'relay_extract', action: 'extract', title: 'Extract declared outputs', annotations: acts(false),
@@ -120,13 +120,15 @@ export interface RelayCallResult extends RelayRendered {
   imageDelivery?: Omit<ImageResult, 'content'>;
   /** The delivered image, when the delivery attached one. */
   image?: RelayImageContent;
+  /** relay_run: the target tool's own text and delivered images, in its order, between the relay's text and its after-snapshot. */
+  content?: Array<{ type: 'text'; text: string } | RelayImageContent>;
 }
 /** The details kind of an image-bearing result; a front end may use it to tell such results apart. */
 export const relayResultKind = 'relay-image-result-v1';
 
 /** Text output is capped at 50 KiB / 2000 lines; a larger result is retained whole in a private local file. */
-export async function renderRelayResult(value: unknown, resultRoot = join(tmpdir(), 'mcp-vm-relay-results')): Promise<RelayRendered> {
-  const full = JSON.stringify(value, null, 2);
+export async function renderRelayResult(value: unknown, resultRoot = join(tmpdir(), 'mcp-vm-relay-results'), indent: number | undefined = 2): Promise<RelayRendered> {
+  const full = JSON.stringify(value, null, indent);
   const text = new TextDecoder().decode(Buffer.from(full.split('\n').slice(0, 2000).join('\n')).subarray(0, 50 * 1024), { stream: true });
   if (text !== full) {
     await mkdir(resultRoot, { recursive: true, mode: 0o700 });
@@ -144,14 +146,14 @@ export async function renderRelayResult(value: unknown, resultRoot = join(tmpdir
  */
 async function imageResult(value: Record<string, unknown>, delivery: ImageResult, executionFailed = false): Promise<RelayCallResult> {
   const { content: image, ...imageDelivery } = delivery;
-  const { imageDelivery: _, ...rest } = value;
+  const { imageDelivery: _, passthrough, ...rest } = value as Record<string, unknown> & { passthrough?: RelayCallResult['content'] };
   const rendered = await renderRelayResult(rest);
   const failed = executionFailed || !['attached', 'not-requested'].includes(delivery.status);
   return {
     text: `${JSON.stringify({ imageDelivery, executionFailed })}\n${rendered.text}`,
     details: { kind: relayResultKind, isError: failed, result: rendered.details, imageDelivery },
     ...(rendered.resultPath ? { resultPath: rendered.resultPath } : {}),
-    isError: failed, imageDelivery, ...(image ? { image } : {}),
+    isError: failed, imageDelivery, ...(image ? { image } : {}), ...(passthrough?.length ? { content: passthrough } : {}),
   };
 }
 
@@ -185,11 +187,16 @@ export async function relayCall(host: RelayManager | (() => RelayManager), raw: 
     }
     case 'run': {
       const { action: _, reason: because, ...input } = raw;
-      const execution = await manager.run({ ...input, because }, signal);
+      const execution = await manager.run({ ...input, ...(because === undefined ? {} : { because }) }, signal);
       const failed = execution.outcome.kind !== 'completed' || execution.outcome.exitStatus.code !== 0 || !!execution.outcome.exitStatus.signal;
       if ('imageDelivery' in execution) return imageResult(execution, execution.imageDelivery, failed);
       const rendered = await renderRelayResult(execution);
       return { ...rendered, isError: failed };
+    }
+    case 'tools': {
+      // Compact JSON keeps a long tool list within the text bound; a larger one is kept whole in a file the result names.
+      const listed = await manager.tools(raw.target, raw.tool, signal);
+      return { ...(await renderRelayResult(listed, undefined, undefined)), isError: false };
     }
     case 'image': return imageResult({}, await manager.image(raw.target, signal));
     case 'extract': value = await manager.extract(raw.names, signal); break;

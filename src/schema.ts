@@ -1,16 +1,18 @@
 import { Type, StringEnum } from './typebox.js';
 import type { Static, TSchema } from 'typebox';
 import { Check } from 'typebox/value';
+import { TARGETS } from './targets.js';
 
 const closed = { additionalProperties: false };
 const reason = Type.String({ minLength: 1, maxLength: 4000, pattern: '\\S', description: 'Intent of this execution. Retained as evidence, never identity, authorization or a retry key.' });
-const interval = Type.Number({ minimum: 0, maximum: 300000, description: 'Agent-chosen wait in milliseconds from dispatch completion to after-capture. Required per event or on group last. No default or stability polling; choose for text echo, dialog or game semantics.' });
+const optionalReason = Type.Optional(Type.String({ minLength: 1, maxLength: 4000, pattern: '\\S', description: 'Optional intent, retained as evidence. Default: derived from the call.' }));
+const interval = Type.Number({ minimum: 0, maximum: 300000, description: 'Wait in milliseconds from the end of the call to the after-snapshot. Optional; the relay has a default.' });
 const id = Type.String({ pattern: '^[A-Za-z0-9][A-Za-z0-9_.-]{0,119}$' });
 const snapshots = Type.Object({
   afterIntervalMs: Type.Optional(interval),
   group: Type.Optional(Type.Object({ groupId: id, phase: StringEnum(['first', 'member', 'last'] as const), afterIntervalMs: Type.Optional(interval) }, closed)),
-}, { ...closed, description: 'Standalone event requires afterIntervalMs. Explicit consecutive text group uses first/member/last; last requires an interval. No inferred groups.' });
-const step = Type.Object({ id, title: Type.String({ minLength: 1, maxLength: 500 }), expected: Type.String({ minLength: 1, maxLength: 4000 }), inputMode: StringEnum(['ordinary', 'accessibility'] as const) }, closed);
+}, { ...closed, description: 'Optional. Consecutive keystrokes may form an explicit text group (first/member/last); only first gets a before-snapshot and only last an after-snapshot.' });
+const step = Type.Object({ id: Type.Optional(id), title: Type.Optional(Type.String({ minLength: 1, maxLength: 500 })), expected: Type.Optional(Type.String({ minLength: 1, maxLength: 4000 })), inputMode: Type.Optional(StringEnum(['ordinary', 'accessibility'] as const)) }, { ...closed, description: 'Optional step record overrides; any field left out is derived from the call.' });
 const imageTarget = Type.Union([
   Type.Object({ source: Type.Literal('display'), sessionId: id, executionId: Type.String({ pattern: '^[A-Za-z0-9][A-Za-z0-9_.-]{0,159}$' }), phase: StringEnum(['before', 'after'] as const) }, closed),
   Type.Object({ source: Type.Literal('application'), name: Type.String({ minLength: 1, maxLength: 101 }), path: Type.Optional(Type.String({ minLength: 1, maxLength: 4096 })) }, closed),
@@ -19,15 +21,10 @@ const imageTarget = Type.Union([
 const argv = Type.Array(Type.String(), { minItems: 1, maxItems: 256 });
 const language = StringEnum(['javascript', 'typescript', 'python'] as const);
 const timeoutMs = Type.Optional(Type.Integer({ minimum: 1, maximum: 3600000, description: 'Execution timeout in milliseconds, default 120000, maximum 3600000. Independent of snapshot delay and lease TTL.' }));
-const runBase = { action: Type.Literal('run'), reason, step, snapshots, timeoutMs };
-const browserEvent = Type.Union([
-  Type.Object({ action: Type.Literal('navigate'), url: Type.String({ minLength: 1 }) }, closed),
-  Type.Object({ action: Type.Literal('click'), selector: Type.String({ minLength: 1 }) }, closed),
-  Type.Object({ action: Type.Literal('type'), selector: Type.String({ minLength: 1 }), text: Type.String() }, closed),
-  Type.Object({ action: Type.Literal('press'), key: Type.String({ minLength: 1 }), selector: Type.String({ minLength: 1 }) }, closed),
-  Type.Object({ action: Type.Literal('read'), selector: Type.String({ minLength: 1 }) }, closed),
-  Type.Object({ action: Type.Literal('snapshot'), name: Type.Optional(Type.String({ pattern: '^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$', description: 'Short safe name for this page capture.' })) }, { ...closed, description: 'Capture the live page now: settle-waited PNG plus a record with the console lines since the last capture.' }),
-]);
+const runBase = { action: Type.Literal('run'), reason: optionalReason, step: Type.Optional(step), snapshots: Type.Optional(snapshots), timeoutMs };
+/** The MCP servers relay_run forwards to, defined once in src/targets.ts. */
+export const runTargets = TARGETS;
+const target = StringEnum(TARGETS, { description: 'cua (cua-driver), playwright (Playwright MCP) or chrome-devtools (Chrome DevTools MCP).' });
 // Authoritative discriminated contract. Even if a provider only exposes the
 // object-shaped projection, every invocation is checked here before dispatch.
 export const relayContract = Type.Union([
@@ -52,13 +49,20 @@ export const relayContract = Type.Union([
     files: Type.Optional(Type.Array(Type.Object({ local: Type.String(), path: Type.String({ description: 'Relative destination under guest support/.' }) }, closed))),
     nodePath: Type.Optional(Type.String({ description: 'Guest Node executable, default node; use image nvm path if needed.' })),
     cuaDriver: Type.Optional(Type.String({ description: 'Guest CUA executable; OS default when omitted.' })),
-    browser: Type.Optional(Type.Object({ playwrightModule: Type.Optional(Type.String({ description: 'Guest Playwright module path; default resolution from workspace. No install or CDP attachment.' })), settleTimeoutMs: Type.Optional(Type.Number({ minimum: 0, maximum: 60000, description: 'Longest wait for the page to settle (load, network idle, fonts, two frames) before each page capture; default 5000.' })) }, { ...closed, description: 'Enable fresh persistent guest Chromium; empty object enables defaults.' })),
+    browserExecutable: Type.Optional(Type.String({ description: 'Guest browser executable for the playwright and chrome-devtools targets; default is installed Google Chrome.' })),
   }, closed),
   Type.Object({ ...runBase, kind: Type.Literal('exec'), argv, diagnostic: Type.Optional(Type.Boolean({ description: 'Explicit command diagnosis or repair without screenshot evidence, including before staging. Commands and outcomes remain recorded. Never claim visual verification.' })) }, closed),
   Type.Object({ ...runBase, kind: Type.Literal('script'), localPath: Type.String({ minLength: 1 }), language }, closed),
   Type.Object({ ...runBase, kind: Type.Literal('code'), code: Type.String({ maxLength: 1048576 }), language }, closed),
-  Type.Object({ ...runBase, kind: Type.Literal('cua'), tool: Type.String({ minLength: 1 }), args: Type.Optional(Type.Record(Type.String(), Type.Unknown())) }, closed),
-  Type.Object({ ...runBase, kind: Type.Literal('browser'), browser: browserEvent }, closed),
+  Type.Object({ action: Type.Literal('run'), kind: Type.Literal('mcp'), target,
+    tool: Type.String({ minLength: 1, maxLength: 200, description: 'The target server\'s own tool name.' }),
+    args: Type.Optional(Type.Record(Type.String(), Type.Unknown(), { description: 'The tool\'s own arguments, forwarded unchanged.' })),
+    reason: optionalReason,
+    expected: Type.Optional(Type.String({ minLength: 1, maxLength: 4000, description: 'Optional expected result for the step record.' })),
+    afterIntervalMs: Type.Optional(interval),
+    timeoutMs,
+  }, closed),
+  Type.Object({ action: Type.Literal('tools'), target, tool: Type.Optional(Type.String({ minLength: 1, maxLength: 200, description: 'Optional: return only this tool.' })) }, closed),
   Type.Object({ action: Type.Literal('image'), target: imageTarget }, closed),
   Type.Object({ action: Type.Literal('extract'), names: Type.Array(Type.String()) }, closed),
   Type.Object({ action: Type.Literal('finish') }, closed),
@@ -77,15 +81,16 @@ for (const branch of relayContract.anyOf) {
   }
 }
 const parameterObject = Type.Object({
-  action: StringEnum(['search', 'probe', 'acquire', 'stage', 'run', 'image', 'extract', 'finish', 'release', 'acquisition-capabilities', 'console-resolve', 'console-open', 'console-cancel'] as const),
+  action: StringEnum(['search', 'probe', 'acquire', 'stage', 'run', 'tools', 'image', 'extract', 'finish', 'release', 'acquisition-capabilities', 'console-resolve', 'console-open', 'console-cancel'] as const),
   ...projected,
-}, { ...closed, anyOf: relayContract.anyOf, description: 'Select exactly one action. Each closed branch defines allowed fields. Run requires reason and selects a kind; console-open requires reason, expected and userRequested=true. Other actions reject reason. No default action.' });
+}, { ...closed, anyOf: relayContract.anyOf, description: 'Select exactly one action. Each closed branch defines allowed fields. Run selects a kind; console-open requires reason, expected and userRequested=true. No default action.' });
 
 export type RelayInput = Static<typeof relayContract>;
 export const relayParameters = Type.Unsafe<RelayInput>(parameterObject);
 export type RelayAction = RelayInput['action'];
-export const relayActions = ['search', 'probe', 'acquire', 'stage', 'run', 'image', 'extract', 'finish', 'release', 'acquisition-capabilities', 'console-resolve', 'console-open', 'console-cancel'] as const;
-export type RunKind = 'exec' | 'script' | 'code' | 'cua' | 'browser';
+export const relayActions = ['search', 'probe', 'acquire', 'stage', 'run', 'tools', 'image', 'extract', 'finish', 'release', 'acquisition-capabilities', 'console-resolve', 'console-open', 'console-cancel'] as const;
+export type RunKind = 'exec' | 'script' | 'code' | 'mcp';
+export type RunTarget = typeof runTargets[number];
 
 type Branch = (typeof relayContract)['anyOf'][number];
 function branchFor(action: RelayAction, kind?: RunKind): Branch {
@@ -113,11 +118,6 @@ export function toolInputSchema(action: RelayAction, kind?: RunKind): Record<str
 }
 
 export function validateRelayInput(value: unknown): asserts value is RelayInput {
-  if (!Check(relayContract, value)) throw new Error('Invalid relay input: action is required; run and console-open require nonblank reason. Supply only the fields for the selected action and run kind.');
-  if (value.action === 'run') {
-    const s = value.snapshots;
-    if (value.kind === 'exec' && value.diagnostic && s.group) throw new Error('Diagnostic commands cannot join snapshot groups.');
-    if (!s.group && s.afterIntervalMs === undefined) throw new Error('Standalone run requires snapshots.afterIntervalMs; no default interval.');
-    if (s.group?.phase === 'last' && s.group.afterIntervalMs === undefined && s.afterIntervalMs === undefined) throw new Error('Last text-group member requires afterIntervalMs.');
-  }
+  if (!Check(relayContract, value)) throw new Error('Invalid relay input: action is required; console-open requires nonblank reason. Supply only the fields for the selected action and run kind.');
+  if (value.action === 'run' && value.kind === 'exec' && value.diagnostic && value.snapshots?.group) throw new Error('Diagnostic commands cannot join snapshot groups.');
 }

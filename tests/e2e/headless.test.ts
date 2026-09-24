@@ -127,53 +127,6 @@ test('lifecycle: acquire, stage, run one exec, finish; the verified package and 
   assert.equal(lifecycle.released, true);
 });
 
-const fakePlaywright = `const fs = require('node:fs');
-module.exports.chromium = { launch: async () => { let url = 'about:blank';
-  return { close: async () => {}, on() {}, newContext: async () => ({ newPage: async () => { const handlers = {}; const frame = {}; const page = {
-    setDefaultTimeout() {}, setDefaultNavigationTimeout() {}, on(name, fn) { handlers[name] = fn; }, mainFrame: () => frame,
-    url: () => url, title: async () => 'Fixture ' + url, waitForLoadState: async () => {}, evaluate: async () => {},
-    screenshot: async o => fs.writeFileSync(o.path, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aO/8AAAAASUVORK5CYII=', 'base64')),
-    goto: async next => { url = next; handlers.framenavigated && handlers.framenavigated(frame); handlers.console && handlers.console({ type: () => 'log', text: () => 'arrived at ' + next }); },
-    locator: () => ({ click: async () => {}, pressSequentially: async () => {}, press: async () => {}, innerText: async () => url }) }; return page; } }) }; } };
-`;
-
-test('browser: staging the browser, navigating and taking a snapshot brings settle-waited page captures home with the package', { skip, timeout: 600_000 }, async t => {
-  const f = await fixture(t);
-  const playwright = join(f.root, 'fake-playwright.cjs'); await writeFile(playwright, fakePlaywright);
-  const step = (id: string, title: string, expected: string) => ({ id, title, expected, inputMode: 'ordinary' });
-  const steps = [
-    { action: 'acquire', task: 'e2e-browser', image: 'ubuntu2404', extractions: [] },
-    { action: 'stage', nodePath: f.info.node, cuaDriver: f.info.driver, browser: { playwrightModule: playwright } },
-    { action: 'run', reason: 'Open the fixture page', kind: 'browser', browser: { action: 'navigate', url: 'https://example.test/start' }, step: step('open', 'Open the start page', 'The start page is shown'), snapshots: { afterIntervalMs: 0 } },
-    { action: 'run', reason: 'Capture the settled page', kind: 'browser', browser: { action: 'snapshot', name: 'after-landing' }, step: step('capture', 'Capture the page', 'A page capture is recorded'), snapshots: { afterIntervalMs: 0 } },
-    { action: 'finish' },
-  ];
-  const prompt = `You are exercising the vm-relay plugin against a fixture service. Make exactly these five relay tool calls, in this order, one at a time, passing each JSON object as the arguments verbatim:\n${steps.map((s, i) => `${i + 1}. ${stepJson(s)}`).join('\n')}\nDo not call any other tool and do not change the arguments. When the fifth call has returned, reply with the single word DONE.`;
-  const run = await claude(f.project, prompt, f.env, 14);
-  assert.equal(run.code, 0, run.stderr);
-  assert.deepEqual(run.toolUses.map(u => u.input.action), ['acquire', 'stage', 'run', 'run', 'finish'], JSON.stringify(run.toolUses));
-  for (const result of run.toolResults) assert.equal(result.isError, false, result.text);
-  const staged = JSON.parse(run.toolResults[1]!.text);
-  assert.ok(staged.extractions.some((e: any) => e.name === 'browser-captures'), 'staging the browser declares the captures extraction');
-  const navigate = JSON.parse(run.toolResults[2]!.text);
-  assert.equal(navigate.browser?.settled?.navigated, true, JSON.stringify(navigate).slice(0, 500));
-  assert.equal(navigate.browser?.landing?.kind, 'landing');
-  const snapshot = JSON.parse(run.toolResults[3]!.text);
-  assert.equal(snapshot.browser?.capture?.name, 'after-landing', JSON.stringify(snapshot).slice(0, 500));
-  const packages = (await readdir(join(f.project, 'relay-evidence'))).filter(name => name.startsWith('relay-e2e-browser-') && !name.includes('.'));
-  assert.equal(packages.length, 1);
-  const dir = join(f.project, 'relay-evidence', packages[0]!);
-  assert.equal((await verifyDeliveredPackage(dir)).deliveryVerified, true);
-  const copies = await readdir(join(dir, 'extractions', 'browser-captures'));
-  const captures = (await readdir(join(dir, 'extractions', 'browser-captures', copies[0]!))).sort();
-  assert.equal(captures.length, 4, captures.join(','));
-  assert.match(captures[0]!, /^c000001-.*-landing-navigate\.json$/); assert.match(captures[1]!, /^c000001-.*-landing-navigate\.png$/);
-  assert.match(captures[2]!, /^c000002-.*-snapshot-after-landing\.json$/); assert.match(captures[3]!, /^c000002-.*-snapshot-after-landing\.png$/);
-  const record = JSON.parse(await readFile(join(dir, 'extractions', 'browser-captures', copies[0]!, captures[0]!), 'utf8'));
-  assert.equal(record.url, 'https://example.test/start');
-  assert.deepEqual(record.console.map((line: any) => line.text), ['arrived at https://example.test/start']);
-});
-
 test('abandoned lease: a session that acquires and stops without finishing keeps its VM; renewal pauses and the lease waits for an explicit release or the service TTL', { skip, timeout: 600_000 }, async t => {
   const f = await fixture(t);
   const prompt = `This is a cleanup test. Make exactly one relay tool call with the arguments ${stepJson({ action: 'acquire', task: 'e2e-abandon', image: 'ubuntu2404', extractions: [] })}. Then reply with the single word DONE. Do not call finish, release or any other tool: the test is checking what happens when a session ends with a lease still held.`;
