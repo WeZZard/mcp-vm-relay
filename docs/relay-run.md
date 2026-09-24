@@ -36,8 +36,13 @@ persistent guest browser it replaces:
   host starts no server.
 - It starts each target's server on first use, through the SDK's
   `StdioClientTransport`, and holds one SDK `Client` per target. The server
-  inherits the guest session's environment (`DISPLAY`, `XAUTHORITY`, `HOME`),
-  so the browser opens headed on the VM's display.
+  inherits the host's environment. On Linux the host runs under SSH, which
+  has no display, so it copies `DISPLAY`, `WAYLAND_DISPLAY`, `XAUTHORITY`,
+  `DBUS_SESSION_BUS_ADDRESS`, `XDG_RUNTIME_DIR`, `XDG_SESSION_TYPE` and
+  `XDG_CURRENT_DESKTOP` from a desktop process of the same user, preferring
+  the image's `cua-driver serve`. A fresh VM answers SSH before its desktop
+  login finishes, so the host waits up to 30 s for that process before it
+  starts a server. The browser then opens headed on the VM's display.
 - It serves the per-request `call` client over a Unix socket in
   `<guestRoot>/mcp`. That directory is mode 0700 and the socket is mode 0600.
   The socket is addressed relative to that directory, which keeps it under
@@ -54,20 +59,25 @@ All pins are in `src/targets.ts`.
 
 | Target | Server | Launch (argv, cwd = guest workspace) |
 |---|---|---|
-| `cua` | the image's own `cua-driver` | `<cuaDriver> mcp` |
-| `playwright` | `@playwright/mcp` 0.0.82, with `playwright` and `playwright-core` 1.64.0-alpha-1789764292000 | `<node> <packages>/node_modules/@playwright/mcp/cli.js --isolated --output-dir <workspace>/relay-run/playwright/files [--executable-path <browserExecutable>]` |
-| `chrome-devtools` | `chrome-devtools-mcp` 1.10.1 | `<node> <packages>/node_modules/chrome-devtools-mcp/build/src/bin/chrome-devtools-mcp.js --isolated --no-usage-statistics --no-performance-crux --no-page-id-routing --workspace <workspace> [--executablePath <browserExecutable>]` |
+| `cua` | the image's own `cua-driver` | `<cuaDriver> mcp`, plus `--no-overlay` on Linux |
+| `playwright` | `@playwright/mcp` 0.0.82, with `playwright` and `playwright-core` 1.64.0-alpha-1789764292000 | `<node> <packages>/node_modules/@playwright/mcp/cli.js --isolated --output-dir <workspace>/relay-run/playwright/files [--executable-path <browserExecutable>]`, plus `--no-sandbox` on Linux |
+| `chrome-devtools` | `chrome-devtools-mcp` 1.10.1 | `<node> <packages>/node_modules/chrome-devtools-mcp/build/src/bin/chrome-devtools-mcp.js --isolated --no-usage-statistics --no-performance-crux --no-page-id-routing --workspace <workspace> [--executablePath <browserExecutable>]`, plus `--chromeArg=--no-sandbox` on Linux |
 
 - **cua.** `cua-driver mcp` is the MCP stdio proxy to the Cua Driver daemon.
-  The overlay flags belong to `serve`, not to `mcp`. On Linux the daemon must
-  already run as `cua-driver serve --no-overlay`. That is the same
-  precondition `cua-driver call` had, and the proxy connects to that daemon.
-  On macOS the proxy starts the CuaDriver app's daemon if none is running.
+  On Linux the daemon must already run as `cua-driver serve --no-overlay`,
+  the same precondition `cua-driver call` had. `mcp` draws its own X11 cursor
+  overlay unless it too gets `--no-overlay`. With the overlay, screen reads
+  come from pixels saved under it that it cannot confirm, and the display
+  snapshots come back black or stale. On macOS the proxy starts the CuaDriver
+  app's daemon if none is running.
 - **Browsers.** Both servers are headed by default, and the relay never
   passes `--headless`. Both use `--isolated`, so each start is a fresh browser
   profile. Without `browserExecutable` they use installed Google Chrome, the
   default channel of each server. Guests without Chrome, such as Linux arm64,
-  need `browserExecutable` set to a Chromium path.
+  need `browserExecutable` set to a Chromium path. On Linux both run
+  Chromium without its sandbox: Ubuntu 24.04's AppArmor forbids the
+  unprivileged user namespaces the sandbox needs, and the VM is the isolation
+  boundary.
 - **Chrome DevTools MCP page routing.** Page-ID routing is meant for several
   agents that share one browser, and it makes `pageId` required on
   page-scoped tools. It is turned off, because one enclosure has one agent.
@@ -163,25 +173,29 @@ The default is the wait from the end of the call to the after-snapshot.
 | `cua` | 500 | cua-driver returns when input is dispatched, so native animations and dialogs need longer. |
 | `relay_exec`, `relay_script`, `relay_code` | 500 | Same as `cua`. A command's visual effect is unknown. |
 
-## Not yet proven without a live VM
+## Live checks
 
-The tests use SDK fixture servers, a fake capture driver and a loopback
-stand-in for vm-service. The following checks need one live run:
+Run on 2026-09-24 against `ubuntu2404` (arm64, GNOME on X11) and `macos26`
+(26.6.1) with the local vm-service:
 
-1. On `ubuntu2404`, stage with the image's `cua-driver` and start `cua-driver
-   serve --no-overlay`. Then call `relay_tools {target:"cua"}` and one
-   `relay_run` `cua` call, such as `get_screen_size`. Confirm that `cua-driver
-   mcp` reaches the running daemon.
-2. On `macos26`, make the same `cua` calls through `/Applications/CuaDriver.app/.../cua-driver mcp`.
-   Confirm that TCC permissions carry over to the proxy's daemon, and that a
-   `click` lands and shows in the after-snapshot.
-3. On both images, run `relay_run` `playwright` `browser_navigate` and then
-   `browser_snapshot`. Confirm three things: the host downloads the pinned
-   tarballs, the guest unpacks them, Chromium opens headed on the VM display,
-   and the after-snapshot shows the page. Set `browserExecutable` where
-   Google Chrome is absent, such as Linux arm64.
-4. Make the same check with `chrome-devtools` `navigate_page` and
-   `take_screenshot`, including the inline tool image.
-5. Call `relay_finish` and confirm that the `relay-run` extraction and the
-   server logs are in the package, and that no MCP host or browser process
-   survives the host stop.
+1. `cua`: `get_screen_size` answered on both images (3840x2160 on Ubuntu,
+   1920x1080 on macOS), and `list_apps` answered on Ubuntu.
+2. On macOS, `launch_app` Calculator, `get_window_state`, then two `click`s
+   on the 7 button by element index; the after-snapshot shows 77.
+3. `playwright` `browser_navigate` and `browser_snapshot`: the pinned
+   tarballs were staged, and the page shows headed in the after-snapshot on
+   both images. Ubuntu used `browserExecutable` set to Playwright's
+   Chromium; macOS used installed Google Chrome.
+4. `chrome-devtools` `navigate_page` and `take_screenshot`, with the inline
+   tool image, on both images.
+5. `relay_finish` delivered a verified package with the `relay-run`
+   extraction (per-call results, `playwright/files`, `servers/*.log`). The
+   host stop is logged; the VM is destroyed right after it, so no process
+   check follows the stop.
+6. Refusals: arguments that break a tool's schema, and a tool name the
+   target lacks, were refused with nothing sent.
+
+These runs found the Linux display, Chromium sandbox and cua overlay
+problems described above, and a preview failure on macOS captures, which
+carry an ICC profile (`iCCP`) and XMP (`iTXt`). The preview now accepts
+those chunks without inflating them.

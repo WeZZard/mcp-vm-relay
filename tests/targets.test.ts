@@ -21,7 +21,7 @@ test('the targets, their pins and the schema enum are defined in one place', () 
 
 test('launch commands: cua-driver mcp, headed browser servers, no shell', () => {
   const launches = targetLaunches(context);
-  assert.deepEqual(launches.cua, { command: '/opt/cua/cua-driver', args: ['mcp'], cwd: '/g/workspace' });
+  assert.deepEqual(launches.cua, { command: '/opt/cua/cua-driver', args: ['mcp'], cwd: '/g/workspace', platformArgs: { linux: ['--no-overlay'] } });
   assert.equal(launches.playwright.command, '/usr/bin/node');
   assert.equal(launches.playwright.args[0], '/g/mcp/packages/node_modules/@playwright/mcp/cli.js');
   assert.equal(launches['chrome-devtools'].args[0], '/g/mcp/packages/node_modules/chrome-devtools-mcp/build/src/bin/chrome-devtools-mcp.js');
@@ -32,6 +32,8 @@ test('launch commands: cua-driver mcp, headed browser servers, no shell', () => 
   const withBrowser = targetLaunches({ ...context, browserExecutable: '/usr/bin/chromium' });
   assert.deepEqual(withBrowser.playwright.args.slice(-2), ['--executable-path', '/usr/bin/chromium']);
   assert.deepEqual(withBrowser['chrome-devtools'].args.slice(-2), ['--executablePath', '/usr/bin/chromium']);
+  assert.deepEqual(launches.playwright.platformArgs, { linux: ['--no-sandbox'] }, 'Chromium runs unsandboxed only on Linux guests');
+  assert.deepEqual(launches['chrome-devtools'].platformArgs, { linux: ['--chromeArg=--no-sandbox'] });
 });
 
 test('tarball names and registry URLs follow npm, and the integrity check is exact', async t => {

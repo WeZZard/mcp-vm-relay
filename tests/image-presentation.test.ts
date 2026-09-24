@@ -226,10 +226,18 @@ test('bounds PNG dimensions before calling a pixel decoder, including zero and d
  }
 });
 
-test('rejects animated PNG and compressed ancillary metadata before decoding', async () => {
+test('rejects animated PNG before decoding', async () => {
  const original = png(3, 2);
- for (const type of ['acTL', 'fcTL', 'fdAT', 'iCCP', 'zTXt', 'iTXt']) {
+ for (const type of ['acTL', 'fcTL', 'fdAT']) {
   await unavailable(Buffer.concat([original.subarray(0, 33), chunk(type, Buffer.alloc(10)), original.subarray(33)]), 'image/png', /unsupported/);
+ }
+});
+
+test('accepts compressed ancillary metadata (macOS captures carry iCCP and iTXt) without inflating it', async () => {
+ const original = png(3, 2);
+ for (const type of ['iCCP', 'zTXt', 'iTXt']) {
+  const prepared = await prepareImage(Buffer.concat([original.subarray(0, 33), chunk(type, Buffer.from('not zlib at all')), original.subarray(33)]), 'image/png');
+  assert.equal(prepared.presentation.width, 3);
  }
 });
 

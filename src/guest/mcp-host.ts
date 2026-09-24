@@ -1,7 +1,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { openSync } from "node:fs";
-import { appendFile, chmod, mkdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
+import { appendFile, chmod, mkdir, readdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { connect, createServer, type Server, type Socket } from "node:net";
 import { isAbsolute, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -27,7 +27,7 @@ import { checkArguments } from "../json-schema.js";
  * makes it `uncertain`. Bundled, guest-only CLI: never run `serve` on the
  * human's desktop.
  */
-export interface TargetLaunch { command: string; args: string[]; cwd?: string; env?: Record<string, string> }
+export interface TargetLaunch { command: string; args: string[]; cwd?: string; env?: Record<string, string>; platformArgs?: Partial<Record<NodeJS.Platform, string[]>> }
 export interface McpHostConfig {
   /** Private state: socket, state file, lock, cached tool lists. Owner-only, outside the workspace. */
   stateDir: string;
@@ -60,6 +60,7 @@ const MAX_TEXT_CHARS = 32 * 1024;
 const MAX_SUMMARY_BYTES = 48 * 1024;
 const MAX_STRUCTURED_BYTES = 8 * 1024;
 const MAX_STDERR_TAIL = 4096;
+const DESKTOP_WAIT_MS = 30000;
 const message = (error: unknown): string => String(error instanceof Error ? error.message : error).slice(0, 2000);
 const sleep = (ms: number) => new Promise<void>(done => setTimeout(done, ms));
 const safeName = (value: string) => value.replace(/[^A-Za-z0-9_.-]+/g, "-").replace(/^[-.]+/, "").slice(0, 60) || "call";
@@ -151,7 +152,11 @@ export async function serveHost(configPath: string): Promise<void> {
     await mkdir(join(config.outputDir, "servers"), { recursive: true });
     // The SDK's default environment is a small safe subset; a headed browser
     // and cua-driver need the whole guest session (DISPLAY, XAUTHORITY, HOME...).
-    const transport = new StdioClientTransport({ command: launch.command, args: launch.args, cwd: launch.cwd, env: { ...process.env, ...(launch.env ?? {}) } as Record<string, string>, stderr: "pipe" });
+    // On Linux this host runs under SSH, which has no display, so it borrows
+    // the desktop session's display variables.
+    const args = [...launch.args, ...(launch.platformArgs?.[process.platform] ?? [])];
+    const env = { ...process.env, ...(process.platform === "linux" ? await waitForDesktop(process.env, Math.min(config.startTimeoutMs! / 2, DESKTOP_WAIT_MS)) : {}), ...(launch.env ?? {}) } as Record<string, string>;
+    const transport = new StdioClientTransport({ command: launch.command, args, cwd: launch.cwd, env, stderr: "pipe" });
     const client = new Client({ name: "mcp-vm-relay-guest-host", version: "1" });
     const entry: Entry = { target, client, transport, alive: true, stderrTail: "", startedAt: new Date().toISOString() };
     transport.stderr?.on("data", (chunk: Buffer) => {
@@ -160,7 +165,7 @@ export async function serveHost(configPath: string): Promise<void> {
       void appendFile(logFile(target), text).catch(() => {});
     });
     client.onclose = () => { entry.alive = false; entry.exitedAt ??= new Date().toISOString(); };
-    await appendFile(logFile(target), `[mcp-vm-relay] starting ${JSON.stringify([launch.command, ...launch.args])} at ${entry.startedAt}\n`).catch(() => {});
+    await appendFile(logFile(target), `[mcp-vm-relay] starting ${JSON.stringify([launch.command, ...args])} with DISPLAY=${env.DISPLAY ?? ""} WAYLAND_DISPLAY=${env.WAYLAND_DISPLAY ?? ""} at ${entry.startedAt}\n`).catch(() => {});
     try {
       await client.connect(transport, { timeout: config.startTimeoutMs });
       entry.tools = await listAll(client, config.startTimeoutMs!);
@@ -272,6 +277,55 @@ export async function serveHost(configPath: string): Promise<void> {
     try { await writeFile(join(config.stateDir, "startup-error.json"), JSON.stringify({ error: message(error) }), { mode: 0o600 }); }
     finally { await shutdown(); }
     throw error;
+  }
+}
+
+/** The variables that tie a process to a graphical login session. */
+export const DESKTOP_VARIABLES = ["DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY", "DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR", "XDG_SESSION_TYPE", "XDG_CURRENT_DESKTOP"] as const;
+/** Parse a `/proc/<pid>/environ` file: NUL-separated `NAME=value` pairs. */
+export function parseEnviron(bytes: Buffer): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const pair of bytes.toString("utf8").split("\0")) { const at = pair.indexOf("="); if (at > 0) out[pair.slice(0, at)] = pair.slice(at + 1); }
+  return out;
+}
+/**
+ * The desktop session's display variables, read from a process of this user
+ * that already has a display. The `cua-driver serve` daemon, which the image
+ * autostarts in the desktop session, is preferred; any other process with a
+ * display is the fallback. Nothing is borrowed when this process already has
+ * a display, or when no such process exists.
+ */
+export async function desktopEnvironment(current: NodeJS.ProcessEnv, procRoot = "/proc", uid = process.getuid?.()): Promise<Record<string, string>> {
+  if (current.DISPLAY || current.WAYLAND_DISPLAY) return {};
+  let pids: string[];
+  try { pids = (await readdir(procRoot)).filter(name => /^\d+$/.test(name)); } catch { return {}; }
+  let fallback: Record<string, string> | undefined;
+  for (const pid of pids) {
+    try {
+      if (uid !== undefined && (await stat(join(procRoot, pid))).uid !== uid) continue;
+      const environ = parseEnviron(await readFile(join(procRoot, pid, "environ")));
+      if (!environ.DISPLAY && !environ.WAYLAND_DISPLAY) continue;
+      const picked = Object.fromEntries(DESKTOP_VARIABLES.filter(name => environ[name]).map(name => [name, environ[name]!]));
+      const cmdline = (await readFile(join(procRoot, pid, "cmdline"))).toString("utf8").split("\0");
+      if (/cua-driver$/.test(cmdline[0] ?? "") && cmdline[1] === "serve") return picked;
+      fallback ??= picked;
+    } catch { /* the process ended or is not readable */ }
+  }
+  return fallback ?? {};
+}
+
+/**
+ * A fresh VM can answer SSH before its desktop login finishes, so a server
+ * started right after acquire would find no display. Wait for the session,
+ * up to `limitMs`; after that the server starts anyway and reports its own
+ * error.
+ */
+export async function waitForDesktop(current: NodeJS.ProcessEnv, limitMs: number, procRoot = "/proc", uid = process.getuid?.()): Promise<Record<string, string>> {
+  const deadline = Date.now() + limitMs;
+  for (;;) {
+    const found = await desktopEnvironment(current, procRoot, uid);
+    if (Object.keys(found).length || current.DISPLAY || current.WAYLAND_DISPLAY || Date.now() >= deadline) return found;
+    await sleep(Math.min(1000, Math.max(0, deadline - Date.now())));
   }
 }
 

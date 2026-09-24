@@ -23,7 +23,8 @@ export const IMAGE_PRESENTATION_POLICY = Object.freeze({
  /** Formats resampled in-process when they exceed the preview bounds; the others pass through or are unavailable. */
  resampledMimeTypes: Object.freeze(['image/png']),
  animation: 'reject',
- compressedPngMetadata: 'reject',
+ /** iCCP, zTXt and iTXt (macOS captures carry a color profile and XMP) are checksum-verified, never inflated, and dropped from a resampled preview. */
+ compressedPngMetadata: 'ignore',
  jpegFrames: Object.freeze(['baseline', 'progressive']),
  maxContainerRecords: 10000,
  /** Dimensions are those stored in the container; no EXIF orientation is applied. */
@@ -84,8 +85,7 @@ function pngDimensions(bytes: Buffer): Dimensions {
   requireImage(end <= bytes.length, 'Truncated PNG chunk');
   const type = bytes.toString('ascii', offset + 4, offset + 8);
   requireImage(/^[A-Za-z]{4}$/.test(type), 'Invalid PNG chunk type');
-  requireImage(!['acTL', 'fcTL', 'fdAT', 'iCCP', 'zTXt', 'iTXt'].includes(type),
-   'Animated PNG and compressed PNG metadata are unsupported');
+  requireImage(!['acTL', 'fcTL', 'fdAT'].includes(type), 'Animated PNG is unsupported');
   requireImage(type !== 'IHDR' || offset === 8, 'Duplicate PNG header');
   requireImage(type[0] !== type[0].toUpperCase() || ['IHDR', 'PLTE', 'IDAT', 'IEND'].includes(type),
    'Unsupported critical PNG chunk');

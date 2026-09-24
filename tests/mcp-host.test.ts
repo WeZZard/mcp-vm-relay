@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
 import { receive, type GuestRequest, type ReceiveOptions } from "../src/guest/receiver.js";
-import { hostRequest, refusedBeforeInput, SOCKET_NAME } from "../src/guest/mcp-host.js";
+import { desktopEnvironment, hostRequest, waitForDesktop, parseEnviron, refusedBeforeInput, SOCKET_NAME } from "../src/guest/mcp-host.js";
 import { checkArguments } from "../src/json-schema.js";
 
 /**
@@ -199,4 +199,34 @@ test("argument validation follows the schema's own dialect", () => {
   assert.equal(checkArguments(draft2020, { items: [1] }).valid, false);
   assert.equal(checkArguments({ type: "object", properties: { url: { type: "string", format: "uri" } } }, { url: "not a uri" }).valid, false);
   assert.equal(checkArguments(undefined, {}).valid, false);
+});
+
+test("a Linux host under SSH borrows the desktop session's display variables, preferring cua-driver serve", async t => {
+  const proc = await mkdtemp(join(tmpdir(), "proc-"));
+  t.after(() => rm(proc, { recursive: true, force: true }));
+  const fake = async (pid: string, argv: string[], env: Record<string, string>) => {
+    await mkdir(join(proc, pid));
+    await writeFile(join(proc, pid, "cmdline"), argv.join("\0") + "\0");
+    await writeFile(join(proc, pid, "environ"), Object.entries(env).map(([k, v]) => `${k}=${v}`).join("\0") + "\0");
+  };
+  await fake("10", ["/usr/bin/bash"], { HOME: "/home/admin" });
+  await fake("11", ["/usr/bin/gnome-shell"], { DISPLAY: ":1", XAUTHORITY: "/other" });
+  await fake("12", ["/usr/local/bin/cua-driver", "serve"], { DISPLAY: ":0", XAUTHORITY: "/run/user/1000/gdm/Xauthority", DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/1000/bus", XDG_RUNTIME_DIR: "/run/user/1000", XDG_SESSION_TYPE: "x11", SECRET: "not-copied" });
+  await writeFile(join(proc, "self"), "");
+  assert.deepEqual(parseEnviron(Buffer.from("A=1\0B=x=y\0\0")), { A: "1", B: "x=y" });
+  assert.deepEqual(await desktopEnvironment({}, proc, undefined), { DISPLAY: ":0", XAUTHORITY: "/run/user/1000/gdm/Xauthority", DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/1000/bus", XDG_RUNTIME_DIR: "/run/user/1000", XDG_SESSION_TYPE: "x11" });
+  assert.deepEqual(await desktopEnvironment({ DISPLAY: ":5" }, proc, undefined), {}, "a process that has a display keeps its own");
+  await rm(join(proc, "12"), { recursive: true });
+  assert.deepEqual(await desktopEnvironment({}, proc, undefined), { DISPLAY: ":1", XAUTHORITY: "/other" }, "any desktop process is the fallback");
+  assert.deepEqual(await desktopEnvironment({}, join(proc, "missing"), undefined), {});
+});
+
+test("a server started before the desktop login waits for it, within a limit", async t => {
+  const proc = await mkdtemp(join(tmpdir(), "proc-"));
+  t.after(() => rm(proc, { recursive: true, force: true }));
+  const started = Date.now();
+  assert.deepEqual(await waitForDesktop({}, 300, proc, undefined), {}, "no session: gives up at the limit");
+  assert.ok(Date.now() - started >= 250);
+  setTimeout(() => void mkdir(join(proc, "7")).then(() => Promise.all([writeFile(join(proc, "7", "cmdline"), "/usr/bin/gnome-shell\0"), writeFile(join(proc, "7", "environ"), "DISPLAY=:0\0")])), 200);
+  assert.deepEqual(await waitForDesktop({}, 5000, proc, undefined), { DISPLAY: ":0" });
 });
