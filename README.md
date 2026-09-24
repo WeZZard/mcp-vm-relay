@@ -22,7 +22,7 @@ the guest transfer and transport, the evidence package and its state merge, the
 selected-environment profile, the console and saved-image contracts, the strict
 tool contract (`src/schema.ts`), the action dispatch and bounded result
 rendering (`src/surface.ts`), and the two guest programs
-(`src/guest/receiver.ts`, `src/guest/browser.ts`). It was inherited from
+(`src/guest/receiver.ts`, `src/guest/mcp-host.ts`). It was inherited from
 [pi-vm-relay](https://github.com/WeZZard/pi-vm-relay) at commit 8990123,
 synchronized with its implementation through commit 0d69fc7 before that
 project's retirement, and is maintained here as mcp-vm-relay's own
@@ -30,7 +30,7 @@ implementation from then on. `src/server.ts` binds the core to MCP over
 standard input and output.
 
 The committed `dist/` holds `server.mjs` (the MCP server with the core bundled
-in), the guest bundles the manager stages (`receiver.mjs`, `browser.mjs`) and
+in), the guest bundles the manager stages (`receiver.mjs`, `mcp-host.mjs`) and
 the doctor. Compiled [relay-driver](https://github.com/WeZZard/relay-driver)
 code, the recorded-execution and evidence substrate, is bundled with hashes and
 provenance in `dist/build-info.json`. Consumers load `dist/`; no build, SDK
@@ -110,9 +110,11 @@ Apple-silicon Mac with Tart, a running
 [vm-service](https://github.com/WeZZard/vm-service) and prepared guest images.
 Check readiness with `node dist/doctor.mjs`. It does not acquire a VM or
 establish guest UI readiness. Guest execution needs Node and CuaDriver with
-capture/input permissions; Linux requires native X11 and `serve --no-overlay`,
-and browser actions additionally require guest Playwright and bundled
-Chromium. Console viewing needs the vm-service guest-sharing backend and its
+capture/input permissions; Linux requires native X11 and `serve --no-overlay`.
+The `playwright` and `chrome-devtools` targets of `relay_run` need a browser in
+the guest (installed Google Chrome, or a path given as `browserExecutable`);
+their pinned servers are downloaded once on the host and staged, so the guest
+needs no network or npm. Console viewing needs the vm-service guest-sharing backend and its
 guest preparation; see `docs/console.md` here.
 
 ## The tools
@@ -123,21 +125,23 @@ and no `action` field, derived directly from the strict per-action contract in
 `target`, are unaffected). A call is mapped back to that contract's shape and
 dispatched exactly as the retired single `relay` tool was, so behaviour,
 results, image blocks and `isError` semantics are unchanged from before this
-split. The five run tools additionally share `reason`, `step`, `snapshots` and
-`timeoutMs`; each fixes its own `kind` rather than accepting one.
+split. `relay_run` forwards the cua-driver, Playwright MCP and Chrome DevTools
+MCP tool calls a model already knows; `relay_exec`, `relay_script` and
+`relay_code` share the optional `reason`, `step`, `snapshots` and `timeoutMs`.
+Evidence is automatic for all four: see "relay_run" below.
 
 | Tool | Title | Replaces (`action`, `kind`) | Purpose |
 |---|---|---|---|
 | `relay_search` | Search installed applications | `search` | Find installed applications from image inventories by name and optional OS. |
-| `relay_probe` | Probe host and guest readiness | `probe` | Default `scope: "host"` reports host facts, service availability and owned state. `scope: "guest"` checks the Node and CuaDriver executables on the owned guest without claiming capture or browser readiness. |
+| `relay_probe` | Probe host and guest readiness | `probe` | Default `scope: "host"` reports host facts, service availability and owned state. `scope: "guest"` checks the Node and CuaDriver executables and each `relay_run` target's availability on the owned guest without installing, starting or claiming capture readiness. |
 | `relay_acquisition_capabilities` | Read acquisition capabilities | `acquisition-capabilities` | Read versioned acquisition options (VNC backends) without allocation or ownership recovery. |
 | `relay_acquire` | Acquire a VM | `acquire` | Register the task, acquire a fresh VM and start its heartbeat; declare outputs before work. Optional `vnc` prepares sharing without opening a viewer. |
-| `relay_stage` | Stage the guest runtime | `stage` | Push and hash-check the runtime, support files, an opt-in workspace and the optional browser. Failed staging can be retried; a staged runtime accepts corrected executable paths; `resetRecording: true` archives the recording and starts a new one on the same VM. |
+| `relay_stage` | Stage the guest runtime | `stage` | Push and hash-check the runtime, support files and an opt-in workspace; `browserExecutable` names the guest browser for the browser targets. Failed staging can be retried; a staged runtime accepts corrected executable paths; `resetRecording: true` archives the recording and starts a new one on the same VM. |
 | `relay_exec` | Run a guest command | `run`, `exec` | One recorded guest command. `diagnostic: true` records command diagnosis or repair without screenshot evidence, including before staging. |
 | `relay_script` | Run a guest script | `run`, `script` | One recorded guest script file (`localPath`, `language`). |
 | `relay_code` | Run guest code | `run`, `code` | One recorded inline guest code snippet (`code`, `language`). |
-| `relay_cua` | Run a CUA driver call | `run`, `cua` | One recorded CUA driver call (`tool`, optional `args`). |
-| `relay_browser` | Send a browser event | `run`, `browser` | One recorded browser event (`navigate`/`click`/`type`/`press`/`read`/`snapshot`) to the guest Playwright page `relay_stage` enabled. |
+| `relay_run` | Run an MCP tool call in the VM | `run`, `mcp` | One recorded tool call (`target`: `cua`, `playwright` or `chrome-devtools`; that server's own `tool` and `args`), forwarded unchanged to the server inside the VM. Replaces `relay_cua` and `relay_browser`. |
+| `relay_tools` | List a target's tools | `tools` | The target's real `tools/list` from its in-guest server: names, descriptions and input schemas; `tool` narrows to one. |
 | `relay_image` | Retrieve a saved image | `image` | Retrieve one saved display image, declared application image or immutable image reference without input, capture, directory export or acquisition. |
 | `relay_extract` | Extract declared outputs | `extract` | Pull only declared files or directories with source and host checksum verification. |
 | `relay_finish` | Finish and deliver evidence | `finish` | Extract declared outputs, deliver and verify the snapshot package, destroy the VM and unregister. |
@@ -152,13 +156,13 @@ split. The five run tools additionally share `reason`, `step`, `snapshots` and
 `relay_acquisition_capabilities`, `relay_console_resolve`, `relay_image` and
 `relay_status`; `destructiveHint` is true only for `relay_finish` and
 `relay_release`, which destroy the VM; `openWorldHint` is true only for the
-five run tools, whose guest code may reach the network.
+four run tools, whose guest code may reach the network.
 
-A run tool's result carries the execution identity and outcome, the guest's
-bounded standard output and error, for a `relay_browser` event the parsed
-browser answer (the settle facts, the landing or snapshot capture, or the text
-a `read` returned), and, when the snapshot plan captured the after phase and
-delivery succeeded, the saved after-image as an MCP image content block. The
+A run's result carries the execution identity and outcome, the derived step
+record, and, when the snapshot plan captured the after phase and delivery
+succeeded, the saved after-image as an MCP image content block. A command's
+result also carries the guest's bounded standard output and error; a
+`relay_run` result carries the target tool's own text and image blocks. The
 full receipt stays in the evidence package.
 
 ## Prompts
@@ -179,45 +183,53 @@ full receipt stays in the evidence package.
 - `relay_exec` with `diagnostic: true` records command diagnosis or repair without screenshots, for explicitly requested diagnosis when capture is unavailable. Before staging it runs through vm-service in the guest's default directory; after staging in the recording workspace. It cannot join a snapshot group and is not visual verification.
 - After diagnosing damaged recording state, `relay_stage` with `resetRecording: true` archives the old recording and starts a new recording session in the same VM. An existing receiver lock refuses the reset until its operation is reconciled. Prior evidence paths remain in the owned status.
 
-## Browser events and page captures
+## relay_run: MCP tool calls in the VM
 
-Enable `browser: {}` in `relay_stage` for a persistent fresh **guest** Playwright
-page; the workspace must have Playwright available, or supply an absolute guest
-`browser.playwrightModule` path. `relay_browser` sends one event: `navigate`,
-`click`, `type`, `press`, `read`, or `snapshot`. The guest-owned
-server keeps the same page across calls, so the after-snapshot shows the live
-result. It uses Playwright-managed bundled Chromium, never host Chrome or CDP.
-Each event carries the run's `timeoutMs` as its own deadline; an event that
-misses it, or whose caller disconnects, has its browser context closed so
-pending input cannot land later, and the next event uses a fresh page. Nothing
-is replayed.
+`relay_run` takes the same tool calls a model already sends to cua-driver,
+Playwright MCP or Chrome DevTools MCP and runs them against that server inside
+the VM:
 
-The desktop snapshot pair is captured after a fixed, agent-declared interval.
-A web page is also captured from inside the browser, where the timing can be
-tied to the page's own state:
+```json
+{"target":"playwright","tool":"browser_navigate","args":{"url":"https://example.com"}}
+{"target":"cua","tool":"click","args":{"pid":812,"window_id":3,"x":40,"y":90}}
+{"target":"chrome-devtools","tool":"take_snapshot","args":{}}
+```
 
-- After every input event (`navigate`, `click`, `type`, `press`) the guest
-  server waits for the page to settle: the load event when the page navigated,
-  then network idle, then loaded fonts, then two animation frames. The wait is
-  bounded by `browser.settleTimeoutMs` (default 5000, at most 60000) and by what
-  the event's deadline leaves for the capture, and the facts of the wait
-  (`loaded`, `networkIdle`, `fontsReady`, `timedOut`, `waitedMs`) come back with
-  the event as `settled`.
-- An event that moved the page to a new address gets a **landing** capture of
-  where it arrived. A `snapshot` event captures the settled page on demand, with
-  an optional short `name`.
-- Each capture is a PNG of the viewport plus a JSON record beside it, named
-  `c<seq>-<ISO-8601Z>-<landing|snapshot>-<name>`. The record holds the settle
-  facts, the operation, the file's SHA-256 and the console lines (including
-  page errors) the page emitted since the previous capture.
-- Captures land in `workspace/browser-captures`. Staging the browser declares
-  that directory as the extraction `browser-captures` when the agent did not,
-  so `finish` carries the captures home under `extractions/` as byte-verified
-  application attachments, and `image` can retrieve one of them by name and
-  relative path. The dispatch-time snapshot pair contract is unchanged.
-- A capture that fails after the input was dispatched is an error whose
-  response says `dispatched: true`; the run is then refused as any nonzero
-  browser event is.
+`relay_tools {"target":"playwright"}` returns the server's real `tools/list`,
+so the exact names and schemas are one call away. The arguments are checked
+against the tool's input schema (a JSON Schema validator, Ajv) before anything
+is sent; a mismatch is refused with the correct schema in the error.
+
+- **Evidence is automatic.** Every call is admitted by the guest receiver,
+  journaled, and bracketed by a before and an after display snapshot. The step
+  record is derived from the call: the title is `<target>.<tool>` (for example
+  `playwright.browser_click`), the expected result is "returns without a tool
+  error", and cua-driver's accessibility forms are labelled `accessibility`.
+  `reason`, `expected` and `afterIntervalMs` are optional overrides. The same
+  rule now applies to `relay_exec`, `relay_script` and `relay_code`: their
+  `reason`, `step` and `snapshots` are accepted but no longer required.
+- **Default waits** before the after-snapshot: 300 ms for `playwright` and
+  `chrome-devtools` (both servers already wait for the page to settle before
+  they answer), 500 ms for `cua` and for commands.
+- **Sessions persist.** A small guest-resident MCP host keeps one MCP SDK
+  client per target, starting each server on first use, so a browser page or a
+  native session survives between calls. `relay_finish` and `relay_release`
+  stop it.
+- **Results pass through.** The target's text blocks follow the relay's own
+  result text, bounded like every result (50 KiB, 2000 lines); its images (up
+  to four) are delivered inline under the usual image rules, before the
+  relay's after-snapshot. Each call's full result, images and the servers'
+  logs land in `workspace/relay-run`, the extraction `relay-run`, and come home
+  with `relay_finish`.
+- **Outcomes.** A call the relay proves was never sent is `refused`; a call
+  that may have reached the server and has no answer (timeout, crash, a
+  malformed answer) is `uncertain`, and the server is stopped so nothing it
+  still holds can act later; the target's own `isError: true` is
+  `completed-with-tool-error` (exit status 3). All three are error results and
+  keep the VM. Nothing is ever replayed.
+
+The launch commands, pinned versions and the full outcome mapping are in
+`docs/relay-run.md`.
 
 ## Saved images
 
@@ -236,7 +248,7 @@ consumer directory or acquires a VM:
 
 ```json
 {"target":{"source":"display","sessionId":"<recording-session>","executionId":"<saved-execution>","phase":"after"}}
-{"target":{"source":"application","name":"browser-captures","path":"c000001-…-landing-navigate.png"}}
+{"target":{"source":"application","name":"relay-run","path":"playwright/<call>/image-1.png"}}
 {"target":{"source":"reference","imageId":"image-<64 lowercase hex digits>"}}
 ```
 
@@ -336,19 +348,18 @@ This runs `claude --print` with the plugin loaded from this checkout
 (`--plugin-dir`), the model limited to the relay's tools, and the server pointed
 at a loopback stand-in for vm-service (`tests/e2e/fixture-service.ts`), which
 keeps leases as records, runs the relay's own Node and transfer commands
-locally, and fakes the desktop capture driver. Five cases run, each a separate
+locally, and fakes the desktop capture driver. Four cases run, each a separate
 headless session: the status call (which also proves the server is pointed at
 the stand-in before anything is acquired), an invalid call refused by the
 contract, a full acquire, stage, exec, finish lifecycle with a verified package,
-a browser lifecycle whose settle-waited page captures come home in the package,
 and a lease abandoned when the session ends, which is retained with its renewal
 paused rather than released. What is checked is what happened on disk and at
 the service, not what the model said. The suite needs `claude` on PATH with an
 account and spends a few model turns per case, so it is not part of `npm test`.
 
 The relay-driver links are development-only. The tests run the manager, the
-guest programs and the shipped server against fixture HTTP services, fake
-Playwright pages and a real MCP client over stdio; no VM, desktop or user
+guest programs and the shipped server against fixture HTTP services, fixture
+MCP servers built with the MCP SDK and a real MCP client over stdio; no VM, desktop or user
 registry is touched. Commit the regenerated `dist/` with source changes.
 
 ## Releasing
