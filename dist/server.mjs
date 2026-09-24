@@ -28634,7 +28634,8 @@ var IMAGE_PRESENTATION_POLICY = Object.freeze({
   /** Formats resampled in-process when they exceed the preview bounds; the others pass through or are unavailable. */
   resampledMimeTypes: Object.freeze(["image/png"]),
   animation: "reject",
-  compressedPngMetadata: "reject",
+  /** iCCP, zTXt and iTXt (macOS captures carry a color profile and XMP) are checksum-verified, never inflated, and dropped from a resampled preview. */
+  compressedPngMetadata: "ignore",
   jpegFrames: Object.freeze(["baseline", "progressive"]),
   maxContainerRecords: 1e4,
   /** Dimensions are those stored in the container; no EXIF orientation is applied. */
@@ -28689,10 +28690,7 @@ function pngDimensions(bytes) {
     requireImage(end <= bytes.length, "Truncated PNG chunk");
     const type = bytes.toString("ascii", offset + 4, offset + 8);
     requireImage(/^[A-Za-z]{4}$/.test(type), "Invalid PNG chunk type");
-    requireImage(
-      !["acTL", "fcTL", "fdAT", "iCCP", "zTXt", "iTXt"].includes(type),
-      "Animated PNG and compressed PNG metadata are unsupported"
-    );
+    requireImage(!["acTL", "fcTL", "fdAT"].includes(type), "Animated PNG is unsupported");
     requireImage(type !== "IHDR" || offset === 8, "Duplicate PNG header");
     requireImage(
       type[0] !== type[0].toUpperCase() || ["IHDR", "PLTE", "IDAT", "IEND"].includes(type),
@@ -29595,17 +29593,22 @@ function targetLaunches(context) {
   const entry = (target2) => join14(context.packagesRoot, "node_modules", TARGET_PACKAGES[target2].entry);
   const executable = context.browserExecutable;
   return {
-    cua: { command: context.cuaDriver, args: ["mcp"], cwd: context.workspace },
+    // On X11 cua-driver's cursor overlay serves screen reads from saved-under
+    // pixels it cannot confirm, so display snapshots come back stale or black.
+    // The image's own `cua-driver serve` runs with --no-overlay for the same reason.
+    cua: { command: context.cuaDriver, args: ["mcp"], cwd: context.workspace, platformArgs: { linux: ["--no-overlay"] } },
     playwright: {
       command: context.node,
       args: [entry("playwright"), "--isolated", "--output-dir", join14(context.outputDir, "playwright", "files"), ...executable ? ["--executable-path", executable] : []],
-      cwd: context.workspace
+      cwd: context.workspace,
+      platformArgs: { linux: ["--no-sandbox"] }
     },
     "chrome-devtools": {
       command: context.node,
       args: [entry("chrome-devtools"), "--isolated", "--no-usage-statistics", "--no-performance-crux", "--no-page-id-routing", "--workspace", context.workspace, ...executable ? ["--executablePath", executable] : []],
       cwd: context.workspace,
-      env: { CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: "1" }
+      env: { CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: "1" },
+      platformArgs: { linux: ["--chromeArg=--no-sandbox"] }
     }
   };
 }

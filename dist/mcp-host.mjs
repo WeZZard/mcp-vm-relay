@@ -8981,7 +8981,7 @@ var require__2 = __commonJS({
 import { spawn as spawn2, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { openSync } from "node:fs";
-import { appendFile, chmod, mkdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
+import { appendFile, chmod, mkdir, readdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { connect, createServer } from "node:net";
 import { isAbsolute, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18962,6 +18962,7 @@ var MAX_TEXT_CHARS = 32 * 1024;
 var MAX_SUMMARY_BYTES = 48 * 1024;
 var MAX_STRUCTURED_BYTES = 8 * 1024;
 var MAX_STDERR_TAIL = 4096;
+var DESKTOP_WAIT_MS = 3e4;
 var message = (error2) => String(error2 instanceof Error ? error2.message : error2).slice(0, 2e3);
 var sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 var safeName = (value) => value.replace(/[^A-Za-z0-9_.-]+/g, "-").replace(/^[-.]+/, "").slice(0, 60) || "call";
@@ -19064,7 +19065,9 @@ async function serveHost(configPath) {
     const launch = config2.targets[target];
     if (!launch) throw new Error(`no launch is configured for target ${target}`);
     await mkdir(join(config2.outputDir, "servers"), { recursive: true });
-    const transport = new StdioClientTransport({ command: launch.command, args: launch.args, cwd: launch.cwd, env: { ...process.env, ...launch.env ?? {} }, stderr: "pipe" });
+    const args = [...launch.args, ...launch.platformArgs?.[process.platform] ?? []];
+    const env = { ...process.env, ...process.platform === "linux" ? await waitForDesktop(process.env, Math.min(config2.startTimeoutMs / 2, DESKTOP_WAIT_MS)) : {}, ...launch.env ?? {} };
+    const transport = new StdioClientTransport({ command: launch.command, args, cwd: launch.cwd, env, stderr: "pipe" });
     const client = new Client({ name: "mcp-vm-relay-guest-host", version: "1" });
     const entry = { target, client, transport, alive: true, stderrTail: "", startedAt: (/* @__PURE__ */ new Date()).toISOString() };
     transport.stderr?.on("data", (chunk) => {
@@ -19077,7 +19080,7 @@ async function serveHost(configPath) {
       entry.alive = false;
       entry.exitedAt ??= (/* @__PURE__ */ new Date()).toISOString();
     };
-    await appendFile(logFile(target), `[mcp-vm-relay] starting ${JSON.stringify([launch.command, ...launch.args])} at ${entry.startedAt}
+    await appendFile(logFile(target), `[mcp-vm-relay] starting ${JSON.stringify([launch.command, ...args])} with DISPLAY=${env.DISPLAY ?? ""} WAYLAND_DISPLAY=${env.WAYLAND_DISPLAY ?? ""} at ${entry.startedAt}
 `).catch(() => {
     });
     try {
@@ -19223,6 +19226,46 @@ async function serveHost(configPath) {
       await shutdown();
     }
     throw error2;
+  }
+}
+var DESKTOP_VARIABLES = ["DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY", "DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR", "XDG_SESSION_TYPE", "XDG_CURRENT_DESKTOP"];
+function parseEnviron(bytes) {
+  const out = {};
+  for (const pair of bytes.toString("utf8").split("\0")) {
+    const at = pair.indexOf("=");
+    if (at > 0) out[pair.slice(0, at)] = pair.slice(at + 1);
+  }
+  return out;
+}
+async function desktopEnvironment(current, procRoot = "/proc", uid = process.getuid?.()) {
+  if (current.DISPLAY || current.WAYLAND_DISPLAY) return {};
+  let pids;
+  try {
+    pids = (await readdir(procRoot)).filter((name) => /^\d+$/.test(name));
+  } catch {
+    return {};
+  }
+  let fallback;
+  for (const pid of pids) {
+    try {
+      if (uid !== void 0 && (await stat(join(procRoot, pid))).uid !== uid) continue;
+      const environ = parseEnviron(await readFile(join(procRoot, pid, "environ")));
+      if (!environ.DISPLAY && !environ.WAYLAND_DISPLAY) continue;
+      const picked = Object.fromEntries(DESKTOP_VARIABLES.filter((name) => environ[name]).map((name) => [name, environ[name]]));
+      const cmdline = (await readFile(join(procRoot, pid, "cmdline"))).toString("utf8").split("\0");
+      if (/cua-driver$/.test(cmdline[0] ?? "") && cmdline[1] === "serve") return picked;
+      fallback ??= picked;
+    } catch {
+    }
+  }
+  return fallback ?? {};
+}
+async function waitForDesktop(current, limitMs, procRoot = "/proc", uid = process.getuid?.()) {
+  const deadline = Date.now() + limitMs;
+  for (; ; ) {
+    const found = await desktopEnvironment(current, procRoot, uid);
+    if (Object.keys(found).length || current.DISPLAY || current.WAYLAND_DISPLAY || Date.now() >= deadline) return found;
+    await sleep(Math.min(1e3, Math.max(0, deadline - Date.now())));
   }
 }
 async function listAll(client, timeoutMs) {
@@ -19498,14 +19541,18 @@ if (process.argv[1] && await realpath(process.argv[1]).catch(() => "") === await
 export {
   CALL_EXIT,
   DEFAULT_START_TIMEOUT_MS,
+  DESKTOP_VARIABLES,
   MAX_ARGS_BYTES,
   SOCKET_NAME,
   callHost,
+  desktopEnvironment,
   hostRequest,
   installPackages,
+  parseEnviron,
   refusedBeforeInput,
   serveHost,
   startHost,
   stopHost,
-  summarize
+  summarize,
+  waitForDesktop
 };

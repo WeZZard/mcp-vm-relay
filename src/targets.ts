@@ -62,7 +62,13 @@ export const TARGET_PACKAGES: Record<Exclude<Target, 'cua'>, TargetPackages> = {
 export const DEFAULT_AFTER_INTERVAL_MS: Record<Target | 'command', number> = { cua: 500, playwright: 300, 'chrome-devtools': 300, command: 500 };
 
 /** How the guest MCP host starts one server: an argv, a working directory and extra environment, never a shell string. */
-export interface TargetLaunch { command: string; args: string[]; cwd: string; env?: Record<string, string> }
+/**
+ * `platformArgs` are appended by the guest host on that platform only. Linux
+ * guests get `--no-sandbox` for Chromium: Ubuntu 24.04's AppArmor forbids the
+ * unprivileged user namespaces the sandbox needs, and the VM is the isolation
+ * boundary.
+ */
+export interface TargetLaunch { command: string; args: string[]; cwd: string; env?: Record<string, string>; platformArgs?: Partial<Record<NodeJS.Platform, string[]>> }
 export interface LaunchContext { node: string; cuaDriver: string; packagesRoot: string; workspace: string; outputDir: string; browserExecutable?: string }
 
 /** The launch commands, derived from the pins and the staged paths. */
@@ -70,17 +76,22 @@ export function targetLaunches(context: LaunchContext): Record<Target, TargetLau
   const entry = (target: Exclude<Target, 'cua'>) => join(context.packagesRoot, 'node_modules', TARGET_PACKAGES[target].entry);
   const executable = context.browserExecutable;
   return {
-    cua: { command: context.cuaDriver, args: ['mcp'], cwd: context.workspace },
+    // On X11 cua-driver's cursor overlay serves screen reads from saved-under
+    // pixels it cannot confirm, so display snapshots come back stale or black.
+    // The image's own `cua-driver serve` runs with --no-overlay for the same reason.
+    cua: { command: context.cuaDriver, args: ['mcp'], cwd: context.workspace, platformArgs: { linux: ['--no-overlay'] } },
     playwright: {
       command: context.node,
       args: [entry('playwright'), '--isolated', '--output-dir', join(context.outputDir, 'playwright', 'files'), ...(executable ? ['--executable-path', executable] : [])],
       cwd: context.workspace,
+      platformArgs: { linux: ['--no-sandbox'] },
     },
     'chrome-devtools': {
       command: context.node,
       args: [entry('chrome-devtools'), '--isolated', '--no-usage-statistics', '--no-performance-crux', '--no-page-id-routing', '--workspace', context.workspace, ...(executable ? ['--executablePath', executable] : [])],
       cwd: context.workspace,
       env: { CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: '1' },
+      platformArgs: { linux: ['--chromeArg=--no-sandbox'] },
     },
   };
 }
