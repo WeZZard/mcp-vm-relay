@@ -289,7 +289,7 @@ async function analyze(root: string, options: DeliverPackageOptions, files: stri
     steps.push({ id: stepId, actionId: executionId, inputMode: 'diagnostic', attemptId: request?.attemptId ?? executionId,
       title: request?.step?.title ?? 'Diagnostic command', execution: receiptOutcome(receipt), state: 'diagnostic',
       because: request?.because, expected: request?.step?.expected,
-      observed: `No screenshot evidence. ${JSON.stringify({ outcome: receipt.outcome, stdout: receipt.stdout, stderr: receipt.stderr, timeoutMs: receipt.timeoutMs })}` });
+      observed: `No screenshot evidence. ${JSON.stringify({ outcome: receipt.outcome, ...(receipt.output !== undefined ? { output: receipt.output } : { stdout: receipt.stdout, stderr: receipt.stderr }), timeoutMs: receipt.timeoutMs })}` });
   }
   if (events.some(e => ["evidence-failure", "capture-status", "resource-stop"].includes(e.kind) && ["incomplete", "uncertain"].includes(e.state))) findings.push("journal records incomplete evidence or a resource stop");
   if (files.some(p => p.startsWith("state/snapshots/") && p.endsWith(".part"))) findings.push("unfinished snapshot originals retained");

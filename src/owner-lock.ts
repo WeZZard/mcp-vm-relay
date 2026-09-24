@@ -106,7 +106,9 @@ export async function acquireOwnerLock(path: string, options: OwnerLockOptions =
         else if (output.length >= 7) rejectReady(new OwnerLockError("Invalid owner lock helper announcement"));
       });
       child.once("error", error => rejectReady(new OwnerLockError("Cannot start Python owner lock helper", { cause: error })));
-      child.once("exit", () => rejectReady(new OwnerLockError(`Owner lock helper exited before announcement: ${stderr || "no ready response"}`)));
+      // "close", not "exit": exit can fire before the helper's stderr is read,
+      // which would drop the reason (e.g. another manager owns the session).
+      child.once("close", () => rejectReady(new OwnerLockError(`Owner lock helper exited before announcement: ${stderr || "no ready response"}`)));
       abort = () => rejectReady(signal!.reason);
       signal?.addEventListener("abort", abort, { once: true });
       if (signal?.aborted) abort();

@@ -811,8 +811,9 @@ export class RelayManager {
     try {
       const argv = e.staged ? ['/bin/sh', '-c', 'cd "$1" || exit; shift; exec "$@"', 'relay-diagnostic', join(e.guestRoot, 'workspace'), ...input.argv] : input.argv;
       const r = await this.channel.exec(e.lease!.vm, argv, timeoutMs);
-      result = { executionId, outcome: { kind: 'completed' as const, exitStatus: { code: r.code, signal: null } }, stdout: r.stdout, stderr: r.stderr };
-    } catch (error) { result = { executionId, outcome: { kind: 'uncertain' as const, diagnostic: String(error) }, stdout: '', stderr: String(error) }; }
+      // vm-service returns one stream with stdout and stderr interleaved; report it once, as what it is.
+      result = { executionId, outcome: { kind: 'completed' as const, exitStatus: { code: r.code, signal: null } }, output: r.stdout, outputStreams: 'stdout and stderr combined' };
+    } catch (error) { result = { executionId, outcome: { kind: 'uncertain' as const, diagnostic: String(error) }, output: '', outputStreams: 'stdout and stderr combined' }; }
     const response = { ...result, timeoutMs, evidenceMode: 'diagnostic', screenshotEvidence: false, imageDelivery: { status: 'not-requested' as const, diagnostic: 'Diagnostic execution has no screenshot evidence.' }, evidencePath: e.hostRoot, leaseReleased: false, owned: this.status() };
     await jsonFile(join(e.hostRoot, 'host', 'diagnostics', `${executionId}.receipt.json`), response);
     if (result.outcome.kind !== 'completed' || result.outcome.exitStatus.code !== 0) await this.fail(new Error(JSON.stringify(result.outcome)));

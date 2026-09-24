@@ -175,6 +175,18 @@ The default is the wait from the end of the call to the after-snapshot.
 
 ## Live checks
 
+To repeat them, build and run one step file per image. Each acquires, uses
+and finishes a real VM through the local vm-service:
+
+```sh
+npm run build
+node scripts/live-check.mjs scripts/live-checks/ubuntu.json <outDir>
+node scripts/live-check.mjs scripts/live-checks/macos.json <outDir>
+```
+
+The script exits nonzero when any step's result differs from what its step
+file expects, and saves every result and image in `<outDir>`.
+
 Run on 2026-09-24 against `ubuntu2404` (arm64, GNOME on X11) and `macos26`
 (26.6.1) with the local vm-service:
 
