@@ -1,6 +1,6 @@
 {
   "name": "mcp-vm-relay",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "Recorded, snapshot-evidenced computer-use and browser-use in a fresh disposable VM, through one relay tool",
   "author": {
     "name": "WeZZard"
