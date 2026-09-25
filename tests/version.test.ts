@@ -31,3 +31,10 @@ test('npm pack ships no skills/ or hooks/ files', async () => {
   const paths = files.map((file: { path: string }) => file.path);
   assert.ok(!paths.some((path: string) => path.startsWith('skills/') || path.startsWith('hooks/')), JSON.stringify(paths));
 });
+
+test('the marketplace is named after the project, not the account, and lists this plugin', async () => {
+  const marketplace = JSON.parse(await readFile('.claude-plugin/marketplace.json', 'utf8'));
+  const plugin = JSON.parse(await readFile('.claude-plugin/plugin.json', 'utf8'));
+  assert.equal(marketplace.name, 'mcp-vm-relay');
+  assert.deepEqual(marketplace.plugins.map((entry: { name: string }) => entry.name), [plugin.name]);
+});
