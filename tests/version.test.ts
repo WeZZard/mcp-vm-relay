@@ -16,10 +16,11 @@ test('package.json, the plugin manifest and the pinned pi-mcp.json arg agree on 
   assert.equal(pinned, `@wezzard/mcp-vm-relay@${pkg.version}`, 'pi-mcp.json must pin the same version as package.json');
 });
 
-test('package.json no longer ships skills or a hook, and relies on MCP alone', async () => {
+test('package.json ships no skills or hook; pi gets the MCP server and the prompt templates', async () => {
   const pkg = JSON.parse(await readFile('package.json', 'utf8'));
   assert.ok(!pkg.files.some((entry: string) => entry.startsWith('skills') || entry.startsWith('hooks')), JSON.stringify(pkg.files));
-  assert.deepEqual(pkg.pi, { mcp: './pi-mcp.json' });
+  assert.deepEqual(pkg.pi, { mcp: './pi-mcp.json', prompts: ['./pi-prompts/*.md'] });
+  assert.ok(pkg.files.includes('commands/') && pkg.files.includes('pi-prompts/'), JSON.stringify(pkg.files));
 });
 
 test('npm pack ships no skills/ or hooks/ files', async () => {

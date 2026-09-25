@@ -133,27 +133,10 @@ test('trajectory refuses an absent or unverified package and never opens a brows
   assert.equal(blank.isError, true); assert.match(blank.content[0].text, /directory is required/);
 });
 
-test('prompts/list offers status and trajectory; prompts/get reads the same status data and asks the assistant to call relay_trajectory', async t => {
-  const { client, project } = await fixture(t);
-  const { prompts } = await client.listPrompts();
-  assert.deepEqual(prompts.map(prompt => prompt.name).sort(), ['status', 'trajectory']);
-  assert.equal(prompts.find(prompt => prompt.name === 'status')!.arguments, undefined);
-  assert.deepEqual(prompts.find(prompt => prompt.name === 'trajectory')!.arguments, [{ name: 'directory', description: 'The package directory, absolute or relative to the project.', required: true }]);
-
-  const status = await client.getPrompt({ name: 'status', arguments: {} });
-  assert.equal(status.messages.length, 1);
-  assert.equal(status.messages[0]!.role, 'user');
-  const statusText = (status.messages[0]!.content as { text: string }).text;
-  assert.deepEqual(JSON.parse(statusText.slice(statusText.indexOf('{'))), { active: false, project, service: 'http://127.0.0.1:9' });
-
-  const trajectory = await client.getPrompt({ name: 'trajectory', arguments: { directory: 'evidence/task-1' } });
-  const trajectoryText = (trajectory.messages[0]!.content as { text: string }).text;
-  assert.match(trajectoryText, /relay_trajectory/);
-  assert.match(trajectoryText, /evidence\/task-1/);
-  assert.match(trajectoryText, /human review remains pending/i);
-
-  await assert.rejects(client.getPrompt({ name: 'trajectory', arguments: {} }), /directory is required/);
-  await assert.rejects(client.getPrompt({ name: 'no-such-prompt', arguments: {} }), /Unknown prompt/);
+test('the server offers no MCP prompts: the user commands are host command files', async t => {
+  const { client } = await fixture(t);
+  assert.equal(client.getServerCapabilities()?.prompts, undefined);
+  await assert.rejects(client.listPrompts(), /Method not found/);
 });
 
 test('cancelling a relay call from the client aborts the server-side signal', async t => {

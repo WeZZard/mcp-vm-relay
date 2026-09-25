@@ -1018,7 +1018,7 @@
     "src/schema.ts": "584e291cd114e0f6e1b1e0009667e66fb0482e260008e765494dfe646f8c57d2",
     "src/search-diagnostics.ts": "cea037618c56f075d51155101ad1cc0314bfa67b174bdb070191e0ea5ea04679",
     "src/search.ts": "8aaf544fcb27e7e018bd976e1ba7d3c70c047aeda3182b3dce91873a901a245e",
-    "src/server.ts": "4c3e819e49dae6fe0e89ae5accb2b02c8dcffe272850c2396122b35a31b68562",
+    "src/server.ts": "56a3f7d4ce9abd4f5b9ec83f308821b1769cb094a8a131bcbfb1089cd0b5be38",
     "src/surface.ts": "ba9e11a0b72b760e2cdaf5a064699d1e71d3afac52f6aa1b705622c6ef0d39a8",
     "src/targets.ts": "6a170f08324c112f2d06f499aefb311f65e845b75f4ac838e797f649e1e34165",
     "src/transfer.ts": "50a7c8dd9ac76e27dd95837175bf398f31b43e20f63742550afe93164c1b8635",

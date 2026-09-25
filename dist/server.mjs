@@ -31119,7 +31119,7 @@ function createRelayServer(options2 = {}) {
     const service = environment?.profile.vmServiceUrl ?? process.env.MCP_VM_RELAY_URL ?? "http://localhost:6240";
     return { ...manager ? manager.status() : { active: false }, project, service, environment: environment?.identity };
   };
-  const server = new Server({ name: SERVER_NAME, version: SERVER_VERSION }, { capabilities: { tools: {}, prompts: {} }, instructions });
+  const server = new Server({ name: SERVER_NAME, version: SERVER_VERSION }, { capabilities: { tools: {} }, instructions });
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: allToolDefinitions() }));
   server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     const { name, arguments: args } = request.params;
@@ -31139,36 +31139,6 @@ function createRelayServer(options2 = {}) {
     } catch (error2) {
       return text3(message(error2), true);
     }
-  });
-  server.setRequestHandler(ListPromptsRequestSchema, async () => ({
-    prompts: [
-      { name: "status", title: "Relay status", description: "Report this session's owned VM lease exactly as the relay_status tool sees it. Read-only." },
-      {
-        name: "trajectory",
-        title: "Relay trajectory",
-        description: "Ask the assistant to verify a delivered relay evidence package and open its trajectory viewer; human review remains pending.",
-        arguments: [{ name: "directory", description: "The package directory, absolute or relative to the project.", required: true }]
-      }
-    ]
-  }));
-  server.setRequestHandler(GetPromptRequestSchema, async (request) => {
-    const { name, arguments: args } = request.params;
-    if (name === "status") {
-      return {
-        description: "This session's owned VM lease, read-only.",
-        messages: [{ role: "user", content: { type: "text", text: `Report this exactly as it is, without acting on it:
-${JSON.stringify(statusPayload(), null, 2)}` } }]
-      };
-    }
-    if (name === "trajectory") {
-      const directory2 = args?.directory;
-      if (typeof directory2 !== "string" || !directory2.trim()) throw new Error("directory is required");
-      return {
-        description: "Verify and open a delivered relay evidence package.",
-        messages: [{ role: "user", content: { type: "text", text: `Call ${TRAJECTORY_TOOL} with directory "${directory2}" and report its answer as given. Opening the viewer does not mean the work was approved: human review remains pending until the user says otherwise.` } }]
-      };
-    }
-    throw new Error(`Unknown prompt: ${name}`);
   });
   const cleanup = async (reason2) => {
     try {
@@ -31228,6 +31198,7 @@ export {
   SERVER_VERSION,
   STATUS_TOOL,
   TRAJECTORY_TOOL,
+  allToolDefinitions,
   createRelayServer,
   projectDirectory,
   relayContent
