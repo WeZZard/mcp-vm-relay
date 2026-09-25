@@ -1,12 +1,14 @@
 {
-  "name": "wezzard",
-  "description": "WeZZard's Claude Code plugins",
-  "owner": { "name": "WeZZard" },
+  "name": "mcp-vm-relay",
+  "description": "The mcp-vm-relay Claude Code plugin",
+  "owner": {
+    "name": "WeZZard"
+  },
   "plugins": [
     {
       "name": "mcp-vm-relay",
       "source": "./",
-      "description": "Recorded, snapshot-evidenced computer-use and browser-use in a fresh disposable VM, through one relay tool"
+      "description": "Recorded, snapshot-evidenced computer-use and browser-use in a fresh disposable VM, through the relay_* MCP tools"
     }
   ]
 }

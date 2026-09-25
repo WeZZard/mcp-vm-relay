@@ -66,7 +66,7 @@ Or add this repository as a marketplace and install the plugin from it:
 
 ```
 /plugin marketplace add WeZZard/mcp-vm-relay
-/plugin install mcp-vm-relay@wezzard
+/plugin install mcp-vm-relay@mcp-vm-relay
 ```
 
 Once loaded, the model sees the nineteen tools as

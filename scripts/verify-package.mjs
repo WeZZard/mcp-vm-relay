@@ -41,6 +41,7 @@ try {
   const pinned = json('pi-mcp.json').mcpServers?.relay?.args ?? [];
   check(pinned.includes(`@wezzard/mcp-vm-relay@${pkg.version}`), `pi-mcp.json does not pin @wezzard/mcp-vm-relay@${pkg.version}`);
   check(has('.mcp.json') && has('dist/server.mjs'), '.mcp.json or dist/server.mjs is missing');
+  check(json('.claude-plugin/marketplace.json').name === 'mcp-vm-relay', 'the Claude Code marketplace is not named mcp-vm-relay');
 
   // 2. Host command files: present, byte-identical to the generator, nothing extra.
   const expected = hostCommandFiles();
