@@ -5,9 +5,11 @@
  * manager, the vm-service client, the registry, the strict contract, the
  * action dispatch and the bounded result rendering). This file binds that
  * core to MCP over standard input and output: nineteen `relay_*` tools, each
- * with its own schema, title and annotations, plus two MCP prompts (`status`
- * and `trajectory`) for the user commands. The server relies on MCP alone:
- * there is no skill, no hook and no agent-runtime-specific delivery path.
+ * with its own schema, title and annotations. The two user commands (status
+ * and trajectory) are not MCP prompts: pi's adapter can only name those
+ * `/mcp__<package>__<server>__<prompt>`, so each host gets its own command file
+ * instead, generated from scripts/host-commands.mjs. There is no skill and no
+ * hook.
  */
 import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
@@ -18,7 +20,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { CallToolRequestSchema, GetPromptRequestSchema, ListPromptsRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { RelayManager, Registry, instructions, relayCall, relayToolInput, relayToolInputSchema, relayTools, selectedEnvironment, verifyDeliveredPackage, type RelayCallResult, type RelayToolAnnotations } from './core.js';
 
 export const SERVER_NAME = 'relay';
@@ -62,7 +64,7 @@ const trajectoryToolDefinition = {
   annotations: trajectoryAnnotations,
 };
 /** Every MCP tool this server offers, for `tools/list` and `--schema`. */
-function allToolDefinitions() {
+export function allToolDefinitions() {
   return [
     ...relayTools.map(tool => ({ name: tool.name, title: tool.title, description: tool.description, inputSchema: relayToolInputSchema(tool), annotations: tool.annotations })),
     statusToolDefinition, trajectoryToolDefinition,
@@ -92,13 +94,13 @@ export function createRelayServer(options: RelayServerOptions = {}) {
     }
     return manager;
   });
-  /** The same data relay_status reports and the `status` prompt reads, read-only. */
+  /** The data relay_status reports, read-only. */
   const statusPayload = () => {
     const environment = selectedEnvironment();
     const service = environment?.profile.vmServiceUrl ?? process.env.MCP_VM_RELAY_URL ?? 'http://localhost:6240';
     return { ...(manager ? manager.status() : { active: false }), project, service, environment: environment?.identity };
   };
-  const server = new Server({ name: SERVER_NAME, version: SERVER_VERSION }, { capabilities: { tools: {}, prompts: {} }, instructions });
+  const server = new Server({ name: SERVER_NAME, version: SERVER_VERSION }, { capabilities: { tools: {} }, instructions });
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: allToolDefinitions() }));
   server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     const { name, arguments: args } = request.params;
@@ -116,33 +118,6 @@ export function createRelayServer(options: RelayServerOptions = {}) {
       if (relayTools.some(tool => tool.name === name)) return relayContent(await relayCall(get, relayToolInput(name, (args ?? {}) as Record<string, unknown>), { signal: extra.signal, toolCallId: String(extra.requestId) }));
       throw new Error(`Unknown tool: ${name}`);
     } catch (error) { return text(message(error), true); }
-  });
-  server.setRequestHandler(ListPromptsRequestSchema, async () => ({
-    prompts: [
-      { name: 'status', title: 'Relay status', description: 'Report this session\'s owned VM lease exactly as the relay_status tool sees it. Read-only.' },
-      {
-        name: 'trajectory', title: 'Relay trajectory', description: 'Ask the assistant to verify a delivered relay evidence package and open its trajectory viewer; human review remains pending.',
-        arguments: [{ name: 'directory', description: 'The package directory, absolute or relative to the project.', required: true }],
-      },
-    ],
-  }));
-  server.setRequestHandler(GetPromptRequestSchema, async request => {
-    const { name, arguments: args } = request.params;
-    if (name === 'status') {
-      return {
-        description: 'This session\'s owned VM lease, read-only.',
-        messages: [{ role: 'user' as const, content: { type: 'text' as const, text: `Report this exactly as it is, without acting on it:\n${JSON.stringify(statusPayload(), null, 2)}` } }],
-      };
-    }
-    if (name === 'trajectory') {
-      const directory = args?.directory;
-      if (typeof directory !== 'string' || !directory.trim()) throw new Error('directory is required');
-      return {
-        description: 'Verify and open a delivered relay evidence package.',
-        messages: [{ role: 'user' as const, content: { type: 'text' as const, text: `Call ${TRAJECTORY_TOOL} with directory "${directory}" and report its answer as given. Opening the viewer does not mean the work was approved: human review remains pending until the user says otherwise.` } }],
-      };
-    }
-    throw new Error(`Unknown prompt: ${name}`);
   });
   // Ending the session pauses lease renewal and detaches the recording; the VM
   // is retained for an explicit finish or release, and the backend TTL is the

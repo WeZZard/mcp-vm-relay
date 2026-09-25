@@ -62,13 +62,25 @@ jobs:
         env:
           VMCTL: ${{ github.workspace }}/.ci/vm-service/rust/target/release/vmctl
 
-      - name: Confirm dist/ is up to date
+      - name: Confirm generated files are up to date
         run: |
           set -e
-          if ! git diff --exit-code -- dist; then
-            echo "dist/ is stale: the build above produced changes that were not committed" >&2
+          if ! git diff --exit-code -- dist commands pi-prompts || [ -n "$(git status --porcelain -- dist commands pi-prompts)" ]; then
+            echo "dist/, commands/ or pi-prompts/ is stale: the build above produced changes that were not committed" >&2
             exit 1
           fi
+
+      # Pack once. The same tarball is checked, published and attached to the
+      # GitHub release, so what was checked is exactly what ships.
+      - name: Pack
+        run: |
+          set -e
+          mkdir -p .release
+          npm pack --pack-destination .release
+          ls .release/*.tgz
+
+      - name: Check the packed package
+        run: node scripts/verify-package.mjs .release/*.tgz --version "${GITHUB_REF_NAME#v}"
 
       - name: Publish to npm
         run: |
@@ -78,7 +90,7 @@ jobs:
           if [ "$published_version" = "$tag_version" ]; then
             echo "skip: @wezzard/mcp-vm-relay@$tag_version is already published"
           else
-            npm publish --provenance --access public
+            npm publish .release/*.tgz --provenance --access public
           fi
 
       - name: Create GitHub release
@@ -89,6 +101,5 @@ jobs:
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             echo "skip: release $GITHUB_REF_NAME already exists"
           else
-            npm pack
-            gh release create "$GITHUB_REF_NAME" --generate-notes --verify-tag ./wezzard-mcp-vm-relay-*.tgz
+            gh release create "$GITHUB_REF_NAME" --generate-notes --verify-tag .release/*.tgz
           fi

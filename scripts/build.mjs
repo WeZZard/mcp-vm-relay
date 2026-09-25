@@ -1,7 +1,13 @@
 import { build } from 'esbuild';
-import { readFile, writeFile, chmod, rm } from 'node:fs/promises';
+import { readFile, writeFile, chmod, rm, mkdir } from 'node:fs/promises';
+import { dirname } from 'node:path';
+import { COMMAND_DIRS, hostCommandFiles } from './host-commands.mjs';
 import { createHash } from 'node:crypto';
 await rm('dist', { recursive: true, force: true });
+// The host command files are generated whole: clear their directories so a
+// renamed or removed command leaves nothing stale behind.
+for (const dir of Object.values(COMMAND_DIRS)) await rm(dir, { recursive: true, force: true });
+for (const [path, content] of Object.entries(hostCommandFiles())) { await mkdir(dirname(path), { recursive: true }); await writeFile(path, content); }
 const pkg = JSON.parse(await readFile('package.json', 'utf8'));
 const common = { bundle: true, platform: 'node', target: 'node22', format: 'esm', metafile: true, define: { __MCP_VM_RELAY_VERSION__: JSON.stringify(pkg.version) } };
 // Bundled CommonJS dependencies need a real require; esbuild's ESM output gets one from this banner.

@@ -51,3 +51,14 @@ jobs:
         run: npm run check
         env:
           VMCTL: ${{ github.workspace }}/.ci/vm-service/rust/target/release/vmctl
+
+      - name: Confirm generated files are committed
+        run: |
+          set -e
+          if ! git diff --exit-code -- dist commands pi-prompts || [ -n "$(git status --porcelain -- dist commands pi-prompts)" ]; then
+            echo "dist/, commands/ or pi-prompts/ is stale: run npm run build and commit the result" >&2
+            exit 1
+          fi
+
+      - name: Check the packed package
+        run: npm run verify:package
