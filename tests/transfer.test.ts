@@ -117,6 +117,23 @@ test('remote inventory scans a file over 512 MiB, and over one Node.js read, wit
  await assert.rejects(transfer.scan(join(root, 'fifo'), root), /special file/);
 });
 
+test('the guest scan timeout grows with the bytes it hashes instead of a fixed 120 s', { timeout: 60000 }, async t => {
+ const root = await realpath(await mkdtemp(join(tmpdir(), 'relay-scan-timeout-'))); t.after(() => rm(root, { recursive: true, force: true }));
+ const state = join(root, 'state'); await mkdir(state);
+ const size = 1024 * 1024 * 1024; // sparse, so no disk space is used
+ await writeFile(join(state, 'large.png'), ''); await truncate(join(state, 'large.png'), size);
+ const timeouts: number[] = [];
+ const channel: VmChannel = {
+  exec: async (_name, argv, timeoutMs) => { timeouts.push(timeoutMs ?? 0); return command(argv, { timeoutMs: 60000 }); },
+  push: async (_name, l, r) => copyFile(l, r), pull: async (_name, r, l) => copyFile(r, l),
+ };
+ const transfer = new Transfer(channel, 'fake', process.execPath, { guestRoot: root, hostTempRoot: join(root, 'temp') });
+ const facts = await transfer.scan(state, root); assert.equal(facts[0].bytes, size);
+ // A state larger than a fixed 120 s of hashing must not time out: the scan allows
+ // at least 8 MiB/s of hashing on top of the 120 s base.
+ assert.ok(Math.max(...timeouts) >= 120000 + (size / (8 * 1024 * 1024)) * 1000, `the longest guest command timeout was ${Math.max(...timeouts)} ms`);
+});
+
 test('path traversal rejected before IO', () => {
  for (const path of ['', '..', '../x', '/elsewhere', 'a\\b', 'a\0b', '.']) assert.throws(() => within('/safe', path));
  assert.equal(within('/safe', 'folder/file'), '/safe/folder/file');
