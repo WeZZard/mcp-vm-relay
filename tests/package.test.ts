@@ -143,7 +143,7 @@ test("review page orders steps by time and reads commands, exit status, output s
   // The diagnostic ran first, so it is step 01 even though the trajectory lists actions first.
   assert.ok(html.indexOf('id="step-diagnostic-early"') < html.indexOf('id="step-step-0"'));
   const diagnostic = html.split('<article id="step-diagnostic-early"')[1]!.split("</article>")[0]!;
-  assert.match(diagnostic, /<span>Step 01 <span class="of">of 02<\/span><\/span><span>Diagnostic<\/span><time>23:59:00 UTC<\/time>/);
+  assert.match(diagnostic, /<span>Step <span class="d">01<\/span> <span class="of">of <span class="d">02<\/span><\/span><\/span><span>Diagnostic<\/span><time>23:59:00 UTC<\/time>/);
   assert.match(diagnostic, /<h2>Inspect the guest before acting<\/h2>/);
   // A step without snapshots shows its command and output in the viewport, and its exit status in the panel.
   assert.match(diagnostic, /<pre class="term-cmd"><span class="prompt" aria-hidden="true">\$<\/span>\/bin\/zsh -c &#39;ls -la workspace&#39;<\/pre>/);
@@ -169,7 +169,7 @@ test("review page orders steps by time and reads commands, exit status, output s
   assert.deepEqual([...html.matchAll(/<div class="lightbox" id="([^"]+)" data-step="([^"]+)" popover>/g)].map(m => `${m[1]} ${m[2]}`),
     ["lightbox-diagnostic-early--command step-diagnostic-early", "lightbox-step-0--before step-step-0", "lightbox-step-0--after step-step-0"]);
   assert.match(html, /<div class="lightbox" id="lightbox-step-0--after" data-step="step-step-0" popover><div class="lb-body"><img loading="lazy" alt="After dispatch snapshot, enlarged" src="[^"]+"><\/div><button type="button" class="lb-nav prev" popovertarget="lightbox-step-0--before" aria-label="Previous: Step 02 · Before, [^"]+">/);
-  assert.match(html, /<p class="lb-cap"><span class="label">Step 02 · After<\/span><time>[^<]+<\/time><a href="[^"]+">Open the original<\/a><button type="button" class="close" popovertarget="lightbox-step-0--after" popovertargetaction="hide" aria-label="Close">/);
+  assert.match(html, /<p class="lb-cap"><span class="label">Step <span class="d">02<\/span> · After<\/span><time>[^<]+<\/time><a href="[^"]+">Open the original<\/a><button type="button" class="close" popovertarget="lightbox-step-0--after" popovertargetaction="hide" aria-label="Close">/);
   // A command has a lightbox too, where it reads in larger text.
   assert.match(diagnostic, /<button type="button" class="enlarge" popovertarget="lightbox-diagnostic-early--command" title="Enlarge the command">/);
   assert.match(html, /id="lightbox-diagnostic-early--command" data-step="step-diagnostic-early" popover><div class="lb-body"><div class="lb-term"><pre class="lb-cmd">/);
@@ -177,7 +177,7 @@ test("review page orders steps by time and reads commands, exit status, output s
   // The title is the relay's, with the task beside it. The statistics say when the run started in UTC,
   // and, filled in by the page's script, in the reader's time zone.
   assert.match(html, /<h1 title="[^"]+">Relay<span class="task">[^<]+<\/span><\/h1>/);
-  assert.match(html, /<p class="when">Started <time datetime="2026-09-12T23:59:00\.000Z" title="[^"]+">Sep 12, 2026, 23:59 UTC<\/time><span class="local" hidden><span class="sep" aria-hidden="true">·<\/span><time datetime="2026-09-12T23:59:00\.000Z" data-local title="In your time zone"><\/time><\/span><\/p>/);
+  assert.match(html, /<li class="at"><time datetime="2026-09-12T23:59:00\.000Z" title="Started [^"]+">Sep 12, 2026, 23:59 UTC<\/time><span class="local" hidden><span class="sep" aria-hidden="true">·<\/span><time datetime="2026-09-12T23:59:00\.000Z" data-local title="Started, in your time zone"><\/time><\/span><\/li>/);
   // The overview is one column; the package's identity and files close it.
   assert.doesNotMatch(html.split('id="overview"')[1]!, /<aside/);
   assert.match(html, /<section class="block"><h3>Package<\/h3><div class="package"><dl class="ids">/);
