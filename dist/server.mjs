@@ -20287,6 +20287,7 @@ var duration3 = (ms) => ms < 6e4 ? `${(ms / 1e3).toFixed(1)} s` : `${Math.floor(
 var size = (bytes) => bytes >= 1e6 ? `${(bytes / 1e6).toFixed(1)} MB` : bytes >= 1e3 ? `${(bytes / 1e3).toFixed(1)} kB` : `${bytes} B`;
 var noun = (count, word) => count === 1 ? word : `${word}s`;
 var plural = (count, word) => `${count} ${noun(count, word)}`;
+var erred = (step2) => tone(step2.execution) !== "ok";
 var tone = (value) => ["passed", "complete", "completed"].includes(value) ? "ok" : ["failed", "refused"].includes(value) ? "bad" : value === "pending" ? "pend" : "warn";
 var verdict = (value) => `<span class="verdict ${tone(value)}"><i aria-hidden="true"></i>${escapeHtml(value)}</span>`;
 var shellWord = (word) => /^[\w@%+=:,./-]+$/.test(word) ? word : `'${word.replace(/'/g, `'\\''`)}'`;
@@ -20388,9 +20389,9 @@ function thumb(step2, detail, number3) {
   const { headline, command: command2 } = describe2(step2, detail);
   const image = step2.snapshots?.after ?? step2.snapshots?.before;
   const face = image ? `<img loading="lazy" alt="" src="${src(image)}">` : `<pre aria-hidden="true"><span class="prompt">$</span>${escapeHtml(command2 ?? headline)}</pre>`;
-  return `<li class="${tone(step2.execution)}${step2.inputMode === "diagnostic" ? " diagnostic" : ""}"><a href="${escapeHtml(link2(step2))}" title="${escapeHtml(headline)}"><span class="face${image ? "" : " text"}">${face}</span><span class="cap"><span class="n">${number3}</span><i class="dot" aria-hidden="true"></i><span class="t">${escapeHtml(headline)}</span></span><span class="sr">${escapeHtml(step2.execution)}</span></a></li>`;
+  return `<li class="${tone(step2.execution)}${step2.inputMode === "diagnostic" ? " diagnostic" : ""}${erred(step2) ? " err" : ""}"><a href="${escapeHtml(link2(step2))}" title="${escapeHtml(headline)}"><span class="face${image ? "" : " text"}">${face}</span><span class="cap"><span class="n">${number3}</span><i class="dot" aria-hidden="true"></i><span class="t">${escapeHtml(headline)}</span></span><span class="sr">${escapeHtml(step2.execution)}</span></a></li>`;
 }
-var keys = `(()=>{const steps=()=>[...document.querySelectorAll(".center>.step:not(.overview)")];const current=()=>{let el=null;try{el=document.getElementById(decodeURIComponent(location.hash.slice(1)))}catch{}const step=el&&el.closest(".step");return step?steps().indexOf(step):0};const reveal=()=>{const li=document.querySelectorAll(".track li")[current()];if(li)li.scrollIntoView({block:"nearest",inline:"nearest"})};document.addEventListener("keydown",e=>{if(e.defaultPrevented||e.altKey||e.ctrlKey||e.metaKey||e.shiftKey)return;const t=e.target;if(t instanceof HTMLElement&&(t.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)))return;const d=e.key==="ArrowRight"?1:e.key==="ArrowLeft"?-1:0;if(!d)return;const all=steps(),i=current(),j=i<0?(d>0?0:-1):i+d;if(j<0||j>=all.length)return;e.preventDefault();location.hash=encodeURIComponent(all[j].id)});addEventListener("hashchange",reveal);reveal()})();`;
+var keys = `(()=>{const steps=()=>[...document.querySelectorAll(".center>.step:not(.overview)")];const current=()=>{let el=null;try{el=document.getElementById(decodeURIComponent(location.hash.slice(1)))}catch{}const step=el&&el.closest(".step");return step?steps().indexOf(step):0};const focused=()=>{const f=document.getElementById("focus-errors");return!!(f&&f.checked)};let last="";const reveal=()=>{const i=current();if(i>=0)last=location.hash;const li=document.querySelectorAll(".track li")[i];if(li)li.scrollIntoView({block:"nearest",inline:"nearest"})};document.addEventListener("keydown",e=>{if(e.defaultPrevented||e.altKey||e.ctrlKey||e.metaKey||e.shiftKey)return;const t=e.target;if(t instanceof HTMLElement&&(t.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)))return;const d=e.key==="ArrowRight"?1:e.key==="ArrowLeft"?-1:0;if(!d)return;const all=steps();let j=current();if(j<0){if(d<0)return;j=-1}do j+=d;while(j>=0&&j<all.length&&focused()&&!all[j].classList.contains("err"));if(j<0||j>=all.length)return;e.preventDefault();location.hash=encodeURIComponent(all[j].id)});const tab=document.querySelector(".tabs .t-traj");if(tab)tab.addEventListener("click",e=>{if(last){e.preventDefault();location.hash=last}});addEventListener("hashchange",reveal);reveal()})();`;
 var keysPolicy = `'sha256-${createHash4("sha256").update(keys).digest("base64")}'`;
 var selection = (count) => !count ? "" : Array.from({ length: count }, (_, i) => `.app:has(.center>.step:nth-of-type(${i + 1}):target) .track li:nth-child(${i + 1}) a,.app:has(.center>.step:nth-of-type(${i + 1}) :target) .track li:nth-child(${i + 1}) a`).join(",") + ",.app:not(:has(.center :target)) .track li:first-child a{background:var(--s2)}" + Array.from({ length: count }, (_, i) => `.app:has(.center>.step:nth-of-type(${i + 1}):target) .track li:nth-child(${i + 1}) .face,.app:has(.center>.step:nth-of-type(${i + 1}) :target) .track li:nth-child(${i + 1}) .face`).join(",") + ",.app:not(:has(.center :target)) .track li:first-child .face{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--accent),0 0 18px var(--ring)}";
 function renderReviewPage(model) {
@@ -20398,6 +20399,7 @@ function renderReviewPage(model) {
   const numbers = new Map(steps.map((step2, i) => [step2.id, String(i + 1).padStart(2, "0")]));
   const times = steps.map((s) => Date.parse(model.details.get(s.id)?.at ?? "")).filter(Number.isFinite);
   const diagnostics = steps.filter((s) => s.inputMode === "diagnostic").length, actions = steps.length - diagnostics;
+  const errors = steps.filter(erred).length;
   const title = /^relay-(.+)-[0-9a-f]{8}$/.exec(model.taskId)?.[1] ?? model.taskId;
   const uuid2 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
   const byName = /* @__PURE__ */ new Map();
@@ -20425,9 +20427,9 @@ function renderReviewPage(model) {
 <div class="app">
 <header class="top"><div class="brand"><span class="mark" aria-hidden="true"></span><div><h1 title="${escapeHtml(model.packageId)}">${escapeHtml(title)}</h1>
 <ul class="stats">${stat2(noun(steps.length, "step"), String(steps.length))}${stat2(noun(actions, "action"), String(actions))}${stat2(noun(diagnostics, "diagnostic"), String(diagnostics))}${times.length ? `${stat2("UTC", time3(new Date(Math.min(...times)).toISOString()))}${stat2("", duration3(Math.max(...times) - Math.min(...times)))}` : ""}</ul></div></div>
-<ul class="pills">${pill("Snapshots", model.completeness)}${pill("Execution", model.execution)}${pill("Review", "pending")}</ul>
-<a class="ovl${model.findings.length ? " has" : ""}" href="#overview">Overview<span>${model.findings.length}</span></a></header>
-<main class="center">${steps.map((step2, i) => `<article id="step-${escapeHtml(step2.id)}" class="step ${tone(step2.execution)}">${stage(step2, model.details.get(step2.id), numbers.get(step2.id), steps[i - 1], steps[i + 1])}${panel(step2, model.details.get(step2.id), numbers.get(step2.id), steps.length, steps[i - 1], steps[i + 1])}</article>`).join("\n")}
+<nav class="tabs" aria-label="View"><a class="t-traj" href="${steps[0] ? escapeHtml(link2(steps[0])) : "#"}">Trajectory</a><a class="t-over" href="#overview">Overview<span class="${model.findings.length ? "has" : ""}">${model.findings.length}</span></a></nav>
+<ul class="pills"><li class="focus"><label title="Highlight the steps with errors, and move between them with the arrow keys"><input type="checkbox" id="focus-errors"${errors ? "" : " disabled"}>Focus on errors<span>${errors}</span></label></li>${pill("Snapshots", model.completeness)}${pill("Execution", model.execution)}${pill("Review", "pending")}</ul></header>
+<main class="center">${steps.map((step2, i) => `<article id="step-${escapeHtml(step2.id)}" class="step ${tone(step2.execution)}${erred(step2) ? " err" : ""}">${stage(step2, model.details.get(step2.id), numbers.get(step2.id), steps[i - 1], steps[i + 1])}${panel(step2, model.details.get(step2.id), numbers.get(step2.id), steps.length, steps[i - 1], steps[i + 1])}</article>`).join("\n")}
 ${overview}</main>
 <footer class="track" aria-label="Steps"><ol>${steps.map((step2) => thumb(step2, model.details.get(step2.id), numbers.get(step2.id))).join("")}</ol></footer>
 </div><script>${keys}</script></body></html>
@@ -20449,20 +20451,27 @@ b,time,.n,.exit,dd,.gap{font-variant-numeric:tabular-nums}
 .ok{--tone:var(--ok)}.bad{--tone:var(--bad)}.warn{--tone:var(--warn)}.pend{--tone:var(--pend)}
 .verdict{display:inline-flex;align-items:center;gap:.45rem;font:600 12.5px/1 var(--sans);color:var(--tone,var(--dim));text-transform:capitalize}
 .verdict i{flex:none;width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 0 3px color-mix(in srgb,currentColor 18%,transparent)}
-.app{height:100vh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;grid-template-columns:minmax(0,1fr);overflow:clip}.track{min-width:0}
+.app{height:100vh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;grid-template-columns:minmax(0,1fr);overflow:clip}.track{min-width:0;position:relative;z-index:0}
 .top{display:flex;align-items:center;gap:1rem 2.25rem;flex-wrap:wrap;padding:1.1rem 1.75rem}
-.brand{display:flex;align-items:center;gap:.9rem;min-width:0;margin-right:auto}
+.brand{flex:1 1 18rem;display:flex;align-items:center;gap:.9rem;min-width:0}
 .mark{flex:none;width:1.9rem;height:1.9rem;border-radius:50%;background:var(--grad);box-shadow:0 6px 18px var(--ring)}
 h1{font:700 1.3rem/1.15 var(--round);letter-spacing:-.015em;margin:0}
-.stats{display:flex;flex-wrap:wrap;list-style:none;margin:.3rem 0 0;padding:0;font-size:12.5px;color:var(--faint)}
-.stats li+li::before{content:"\xB7";margin:0 .55rem;color:var(--faint)}.stats b{font:700 12.5px var(--round);color:var(--text)}
-.pills{display:flex;gap:.4rem;list-style:none;margin:0;padding:0}
+.stats{display:flex;flex-wrap:wrap;gap:.15rem 1rem;list-style:none;margin:.3rem 0 0;padding:0;font-size:12.5px;color:var(--faint)}.stats b{font:700 12.5px var(--round);color:var(--text)}
+.pills{flex:1 1 auto;display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:.4rem;list-style:none;margin:0;padding:0}.pills li,.stats li{white-space:nowrap}
 .pill{display:flex;align-items:center;gap:.5rem;padding:.42rem .8rem;border-radius:999px;background:color-mix(in srgb,var(--tone) 12%,transparent);font-size:12px;color:var(--dim)}
-.ovl{display:inline-flex;align-items:center;gap:.55rem;padding:.45rem .55rem .45rem .95rem;border-radius:999px;background:var(--s1);box-shadow:var(--shadow);color:var(--text);font-weight:600;font-size:13px}
-.ovl span{display:grid;place-items:center;min-width:1.4rem;height:1.4rem;padding:0 .35rem;font:700 11px/1 var(--round);border-radius:999px;background:var(--s3);color:var(--dim)}
-.ovl.has span{background:var(--grad);color:var(--on)}
-.ovl:hover{text-decoration:none;background:var(--s3)}.app:has(#overview:target) .ovl{box-shadow:0 0 0 2px var(--accent)}
-.center{display:grid;grid-template-columns:minmax(0,1fr) minmax(20rem,25rem);grid-template-areas:"stage panel";gap:0 .75rem;padding:0 .75rem;min-height:0;overflow:clip}
+.tabs{flex:none;display:flex;gap:.2rem;padding:.25rem;border-radius:999px;background:var(--s2)}
+.tabs a{display:inline-flex;align-items:center;gap:.5rem;padding:.4rem 1rem;border-radius:999px;color:var(--dim);font-size:13px;font-weight:600}.tabs a:hover{text-decoration:none;color:var(--text)}
+.tabs a span{display:grid;place-items:center;min-width:1.35rem;height:1.35rem;padding:0 .35rem;font:700 11px/1 var(--round);border-radius:999px;background:var(--s3);color:var(--dim)}.tabs a span.has{background:var(--grad);color:var(--on)}
+.app:not(:has(#overview:target)) .t-traj,.app:has(#overview:target) .t-over{background:var(--s1);color:var(--text);box-shadow:var(--shadow)}
+.focus label{display:flex;align-items:center;gap:.5rem;padding:.38rem .8rem .38rem .6rem;border-radius:999px;font-size:12px;font-weight:600;color:var(--dim);cursor:pointer;user-select:none}
+.focus label:hover{background:var(--s2)}.focus input{appearance:none;margin:0;width:1.05rem;height:1.05rem;border-radius:6px;background:var(--s1);box-shadow:inset 0 0 0 1.5px var(--faint);display:grid;place-items:center;cursor:pointer}
+.focus input:checked{background:var(--bad);box-shadow:none}.focus input:checked::after{content:"";width:.28rem;height:.55rem;border:solid #fff;border-width:0 2px 2px 0;rotate:45deg;translate:0 -1px}
+.focus input:disabled,.focus label:has(input:disabled){cursor:default;opacity:.55}.focus span{font:700 11px/1 var(--round);color:var(--bad)}.focus label:has(input:disabled) span{color:var(--faint)}
+.app:has(#focus-errors:checked) .track li:not(.err){opacity:.35;filter:grayscale(1)}
+.app:has(#focus-errors:checked) .track li.err .face{box-shadow:0 0 0 2px var(--bad),0 6px 16px color-mix(in srgb,var(--bad) 25%,transparent)}
+.app:has(#focus-errors:checked) .track li.err .t{color:var(--bad)}
+.app:has(#overview:target) .track,.app:has(#overview:target) .focus{display:none}
+.center{display:grid;grid-template-columns:minmax(0,1fr) minmax(20rem,25rem);grid-template-areas:"stage panel";gap:0 .75rem;padding:0 .75rem;min-height:0;position:relative;z-index:1}
 .step{display:none}.step:is(:target,:has(:target)){display:contents}.center:not(:has(:target))>.step:first-of-type{display:contents}
 .stage{grid-area:stage;position:relative;min-width:0;min-height:0;border-radius:22px;background:radial-gradient(80% 60% at 50% 40%,rgba(255,255,255,.7),transparent 70%),var(--stage);display:grid;grid-template-rows:auto minmax(0,1fr);overflow:clip}
 .seg{display:flex;align-items:center;gap:.2rem;justify-self:center;margin:1rem 0 .25rem;padding:.25rem;border-radius:999px;background:var(--s1);box-shadow:var(--shadow);z-index:2}
@@ -20509,17 +20518,17 @@ h1{font:700 1.3rem/1.15 var(--round);letter-spacing:-.015em;margin:0}
 .files{list-style:none;margin:0;padding:0;display:grid;gap:.6rem}.files li{display:grid}.files a{font:12.5px var(--mono)}.files span{font-size:12px;color:var(--faint)}
 .doc{grid-template-rows:minmax(0,1fr);overflow:auto;background:var(--stage)}.doc-in{max-width:52rem;padding:2.25rem 2.75rem 3rem}
 .doc h2{font:700 1.75rem/1.15 var(--round);letter-spacing:-.015em;margin:0}.lede{color:var(--dim);margin:.7rem 0 0}
-.findings{list-style:none;margin:0;padding:0;display:grid;gap:.5rem}.findings li{padding:.8rem 1rem .8rem 1.1rem;border-radius:14px;background:var(--s1);box-shadow:var(--shadow);position:relative}
-.findings li::before{content:"";position:absolute;left:0;top:.8rem;bottom:.8rem;width:3px;border-radius:0 3px 3px 0;background:var(--warn)}
+.findings{list-style:none;margin:0;padding:0;display:grid;gap:.5rem}.findings li{padding:.8rem 1rem;border-radius:14px;background:var(--s1);box-shadow:var(--shadow)}
 .findings summary{cursor:pointer}.findings code{display:block;font:11.5px/1.6 var(--mono);color:var(--faint);margin-top:.4rem;overflow-wrap:anywhere}
 .outputs{display:grid;gap:.5rem}.group{background:var(--s1);border-radius:14px;padding:.75rem 1rem;box-shadow:var(--shadow)}
 .group summary{display:flex;justify-content:space-between;gap:1rem;cursor:pointer;font-size:13px;list-style:none}.group summary::-webkit-details-marker{display:none}
-.group .where{font-weight:600}.group .where::before{content:"\u203A";display:inline-block;width:1em;color:var(--accent);transition:rotate .15s}.group[open] .where::before{rotate:90deg}.group .count{color:var(--faint);flex:none}
+.group summary{align-items:center}.group .where{display:inline-flex;align-items:center;gap:.7rem;font-weight:600}
+.group .where::before{content:"";flex:none;width:.4rem;height:.4rem;border:solid var(--accent);border-width:0 1.5px 1.5px 0;rotate:-45deg;transition:rotate .15s}.group[open] .where::before{rotate:45deg}.group .count{color:var(--faint);flex:none}
 .group[open] summary{margin-bottom:.75rem}
 .flist{list-style:none;margin:0;padding:0;display:grid;gap:.3rem;font:12px var(--mono);max-height:16rem;overflow:auto}.flist li{display:flex;justify-content:space-between;gap:1rem}.flist a{overflow-wrap:anywhere;min-width:0}.flist span{color:var(--faint);flex:none}
 .gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(8.5rem,1fr));gap:.75rem}.flist+.gallery{margin-top:.75rem}
-.gthumb{display:grid;gap:.4rem;font:11.5px var(--mono);min-width:0;color:var(--dim)}.gthumb span{display:flex;justify-content:space-between;gap:.5rem;overflow:hidden}.gthumb small{color:var(--faint);font-size:inherit;flex:none}
-.gthumb img{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:10px;display:block;transition:box-shadow .15s}.gthumb:hover img{box-shadow:0 0 0 2px var(--accent)}
+.gthumb{display:grid;gap:.4rem;font:11.5px var(--mono);min-width:0;color:var(--dim)}.gthumb span{display:flex;justify-content:space-between;gap:.5rem;overflow:hidden;white-space:nowrap}.gthumb small{color:var(--faint);font-size:inherit;flex:none}
+.gthumb img{width:100%;aspect-ratio:16/9;object-fit:contain;border-radius:10px;display:block;background:var(--s2);box-shadow:inset 0 0 0 1px var(--hair);transition:box-shadow .15s}.gthumb:hover img{box-shadow:0 0 0 2px var(--accent)}
 .track ol{list-style:none;margin:0;padding:.85rem 1.75rem 1rem;display:flex;gap:.6rem;overflow-x:auto;scrollbar-width:thin;scrollbar-color:var(--s3) transparent}
 .track li{flex:none;width:9.25rem}
 .track a{display:grid;gap:.45rem;padding:.35rem;border-radius:16px;color:var(--text);transition:background .15s}
@@ -20534,7 +20543,7 @@ h1{font:700 1.3rem/1.15 var(--round);letter-spacing:-.015em;margin:0}
 @media(max-width:960px){.app{height:auto;min-height:100vh;overflow:visible}.center{grid-template-columns:minmax(0,1fr);grid-template-areas:"stage" "panel";gap:.75rem}
 .stage{min-height:60vh}.views{padding:.5rem 3.75rem 1rem}.step:target .v-compare,.center:not(:has(:target))>.step:first-of-type .v-compare{grid-template-columns:1fr}.track{position:sticky;bottom:0;background:var(--bg)}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
-@media print{.app{height:auto;display:block}.track,.arrow,.seg,.pager,.ovl{display:none}.center{display:block}.step{display:block!important;break-inside:avoid;margin-bottom:1rem}.stage{background:none}.view{display:none!important}.v-compare{display:grid!important;grid-template-columns:1fr 1fr}}`;
+@media print{.app{height:auto;display:block}.track,.arrow,.seg,.pager,.tabs,.focus{display:none}.center{display:block}.step{display:block!important;break-inside:avoid;margin-bottom:1rem}.stage{background:none}.view{display:none!important}.v-compare{display:grid!important;grid-template-columns:1fr 1fr}}`;
 
 // src/package.ts
 var generated = /* @__PURE__ */ new Set(["manifest.json", "summary.json", "trajectory.json", "index.html", "OPENING.txt", "journal/session-events.jsonl"]);

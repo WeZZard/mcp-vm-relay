@@ -82,6 +82,8 @@ test("delivers capture-classified package; all originals, viewer, summary, and e
   const html = await readFile(join(root, "index.html"), "utf8");
   assert.match(html, /The user is presenting/);
   assert.match(html, /href="#step-step-0"/);
+  // With no step in error, "Focus on errors" is shown but cannot be turned on.
+  assert.match(html, /<input type="checkbox" id="focus-errors" disabled>Focus on errors<span>0<\/span>/);
   assert.doesNotMatch(withoutKeyScript(html), /<script|https?:\/\/|fetch\(/);
 });
 
@@ -130,6 +132,12 @@ test("review page orders steps by time and reads commands, exit status, output s
   // Without script, a step is selected as the :target: each thumbnail links to its step, which shows
   // the compare view, and a step with snapshots offers its before and after views as targets inside it.
   assert.deepEqual([...html.split('<footer class="track"')[1]!.matchAll(/<li[^>]*><a href="([^"]+)"/g)].map(m => m[1]), ["#step-diagnostic-early", "#step-step-0"]);
+  // The top row switches between the trajectory, which starts at the first step, and the overview.
+  assert.match(html, /<nav class="tabs" aria-label="View"><a class="t-traj" href="#step-diagnostic-early">Trajectory<\/a><a class="t-over" href="#overview">Overview/);
+  // The failed diagnostic is the one step with errors: "Focus on errors" counts it and marks its thumbnail and step.
+  assert.match(html, /<input type="checkbox" id="focus-errors">Focus on errors<span>1<\/span>/);
+  assert.match(html, /<article id="step-diagnostic-early" class="step bad err">/);
+  assert.match(html, /<li class="bad diagnostic err"><a href="#step-diagnostic-early"/);
   const action = html.split('<article id="step-step-0"')[1]!.split("</article>")[0]!;
   assert.match(action, /<a class="s-compare" href="#step-step-0">Compare<\/a><a class="s-before" href="#step-step-0--before">Before<\/a><a class="s-after" href="#step-step-0--after">After<\/a>/);
   assert.match(action, /<div class="view v-compare"><figure class="shot">/);
