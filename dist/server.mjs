@@ -30712,6 +30712,20 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
   async settle() {
     return this.serialized(() => this.pause("Agent settled; VM retained until explicit release or backend expiration"));
   }
+  /**
+   * Shutdown's last resort when an operation does not settle: pause renewal
+   * and release the owner lock without waiting for the queue. The process
+   * exits right after, so the abandoned operation cannot save again.
+   */
+  async pauseNow(reason2) {
+    this.shuttingDown = true;
+    try {
+      await this.pause(`${reason2}; an in-flight operation did not settle and was abandoned`);
+    } finally {
+      this.initialized = false;
+      await this.unlock();
+    }
+  }
   async cleanup(reason2) {
     return this.serialized(async () => {
       this.shuttingDown = true;
@@ -31098,6 +31112,8 @@ function allToolDefinitions() {
     trajectoryToolDefinition
   ];
 }
+var SHUTDOWN_GRACE_MS = 12e4;
+var SHUTDOWN_CANCEL_MS = 5e3;
 async function openInBrowser(url) {
   const run = promisify(execFile);
   if (process.platform === "darwin") await run("/usr/bin/open", ["-a", "Google Chrome", url]);
@@ -31119,6 +31135,7 @@ function createRelayServer(options2 = {}) {
     const service = environment?.profile.vmServiceUrl ?? process.env.MCP_VM_RELAY_URL ?? "http://localhost:6240";
     return { ...manager ? manager.status() : { active: false }, project, service, environment: environment?.identity };
   };
+  const shutdownController = new AbortController();
   const server = new Server({ name: SERVER_NAME, version: SERVER_VERSION }, { capabilities: { tools: {} }, instructions });
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: allToolDefinitions() }));
   server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
@@ -31134,7 +31151,7 @@ function createRelayServer(options2 = {}) {
         await (options2.open ?? openInBrowser)(pathToFileURL(join17(root, "index.html")).href);
         return text3(`Opened verified package: ${root}. Human review remains pending.`);
       }
-      if (relayTools.some((tool) => tool.name === name)) return relayContent(await relayCall(get, relayToolInput(name, args ?? {}), { signal: extra.signal, toolCallId: String(extra.requestId) }));
+      if (relayTools.some((tool) => tool.name === name)) return relayContent(await relayCall(get, relayToolInput(name, args ?? {}), { signal: AbortSignal.any([extra.signal, shutdownController.signal]), toolCallId: String(extra.requestId) }));
       throw new Error(`Unknown tool: ${name}`);
     } catch (error2) {
       return text3(message(error2), true);
@@ -31147,7 +31164,13 @@ function createRelayServer(options2 = {}) {
       manager = void 0;
     }
   };
-  return { server, sessionId, project, cleanup, status: () => manager ? manager.status() : { active: false } };
+  const cancel = (reason2) => {
+    shutdownController.abort(new Error(`Cancelled: ${reason2}`));
+  };
+  const pauseNow = async (reason2) => {
+    await manager?.pauseNow(reason2);
+  };
+  return { server, sessionId, project, cleanup, cancel, pauseNow, status: () => manager ? manager.status() : { active: false } };
 }
 async function main(args) {
   if (args.includes("--instructions")) {
@@ -31162,10 +31185,20 @@ async function main(args) {
   }
   if (args.length) throw new Error("Usage: server.mjs [--instructions | --schema]; with no argument the MCP server speaks on stdin/stdout");
   const relay = createRelayServer();
+  const grace = Number(process.env.MCP_VM_RELAY_SHUTDOWN_GRACE_MS ?? SHUTDOWN_GRACE_MS);
+  if (!Number.isSafeInteger(grace) || grace < 0) throw new Error("MCP_VM_RELAY_SHUTDOWN_GRACE_MS must be a nonnegative integer of milliseconds");
+  const settledWithin = (work, ms) => Promise.race([work.then(() => true), new Promise((done) => setTimeout(done, ms, false).unref())]);
   let closing;
   const shutdown = (reason2, code) => closing ??= (async () => {
     try {
-      await relay.cleanup(reason2);
+      const cleanup = relay.cleanup(reason2);
+      if (await settledWithin(cleanup, grace)) return;
+      process.stderr.write(`mcp-vm-relay: an operation was still running ${grace} ms after the session ended; cancelling it
+`);
+      relay.cancel(reason2);
+      if (await settledWithin(cleanup, SHUTDOWN_CANCEL_MS)) return;
+      process.stderr.write("mcp-vm-relay: the cancelled operation did not stop; pausing renewal without it\n");
+      await relay.pauseNow(reason2);
     } catch (error2) {
       process.stderr.write(`mcp-vm-relay: cleanup failed: ${message(error2)}
 `);
@@ -31177,6 +31210,12 @@ async function main(args) {
   relay.server.onclose = () => {
     void shutdown("Enclosure session ended", 0);
   };
+  process.stdin.once("end", () => {
+    void shutdown("Enclosure session ended: the client closed standard input", 0);
+  });
+  process.stdin.once("close", () => {
+    void shutdown("Enclosure session ended: the client closed standard input", 0);
+  });
   process.once("SIGTERM", () => {
     void shutdown("Enclosure session terminated", 0);
   });
@@ -31196,6 +31235,8 @@ export {
   PLUGIN_TOOL_PREFIX,
   SERVER_NAME,
   SERVER_VERSION,
+  SHUTDOWN_CANCEL_MS,
+  SHUTDOWN_GRACE_MS,
   STATUS_TOOL,
   TRAJECTORY_TOOL,
   allToolDefinitions,

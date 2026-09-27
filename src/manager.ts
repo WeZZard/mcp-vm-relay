@@ -878,6 +878,16 @@ export class RelayManager {
     if (this.enclosure) { this.enclosure.active = false; await this.save(); await this.log('renewal-paused', undefined, { reason, expiresAt: this.enclosure.expiresAt ?? this.enclosure.lease?.ttl_expires_at }); }
   }
   async settle() { return this.serialized(() => this.pause('Agent settled; VM retained until explicit release or backend expiration')); }
+  /**
+   * Shutdown's last resort when an operation does not settle: pause renewal
+   * and release the owner lock without waiting for the queue. The process
+   * exits right after, so the abandoned operation cannot save again.
+   */
+  async pauseNow(reason: string) {
+    this.shuttingDown = true;
+    try { await this.pause(`${reason}; an in-flight operation did not settle and was abandoned`); }
+    finally { this.initialized = false; await this.unlock(); }
+  }
   async cleanup(reason: string) { return this.serialized(async () => {
     this.shuttingDown = true;
     try { await this.pause(reason); await this.session?.close(); this.session = undefined; this.transport = undefined; }

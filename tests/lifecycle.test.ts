@@ -90,8 +90,8 @@ async function fixture(t: TestContext) {
     await rm(root, { recursive: true, force: true });
   });
   /** Start the shipped server with only the variables this test sets: no inherited environment selection, state or registry. */
-  const start = async (url: string, sessionId: string | undefined = `lifecycle-${randomUUID()}`): Promise<Relay> => {
-    const env: Record<string, string> = { PATH: `${bin}:${process.env.PATH}`, HOME: root, TART: tart, MCP_VM_RELAY_URL: url, MCP_VM_RELAY_STATE_DIR: join(root, 'state'), MCP_VM_RELAY_REGISTRY: registry, MCP_VM_RELAY_PROJECT: project, ...(sessionId ? { MCP_VM_RELAY_SESSION: sessionId } : {}) };
+  const start = async (url: string, sessionId: string | undefined = `lifecycle-${randomUUID()}`, extra: Record<string, string> = {}): Promise<Relay> => {
+    const env: Record<string, string> = { PATH: `${bin}:${process.env.PATH}`, HOME: root, TART: tart, MCP_VM_RELAY_URL: url, MCP_VM_RELAY_STATE_DIR: join(root, 'state'), MCP_VM_RELAY_REGISTRY: registry, MCP_VM_RELAY_PROJECT: project, ...(sessionId ? { MCP_VM_RELAY_SESSION: sessionId } : {}), ...extra };
     const child = spawn(process.execPath, [server], { env, stdio: ['pipe', 'pipe', 'pipe'] });
     children.push(child);
     let stdout = '', stderr = '', nextId = 1;
@@ -187,3 +187,20 @@ test('R1: closing stdin during an in-flight release lets the release complete be
 
 /** A fixture with a fake vm-service. */
 async function withService(t: TestContext) { const f = await fixture(t); return { ...f, fake: await f.service() }; }
+
+test('R1: shutdown behind an operation that never settles is bounded by the grace period and still pauses renewal', { timeout: 30000 }, async t => {
+  const f = await withService(t);
+  const relay = await f.start(f.fake.url, undefined, { MCP_VM_RELAY_SHUTDOWN_GRACE_MS: '500' });
+  assert.equal((await relay.call('relay_acquire', acquireArgs)).isError, false);
+  const owned = await f.lease(relay);
+  f.fake.execHook = () => new Promise(() => {}); // a guest command whose answer never comes
+  void relay.call('relay_exec', { diagnostic: true, argv: ['/bin/true'] });
+  await f.fake.arrived('/exec');
+  relay.child.stdin.end();
+  const exit = await exitWithin(relay, 10000);
+  assert.ok(exit, 'shutdown gives up waiting after the grace period');
+  assert.equal(exit.code, 0, relay.stderr());
+  assert.equal((await f.lease(relay)).active, false);
+  assert.ok((await f.events(owned.hostRoot)).some(event => event.kind === 'renewal-paused'));
+  assert.equal(f.fake.releaseCalls, 0);
+});

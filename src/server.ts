@@ -71,6 +71,15 @@ export function allToolDefinitions() {
   ];
 }
 
+/**
+ * How long shutdown waits for an in-flight operation (a finish or release the
+ * client already sent) before it cancels the operation; override with
+ * MCP_VM_RELAY_SHUTDOWN_GRACE_MS. See docs/lifecycle-fixes.md.
+ */
+export const SHUTDOWN_GRACE_MS = 120000;
+/** How long shutdown waits for a cancelled operation before it pauses renewal without it. */
+export const SHUTDOWN_CANCEL_MS = 5000;
+
 export interface RelayServerOptions { sessionId?: string; project?: string; open?: (url: string) => Promise<void>; manager?: () => RelayManager }
 
 async function openInBrowser(url: string): Promise<void> {
@@ -100,6 +109,9 @@ export function createRelayServer(options: RelayServerOptions = {}) {
     const service = environment?.profile.vmServiceUrl ?? process.env.MCP_VM_RELAY_URL ?? 'http://localhost:6240';
     return { ...(manager ? manager.status() : { active: false }), project, service, environment: environment?.identity };
   };
+  // Cancels every in-flight tool call when shutdown gives up waiting for it.
+  // Closing the transport would do the same at once, so shutdown never closes it first.
+  const shutdownController = new AbortController();
   const server = new Server({ name: SERVER_NAME, version: SERVER_VERSION }, { capabilities: { tools: {} }, instructions });
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: allToolDefinitions() }));
   server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
@@ -115,7 +127,7 @@ export function createRelayServer(options: RelayServerOptions = {}) {
         await (options.open ?? openInBrowser)(pathToFileURL(join(root, 'index.html')).href);
         return text(`Opened verified package: ${root}. Human review remains pending.`);
       }
-      if (relayTools.some(tool => tool.name === name)) return relayContent(await relayCall(get, relayToolInput(name, (args ?? {}) as Record<string, unknown>), { signal: extra.signal, toolCallId: String(extra.requestId) }));
+      if (relayTools.some(tool => tool.name === name)) return relayContent(await relayCall(get, relayToolInput(name, (args ?? {}) as Record<string, unknown>), { signal: AbortSignal.any([extra.signal, shutdownController.signal]), toolCallId: String(extra.requestId) }));
       throw new Error(`Unknown tool: ${name}`);
     } catch (error) { return text(message(error), true); }
   });
@@ -123,7 +135,11 @@ export function createRelayServer(options: RelayServerOptions = {}) {
   // is retained for an explicit finish or release, and the backend TTL is the
   // safeguard for an abandoned one.
   const cleanup = async (reason: string) => { try { await manager?.cleanup(reason); } finally { manager = undefined; } };
-  return { server, sessionId, project, cleanup, status: () => manager ? manager.status() : { active: false } };
+  /** Cancel every in-flight tool call. */
+  const cancel = (reason: string) => { shutdownController.abort(new Error(`Cancelled: ${reason}`)); };
+  /** Pause renewal and release the owner lock without waiting for an in-flight operation; for shutdown only. */
+  const pauseNow = async (reason: string) => { await manager?.pauseNow(reason); };
+  return { server, sessionId, project, cleanup, cancel, pauseNow, status: () => manager ? manager.status() : { active: false } };
 }
 
 async function main(args: string[]): Promise<void> {
@@ -131,13 +147,33 @@ async function main(args: string[]): Promise<void> {
   if (args.includes('--schema')) { process.stdout.write(`${JSON.stringify(allToolDefinitions(), null, 2)}\n`); return; }
   if (args.length) throw new Error('Usage: server.mjs [--instructions | --schema]; with no argument the MCP server speaks on stdin/stdout');
   const relay = createRelayServer();
+  const grace = Number(process.env.MCP_VM_RELAY_SHUTDOWN_GRACE_MS ?? SHUTDOWN_GRACE_MS);
+  if (!Number.isSafeInteger(grace) || grace < 0) throw new Error('MCP_VM_RELAY_SHUTDOWN_GRACE_MS must be a nonnegative integer of milliseconds');
+  const settledWithin = (work: Promise<unknown>, ms: number) => Promise.race([work.then(() => true), new Promise<boolean>(done => setTimeout(done, ms, false).unref())]);
   let closing: Promise<void> | undefined;
+  // Every session end comes here once. Cleanup is queued behind an in-flight
+  // operation, so a finish or release the client already sent completes first;
+  // past the grace period the operation is cancelled, and if it still does not
+  // settle, renewal is paused without it.
   const shutdown = (reason: string, code: number) => closing ??= (async () => {
-    try { await relay.cleanup(reason); }
+    try {
+      const cleanup = relay.cleanup(reason);
+      if (await settledWithin(cleanup, grace)) return;
+      process.stderr.write(`mcp-vm-relay: an operation was still running ${grace} ms after the session ended; cancelling it\n`);
+      relay.cancel(reason);
+      if (await settledWithin(cleanup, SHUTDOWN_CANCEL_MS)) return;
+      process.stderr.write('mcp-vm-relay: the cancelled operation did not stop; pausing renewal without it\n');
+      await relay.pauseNow(reason);
+    }
     catch (error) { process.stderr.write(`mcp-vm-relay: cleanup failed: ${message(error)}\n`); code = 1; }
     finally { process.exit(code); }
   })();
   relay.server.onclose = () => { void shutdown('Enclosure session ended', 0); };
+  // The SDK's stdio transport never reports end of file on standard input, so
+  // a client that exits or closes its side would otherwise leave this process
+  // renewing the lease for as long as the owner lock helper keeps it alive.
+  process.stdin.once('end', () => { void shutdown('Enclosure session ended: the client closed standard input', 0); });
+  process.stdin.once('close', () => { void shutdown('Enclosure session ended: the client closed standard input', 0); });
   process.once('SIGTERM', () => { void shutdown('Enclosure session terminated', 0); });
   process.once('SIGINT', () => { void shutdown('Enclosure session interrupted', 0); });
   await relay.server.connect(new StdioServerTransport());
