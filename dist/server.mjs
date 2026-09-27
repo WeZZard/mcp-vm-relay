@@ -6978,7 +6978,7 @@ var require_formats = __commonJS({
     }
     var TIME2 = /^(\d\d):(\d\d):(\d\d(?:\.\d+)?)(z|([+-])(\d\d)(?::?(\d\d))?)?$/i;
     function getTime(strictTimeZone) {
-      return function time3(str) {
+      return function time4(str) {
         const matches = TIME2.exec(str);
         if (!matches)
           return false;
@@ -7024,10 +7024,10 @@ var require_formats = __commonJS({
     }
     var DATE_TIME_SEPARATOR = /t|\s/i;
     function getDateTime(strictTimeZone) {
-      const time3 = getTime(strictTimeZone);
+      const time4 = getTime(strictTimeZone);
       return function date_time(str) {
         const dateTime = str.split(DATE_TIME_SEPARATOR);
-        return dateTime.length === 2 && date3(dateTime[0]) && time3(dateTime[1]);
+        return dateTime.length === 2 && date3(dateTime[0]) && time4(dateTime[1]);
       };
     }
     function compareDateTime(dt1, dt2) {
@@ -18715,12 +18715,12 @@ var SubmissionStore = class {
 // node_modules/@wezzard/relay-driver-core/dist/src/identity.js
 var SUFFIX_ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz";
 function allocateSuffix(now = Date.now(), random = Math.random) {
-  const time3 = now.toString(36).padStart(9, "0");
+  const time4 = now.toString(36).padStart(9, "0");
   let rand = "";
   for (let i = 0; i < 8; i++) {
     rand += SUFFIX_ALPHABET[Math.floor(random() * SUFFIX_ALPHABET.length)];
   }
-  return `${time3}${rand}`;
+  return `${time4}${rand}`;
 }
 function allocateId(kind, now = Date.now(), random = Math.random) {
   return { kind, suffix: allocateSuffix(now, random) };
@@ -19238,7 +19238,7 @@ var VmService = class {
       });
       const reader = response.body?.getReader();
       const chunks = [];
-      let size = 0;
+      let size2 = 0;
       const bound = response.ok ? this.maxResponseBytes : Math.min(4096, this.maxResponseBytes);
       let truncated = false;
       if (reader) {
@@ -19246,9 +19246,9 @@ var VmService = class {
           for (; ; ) {
             const { value, done } = await reader.read();
             if (done) break;
-            const remaining = bound - size;
+            const remaining = bound - size2;
             chunks.push(value.subarray(0, remaining));
-            size += Math.min(value.byteLength, remaining);
+            size2 += Math.min(value.byteLength, remaining);
             if (value.byteLength > remaining) {
               truncated = true;
               await reader.cancel();
@@ -19669,15 +19669,15 @@ async function command(argv2, options2 = {}) {
   options2.signal?.throwIfAborted();
   return new Promise((resolve11, reject) => {
     const child = spawn3(argv2[0], argv2.slice(1), { cwd: options2.cwd, env: options2.env, stdio: ["ignore", "pipe", "pipe"], signal: options2.signal });
-    let stdout = "", stderr = "", size = 0;
+    let stdout = "", stderr = "", size2 = 0;
     let failure2;
     const timer = setTimeout(() => {
       failure2 = new Error(`Command timed out: ${argv2[0]}`);
       child.kill("SIGKILL");
     }, options2.timeoutMs ?? 1e4);
     const consume = (channel, chunk) => {
-      size += chunk.length;
-      if (size > (options2.maxBytes ?? 128 * 1024)) {
+      size2 += chunk.length;
+      if (size2 > (options2.maxBytes ?? 128 * 1024)) {
         failure2 = new Error(`Command output exceeded limit: ${argv2[0]}`);
         child.kill("SIGKILL");
         return;
@@ -20275,6 +20275,261 @@ var VmTransport = class {
 import { createHash as createHash4 } from "node:crypto";
 import { lstat as lstat4, readFile as readFile7, readdir as readdir4, mkdir as mkdir5, writeFile as writeFile3, rm as rm2 } from "node:fs/promises";
 import { dirname as dirname6, join as join10, resolve as resolve6, parse as parse4 } from "node:path";
+
+// src/review-page.ts
+var escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+var src = (path) => escapeHtml(path.split("/").map(encodeURIComponent).join("/"));
+var link2 = (step2) => `#step-${encodeURIComponent(step2.id)}`;
+var time3 = (iso) => iso && Number.isFinite(Date.parse(iso)) ? new Date(iso).toISOString().slice(11, 19) : void 0;
+var preciseTime = (iso) => iso && Number.isFinite(Date.parse(iso)) ? new Date(iso).toISOString().slice(11, 23) : void 0;
+var duration3 = (ms) => ms < 6e4 ? `${(ms / 1e3).toFixed(1)} s` : `${Math.floor(ms / 6e4)} min ${Math.round(ms % 6e4 / 1e3)} s`;
+var size = (bytes) => bytes >= 1e6 ? `${(bytes / 1e6).toFixed(1)} MB` : bytes >= 1e3 ? `${(bytes / 1e3).toFixed(1)} kB` : `${bytes} B`;
+var plural = (count, noun) => `${count} ${noun}${count === 1 ? "" : "s"}`;
+var tone = (value) => ["passed", "complete", "completed"].includes(value) ? "ok" : ["failed", "refused"].includes(value) ? "bad" : value === "pending" ? "pend" : "warn";
+var verdict = (value) => `<span class="verdict ${tone(value)}"><i aria-hidden="true"></i>${escapeHtml(value)}</span>`;
+var shellWord = (word) => /^[\w@%+=:,./-]+$/.test(word) ? word : `'${word.replace(/'/g, `'\\''`)}'`;
+function chronological(model) {
+  const at = (step2) => Date.parse(model.details.get(step2.id)?.at ?? "");
+  return model.steps.map((step2, index) => ({ step: step2, index })).sort((a, b) => (Number.isFinite(at(a.step)) ? at(a.step) : Infinity) - (Number.isFinite(at(b.step)) ? at(b.step) : Infinity) || a.index - b.index).map(({ step: step2 }) => step2);
+}
+function groupFindings(findings) {
+  const groups = /* @__PURE__ */ new Map();
+  for (const finding of findings) {
+    const match = /^(diagnostic|request|action) (\S+) (.*)$/.exec(finding);
+    const key = match ? `${match[1]} ${match[3]}` : finding;
+    const group = groups.get(key) ?? { sentence: finding, ids: [] };
+    if (match) group.ids.push(match[2]);
+    groups.set(key, group);
+  }
+  const sentence = (text4) => text4.replace(/^./, (c) => c.toUpperCase());
+  return [...groups.entries()].map(([key, group]) => {
+    if (group.ids.length < 2) return { text: sentence(group.sentence), ids: [] };
+    const [noun, ...rest] = key.split(" ");
+    const verb = rest.join(" ").replace(/^has /, "have ").replace(/^is /, "are ").replace(/^lacks /, "lack ");
+    return { text: `${group.ids.length} ${noun}s ${verb}`, ids: group.ids };
+  });
+}
+function describe2(step2, detail) {
+  const argv2 = detail?.argv?.length ? detail.argv.map(shellWord).join(" ") : void 0;
+  const generic = !!argv2 && (step2.title === "Diagnostic command" || step2.title.startsWith("exec "));
+  const title = generic && step2.because ? step2.because : step2.title;
+  const first = title.split("\n")[0].trimEnd();
+  const headline = first.length > 140 ? `${first.slice(0, 139).trimEnd()}\u2026` : first === title ? title : `${first} \u2026`;
+  const kind = step2.inputMode === "diagnostic" ? "Diagnostic" : argv2 && !step2.snapshots ? "Command" : "Action";
+  return { headline, command: argv2 ?? (headline === title ? void 0 : title), reasonShown: !(generic && step2.because), kind };
+}
+function receipts(observed2) {
+  const match = /^Authoritative receipt outcomes: (\[.*\])$/m.exec(observed2 ?? "");
+  if (!match) return void 0;
+  try {
+    const seen = /* @__PURE__ */ new Set();
+    return JSON.parse(match[1]).filter((r) => {
+      const key = JSON.stringify(r);
+      return seen.has(key) ? false : (seen.add(key), true);
+    });
+  } catch {
+    return void 0;
+  }
+}
+var exitBadge = (exit, timedOut) => `<span class="exit ${exit.code === 0 && !timedOut ? "ok" : "bad"}">exit ${escapeHtml(exit.code ?? "none")}${exit.signal ? ` \xB7 ${escapeHtml(exit.signal)}` : ""}${timedOut ? " \xB7 timed out" : ""}</span>`;
+function observed(step2, output, streams = true) {
+  const recorded = escapeHtml(step2.observed ?? "No confirmed result");
+  const raw = `<details class="raw"><summary>Receipt as recorded</summary><pre>${recorded}</pre></details>`;
+  if (output) {
+    const status = output.exit === void 0 ? "" : exitBadge({ code: output.exit, signal: output.signal }, output.timedOut);
+    const shown = streams ? streamsOf(output) : "";
+    return `${status}${shown || (streams ? `<p class="quiet">No output.</p>` : "")}${raw}`;
+  }
+  const list = receipts(step2.observed);
+  if (!list?.length) return `<pre class="plain">${recorded}</pre>`;
+  return `<ul class="receipts">${list.map((r) => `<li>${verdict(r.execution ?? r.outcome?.kind ?? "unknown")}${r.outcome?.exitStatus ? exitBadge(r.outcome.exitStatus) : ""}${r.outcome?.diagnostic ? `<span class="diag">${escapeHtml(r.outcome.diagnostic)}</span>` : ""}</li>`).join("")}</ul>${raw}`;
+}
+var streamsOf = (output) => ["stdout", "stderr"].filter((name) => output[name]?.trim()).map((name) => `<div class="stream"><span class="label">${name}</span><pre>${escapeHtml(output[name].trimEnd())}</pre></div>`).join("");
+function shot(step2, detail, role) {
+  const path = step2.snapshots?.[role];
+  const name = role === "before" ? "Before" : "After";
+  const at = preciseTime(role === "before" ? detail?.beforeAt : detail?.afterAt);
+  const caption = `<figcaption><span class="label">${name}</span>${at ? `<time>${at}</time>` : ""}</figcaption>`;
+  if (!path) return `<figure class="shot missing"><div class="void">${name}: unavailable \u2014 incomplete evidence</div>${caption}</figure>`;
+  return `<figure class="shot"><a href="${src(path)}" title="Open the original snapshot"><img alt="${name} dispatch snapshot" src="${src(path)}"></a>${caption}</figure>`;
+}
+function stage(step2, detail, number3, previous, next) {
+  const { headline, command: command2 } = describe2(step2, detail);
+  const arrows = `${previous ? `<a class="arrow prev" href="${escapeHtml(link2(previous))}" aria-label="Previous step">\u2039</a>` : ""}${next ? `<a class="arrow next" href="${escapeHtml(link2(next))}" aria-label="Next step">\u203A</a>` : ""}`;
+  if (!step2.snapshots) {
+    return `<section class="stage terminal" aria-label="Step ${number3} command">${arrows}<div class="term"><div class="term-bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span>${step2.inputMode === "diagnostic" ? "Diagnostic command" : "Command"} \xB7 no snapshots</span></div>
+<pre class="term-cmd"><span class="prompt" aria-hidden="true">$</span>${escapeHtml(command2 ?? headline)}</pre>${detail?.output ? streamsOf(detail.output) || `<p class="quiet">No output.</p>` : ""}
+<p class="term-note">${step2.inputMode === "diagnostic" ? "Screenshots were not requested for this diagnostic." : "No snapshots were captured for this step."}</p></div></section>`;
+  }
+  const gap = detail?.beforeAt && detail.afterAt ? `+${duration3(Date.parse(detail.afterAt) - Date.parse(detail.beforeAt))}` : void 0;
+  const id2 = `step-${step2.id}`, href = (suffix) => escapeHtml(`#${encodeURIComponent(`${id2}${suffix}`)}`);
+  return `<section class="stage" aria-label="Step ${number3} snapshots">
+<nav class="seg" aria-label="Snapshot view"><a class="s-after" href="${escapeHtml(link2(step2))}">After</a><a class="s-before" href="${href("--before")}">Before</a><a class="s-compare" href="${href("--compare")}">Compare</a>${gap ? `<span class="gap" title="Time between the before and after snapshots">${gap}</span>` : ""}</nav>
+${arrows}<div class="views"><div class="view v-after">${shot(step2, detail, "after")}</div><div class="view v-before" id="${escapeHtml(`${id2}--before`)}">${shot(step2, detail, "before")}</div><div class="view v-compare" id="${escapeHtml(`${id2}--compare`)}">${shot(step2, detail, "before")}${shot(step2, detail, "after")}</div></div></section>`;
+}
+function panel(step2, detail, number3, total, previous, next) {
+  const { headline, command: command2, reasonShown, kind } = describe2(step2, detail);
+  const interval2 = step2.snapshots?.declaredAfterIntervalMs;
+  const at = time3(detail?.at);
+  const fact = (term, value) => `<div><dt>${term}</dt><dd>${value}</dd></div>`;
+  return `<aside class="panel" aria-label="Step ${number3} details"><div class="panel-scroll">
+<p class="eyebrow"><span>Step ${number3} <span class="of">of ${String(total).padStart(2, "0")}</span></span><span>${kind}</span>${at ? `<time>${at} UTC</time>` : ""}</p>
+<h2>${escapeHtml(headline)}</h2><p class="state"><span class="sr">Execution: </span>${verdict(step2.execution)}</p>
+${reasonShown ? `<section class="block"><h3>Reason</h3><p>${escapeHtml(step2.because ?? "Not present in retained host metadata")}</p></section>` : ""}
+${command2 && step2.snapshots ? `<section class="block"><h3>Command</h3><pre class="command">${escapeHtml(command2)}</pre></section>` : ""}
+<section class="block"><h3>Expected</h3><p>${escapeHtml(step2.expected || "Not supplied")}</p></section>
+<section class="block"><h3>Observed</h3>${observed(step2, detail?.output, !!step2.snapshots)}</section>
+<dl class="facts">${fact("State", escapeHtml(step2.state))}${fact("Input", escapeHtml(step2.inputMode))}${fact("After interval", interval2 === void 0 ? "unavailable" : `${interval2} ms`)}${step2.snapshots?.groupId ? fact("Group", escapeHtml(step2.snapshots.groupId)) : ""}</dl>
+</div><nav class="pager" aria-label="Step ${number3}">${previous ? `<a href="${escapeHtml(link2(previous))}">\u2039 Previous</a>` : `<span class="off">\u2039 Previous</span>`}<a class="stable" href="${escapeHtml(link2(step2))}">Stable link</a>${next ? `<a href="${escapeHtml(link2(next))}">Next \u203A</a>` : `<span class="off">Next \u203A</span>`}</nav></aside>`;
+}
+function thumb(step2, detail, number3) {
+  const { headline, command: command2 } = describe2(step2, detail);
+  const image = step2.snapshots?.after ?? step2.snapshots?.before;
+  const face = image ? `<img loading="lazy" alt="" src="${src(image)}">` : `<pre aria-hidden="true"><span class="prompt">$</span>${escapeHtml(command2 ?? headline)}</pre>`;
+  return `<li class="${tone(step2.execution)}${step2.inputMode === "diagnostic" ? " diagnostic" : ""}"><a href="${escapeHtml(link2(step2))}" title="${escapeHtml(headline)}"><span class="face${image ? "" : " text"}">${face}</span><span class="cap"><span class="n">${number3}</span><i class="dot" aria-hidden="true"></i><span class="t">${escapeHtml(headline)}</span></span><span class="sr">${escapeHtml(step2.execution)}</span></a></li>`;
+}
+var selection = (count) => !count ? "" : Array.from({ length: count }, (_, i) => `.app:has(.center>.step:nth-of-type(${i + 1}):target) .track li:nth-child(${i + 1}) a,.app:has(.center>.step:nth-of-type(${i + 1}) :target) .track li:nth-child(${i + 1}) a`).join(",") + ",.app:not(:has(.center :target)) .track li:first-child a{border-color:var(--accent);box-shadow:0 0 0 3px var(--ring);background:var(--s2)}";
+function renderReviewPage(model) {
+  const steps = chronological(model);
+  const numbers = new Map(steps.map((step2, i) => [step2.id, String(i + 1).padStart(2, "0")]));
+  const times = steps.map((s) => Date.parse(model.details.get(s.id)?.at ?? "")).filter(Number.isFinite);
+  const diagnostics = steps.filter((s) => s.inputMode === "diagnostic").length, actions = steps.length - diagnostics;
+  const title = /^relay-(.+)-[0-9a-f]{8}$/.exec(model.taskId)?.[1] ?? model.taskId;
+  const uuid2 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+  const byName = /* @__PURE__ */ new Map();
+  for (const output of model.outputs) {
+    const [, declared = "", ...rest] = output.path.split("/");
+    byName.set(declared, [...byName.get(declared) ?? [], { ...output, label: rest.filter((part) => !uuid2.test(part)).join("/") }]);
+  }
+  const outputs = [...byName].map(([declared, files]) => {
+    const images = files.filter((f) => /\.(png|jpe?g|webp|gif)$/i.test(f.path)), others = files.filter((f) => !images.includes(f));
+    const total = files.reduce((sum, f) => sum + f.bytes, 0);
+    return `<details class="group"${model.outputs.length <= 12 ? " open" : ""}><summary><span class="where">${escapeHtml(declared)}</span><span class="count">${plural(files.length, "file")} \xB7 ${size(total)}</span></summary>${others.length ? `<ul class="flist">${others.map((f) => `<li><a href="${src(f.path)}">${escapeHtml(f.label)}</a><span>${size(f.bytes)}</span></li>`).join("")}</ul>` : ""}${images.length ? `<div class="gallery">${images.map((f) => `<a class="gthumb" href="${src(f.path)}"><img loading="lazy" alt="${escapeHtml(f.label)}" src="${src(f.path)}"><span>${escapeHtml(f.label.split("/").at(-1))}<small>${size(f.bytes)}</small></span></a>`).join("")}</div>` : ""}</details>`;
+  }).join("");
+  const stat2 = (label, value) => `<li><b>${value}</b><span>${label}</span></li>`;
+  const pill = (label, value) => `<li class="pill ${tone(value)}"><span>${label}</span>${verdict(value)}</li>`;
+  const overview = `<article class="step overview" id="overview"><section class="stage doc" aria-label="Package overview"><div class="doc-in">
+<h2>Overview</h2><p class="lede">Delivery integrity is separate from execution success. Snapshots are dispatch-time evidence, not continuous video: each shows the screen just before a step was sent and shortly after it returned.</p>
+<section class="block"><h3>Findings \xB7 ${model.findings.length}</h3>${model.findings.length ? `<ul class="findings">${groupFindings(model.findings).map((g) => `<li>${g.ids.length ? `<details><summary>${escapeHtml(g.text)}</summary><code>${g.ids.map(escapeHtml).join("<br>")}</code></details>` : escapeHtml(g.text)}</li>`).join("")}</ul>` : `<p class="quiet">No findings.</p>`}</section>
+<section class="block"><h3>Declared outputs \xB7 ${model.outputs.length}</h3>${outputs ? `<div class="outputs">${outputs}</div>` : `<p class="quiet">No declared outputs were delivered.</p>`}</section></div></section>
+<aside class="panel" aria-label="Package"><div class="panel-scroll"><p class="eyebrow"><span>Package</span></p><h2>${escapeHtml(title)}</h2>
+<dl class="facts stack"><div><dt>Package</dt><dd>${escapeHtml(model.packageId)}</dd></div><div><dt>Task</dt><dd>${escapeHtml(model.taskId)}</dd></div><div><dt>Session</dt><dd>${escapeHtml(model.sessionId)}</dd></div></dl>
+<section class="block"><h3>Files</h3><ul class="files"><li><a href="manifest.json">manifest.json</a><span>Checksums of every artifact</span></li><li><a href="summary.json">summary.json</a><span>Verdicts and findings</span></li><li><a href="trajectory.json">trajectory.json</a><span>Steps as recorded</span></li></ul></section>
+<section class="block"><h3>Human review</h3><p>Pending. The relay does not review its own evidence; these verdicts come from retained records only.</p></section></div>
+<nav class="pager">${steps[0] ? `<a href="${escapeHtml(link2(steps[0]))}">Start at step 01 \u203A</a>` : "<span></span>"}</nav></aside></article>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="dark light"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' file:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>Relay review: ${escapeHtml(model.packageId)}</title><style>${css}${selection(steps.length)}</style></head><body>
+<div class="app">
+<header class="top"><div class="brand"><span class="mark" aria-hidden="true"></span><div><h1>${escapeHtml(title)}</h1><p class="pkg">${escapeHtml(model.packageId)}</p></div></div>
+<ul class="stats">${stat2("steps", String(steps.length))}${stat2("actions", String(actions))}${stat2("diagnostics", String(diagnostics))}${times.length ? `${stat2("UTC start", time3(new Date(Math.min(...times)).toISOString()))}${stat2("span", duration3(Math.max(...times) - Math.min(...times)))}` : ""}</ul>
+<ul class="pills">${pill("Snapshots", model.completeness)}${pill("Execution", model.execution)}${pill("Review", "pending")}</ul>
+<a class="ovl${model.findings.length ? " has" : ""}" href="#overview">Overview<span>${model.findings.length}</span></a></header>
+<main class="center">${steps.map((step2, i) => `<article id="step-${escapeHtml(step2.id)}" class="step ${tone(step2.execution)}">${stage(step2, model.details.get(step2.id), numbers.get(step2.id), steps[i - 1], steps[i + 1])}${panel(step2, model.details.get(step2.id), numbers.get(step2.id), steps.length, steps[i - 1], steps[i + 1])}</article>`).join("\n")}
+${overview}</main>
+<footer class="track" aria-label="Steps"><ol>${steps.map((step2) => thumb(step2, model.details.get(step2.id), numbers.get(step2.id))).join("")}</ol></footer>
+</div></body></html>
+`;
+}
+var css = `:root{color-scheme:dark;--bg:#171412;--s1:#1f1b18;--s2:#29231f;--s3:#332c27;--line:#3a322c;--line2:#4a4039;--text:#f4ede5;--dim:#c3b7aa;--faint:#9d9185;
+--accent:#ff9d5c;--ring:rgba(255,157,92,.28);--stage:#0f0d0c;--glow:rgba(255,157,92,.07);--ok:#93d49a;--bad:#ff8170;--warn:#f4c35e;--pend:#e7a9c0;
+--sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;--round:ui-rounded,"SF Pro Rounded",var(--sans);--mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+@media(prefers-color-scheme:light){:root{color-scheme:light;--bg:#f6f0e8;--s1:#fffaf4;--s2:#f3eadf;--s3:#eadfd2;--line:#e4d8ca;--line2:#d3c4b3;--text:#2b211b;--dim:#62544a;--faint:#7a6b5f;
+--accent:#c9561d;--ring:rgba(201,86,29,.22);--stage:#e9e0d5;--glow:rgba(201,86,29,.06);--ok:#2e7d45;--bad:#c23b2a;--warn:#946100;--pend:#a0466f}}
+*{box-sizing:border-box}html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:14.5px/1.55 var(--sans);-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline;text-underline-offset:3px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+pre{font:12.5px/1.55 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere;margin:0}
+b,time,.n,.exit,dd,.gap{font-variant-numeric:tabular-nums}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.label,h3,dt{font:600 11px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+.quiet{color:var(--faint);margin:0}
+.ok{--tone:var(--ok)}.bad{--tone:var(--bad)}.warn{--tone:var(--warn)}.pend{--tone:var(--pend)}
+.verdict{display:inline-flex;align-items:center;gap:.4rem;font:600 12.5px/1 var(--sans);color:var(--tone,var(--dim));text-transform:capitalize}
+.verdict i{flex:none;width:7px;height:7px;border-radius:50%;background:currentColor}
+.app{height:100vh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;grid-template-columns:minmax(0,1fr);overflow:clip}.track{min-width:0}
+.top{display:flex;align-items:center;gap:1.5rem 2rem;flex-wrap:wrap;padding:.85rem 1.5rem;border-bottom:1px solid var(--line);background:var(--s1)}
+.brand{display:flex;align-items:center;gap:.8rem;min-width:0;margin-right:auto}
+.mark{flex:none;width:2.1rem;height:2.1rem;border-radius:10px;background:radial-gradient(circle at 30% 30%,#ffd29a,var(--accent) 55%,#c2410c);box-shadow:inset 0 0 0 1px rgba(255,255,255,.18)}
+h1{font:650 1.2rem/1.2 var(--round);letter-spacing:-.01em;margin:0}.pkg{margin:.1rem 0 0;font:12px var(--mono);color:var(--faint)}
+.stats{display:flex;gap:1.6rem;list-style:none;margin:0;padding:0}.stats li{display:grid}.stats b{font:650 1.05rem/1.2 var(--round)}.stats span{font-size:11.5px;color:var(--faint)}
+.pills{display:flex;gap:.5rem;list-style:none;margin:0;padding:0}
+.pill{display:flex;align-items:center;gap:.55rem;padding:.4rem .7rem;border-radius:999px;background:var(--s2);border:1px solid var(--line);font-size:12px;color:var(--dim)}
+.pill .verdict{font-size:12px}
+.ovl{display:inline-flex;align-items:center;gap:.5rem;padding:.45rem .8rem;border-radius:999px;border:1px solid var(--line2);color:var(--text);font-weight:600;font-size:13px}
+.ovl span{font:650 11px/1 var(--round);padding:.2rem .45rem;border-radius:999px;background:var(--s3);color:var(--dim)}.ovl.has span{background:var(--warn);color:#2b1d05}
+.ovl:hover{text-decoration:none;border-color:var(--accent)}.app:has(#overview:target) .ovl{border-color:var(--accent);box-shadow:0 0 0 3px var(--ring)}
+.center{display:grid;grid-template-columns:minmax(0,1fr) minmax(20rem,26rem);grid-template-areas:"stage panel";min-height:0;overflow:clip}
+.step{display:none}.step:is(:target,:has(:target)){display:contents}.center:not(:has(:target))>.step:first-of-type{display:contents}
+.stage{grid-area:stage;position:relative;min-width:0;min-height:0;background:radial-gradient(ellipse at 50% 40%,var(--glow),transparent 70%),var(--stage);display:grid;grid-template-rows:auto minmax(0,1fr);overflow:clip}
+.seg{display:flex;align-items:center;gap:.25rem;justify-self:center;margin:.9rem 0 .2rem;padding:.25rem;border-radius:999px;background:var(--s1);border:1px solid var(--line);z-index:2}
+.seg a{padding:.3rem .85rem;border-radius:999px;color:var(--dim);font-size:12.5px;font-weight:600}.seg a:hover{text-decoration:none;color:var(--text)}
+.seg .gap{font:600 11.5px var(--round);color:var(--faint);padding:0 .6rem 0 .5rem}
+.step:target .s-after,.center:not(:has(:target))>.step:first-of-type .s-after,.step:has(.v-before:target) .s-before,.step:has(.v-compare:target) .s-compare{background:var(--s3);color:var(--text)}
+.views{min-height:0;display:grid;padding:.6rem 4.5rem 1.2rem;overflow:clip}
+.view{display:none;min-height:0}
+.step:target .v-after,.center:not(:has(:target))>.step:first-of-type .v-after,.v-before:target{display:grid}
+.v-compare:target{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.shot{margin:0;min-height:0;min-width:0;display:grid;grid-template-rows:minmax(0,1fr) auto;gap:.55rem}
+.shot a{display:grid;place-items:center;min-height:0}
+.shot img{max-width:100%;max-height:100%;object-fit:contain;border-radius:10px;box-shadow:0 1px 0 rgba(255,255,255,.05),0 18px 50px rgba(0,0,0,.45);background:#000}
+.shot figcaption{display:flex;justify-content:center;gap:.8rem;align-items:baseline}.shot figcaption time{font:12px var(--mono);color:var(--faint)}
+.void{display:grid;place-items:center;border:1px dashed var(--line2);border-radius:10px;color:var(--faint);padding:2rem;text-align:center}
+.arrow{position:absolute;top:50%;translate:0 -50%;z-index:3;display:grid;place-items:center;width:2.6rem;height:2.6rem;border-radius:50%;background:var(--s1);border:1px solid var(--line);color:var(--text);font-size:1.5rem;line-height:1}
+.arrow:hover{text-decoration:none;border-color:var(--accent);color:var(--accent)}.arrow.prev{left:1rem}.arrow.next{right:1rem}
+.terminal{grid-template-rows:minmax(0,1fr);place-items:center;padding:2rem 4.5rem}
+.term{width:min(100%,56rem);max-height:100%;overflow:auto;background:var(--s1);border:1px solid var(--line);border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.35)}
+.term-bar{display:flex;align-items:center;gap:1rem;padding:.7rem 1rem;border-bottom:1px solid var(--line);font-size:12px;color:var(--faint);position:sticky;top:0;background:var(--s1)}
+.dots{display:flex;gap:.35rem}.dots i{width:10px;height:10px;border-radius:50%;background:var(--line2)}
+.term-cmd{padding:1rem 1.1rem;font-size:13px;color:var(--text)}.prompt{color:var(--accent);margin-right:.6em;user-select:none}
+.term .stream{margin:0 1.1rem 1rem}.term .quiet,.term-note{margin:0 1.1rem 1rem;font-size:12.5px;color:var(--faint)}
+.stream .label{display:block;margin-bottom:.3rem}.stream pre,.plain,.command{background:var(--stage);border:1px solid var(--line);border-radius:10px;padding:.7rem .85rem;max-height:14rem;overflow:auto;color:var(--text)}
+.panel{grid-area:panel;min-height:0;display:grid;grid-template-rows:minmax(0,1fr) auto;background:var(--s1);border-left:1px solid var(--line)}
+.panel-scroll{overflow:auto;padding:1.3rem 1.4rem 1.5rem;scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
+.eyebrow{display:flex;flex-wrap:wrap;gap:.3rem 1rem;margin:0;font-size:12px;color:var(--faint)}.eyebrow>span:first-child{color:var(--accent);font-weight:650}.eyebrow .of{color:var(--faint);font-weight:500}.eyebrow time{font-family:var(--mono)}
+.panel h2{font:650 1.2rem/1.35 var(--round);letter-spacing:-.005em;margin:.45rem 0 .5rem;overflow-wrap:anywhere}
+.state{margin:0 0 .4rem}
+.block{margin-top:1.15rem;padding-top:1.05rem;border-top:1px solid var(--line)}.block h3{margin:0 0 .45rem}.block p{margin:0;color:var(--dim)}
+.command{font-size:12px;max-height:9rem}
+.receipts{list-style:none;margin:0 0 .4rem;padding:0;display:grid;gap:.45rem}.receipts li{display:flex;flex-wrap:wrap;gap:.4rem .8rem;align-items:center}.diag{font-size:13px;color:var(--dim)}
+.exit{display:inline-block;font:650 11.5px var(--mono);padding:.2rem .55rem;border-radius:999px;margin-bottom:.5rem}
+.exit.ok{color:var(--ok);background:color-mix(in srgb,var(--ok) 14%,transparent)}.exit.bad{color:var(--bad);background:color-mix(in srgb,var(--bad) 14%,transparent)}
+.receipts .exit{margin:0}.stream{margin-bottom:.6rem}
+.raw summary{cursor:pointer;font-size:12px;color:var(--faint);width:max-content}.raw summary:hover{color:var(--dim)}.raw pre{margin-top:.5rem;color:var(--faint);font-size:11.5px;max-height:12rem;overflow:auto}
+.facts{display:grid;grid-template-columns:1fr 1fr;gap:.8rem 1rem;margin:1.15rem 0 0;padding-top:1.05rem;border-top:1px solid var(--line)}.facts dd{margin:.2rem 0 0;font:12.5px var(--mono);color:var(--dim);overflow-wrap:anywhere}
+.facts.stack{grid-template-columns:1fr}
+.pager{display:flex;justify-content:space-between;align-items:center;gap:.5rem;padding:.75rem 1.1rem;border-top:1px solid var(--line);font-size:13px;font-weight:600}
+.pager a{padding:.35rem .7rem;border-radius:8px}.pager a:hover{background:var(--s2);text-decoration:none}.pager .stable{font-weight:500;color:var(--faint)}.pager .off{padding:.35rem .7rem;color:var(--line2)}
+.files{list-style:none;margin:0;padding:0;display:grid;gap:.5rem}.files li{display:grid}.files a{font:12.5px var(--mono)}.files span{font-size:12px;color:var(--faint)}
+.doc{grid-template-rows:minmax(0,1fr);overflow:auto;background:var(--bg)}.doc-in{max-width:52rem;padding:2rem 2.5rem 3rem}
+.doc h2{font:650 1.6rem/1.2 var(--round);margin:0}.lede{color:var(--dim);margin:.6rem 0 0}
+.findings{list-style:none;margin:0;padding:0;display:grid;gap:.5rem}.findings li{padding:.7rem .9rem;border-radius:10px;background:var(--s1);border:1px solid var(--line);border-left:3px solid var(--warn)}
+.findings summary{cursor:pointer}.findings code{display:block;font:11.5px/1.6 var(--mono);color:var(--faint);margin-top:.4rem;overflow-wrap:anywhere}
+.outputs{display:grid;gap:.5rem}.group{background:var(--s1);border:1px solid var(--line);border-radius:10px;padding:.65rem .9rem}
+.group summary{display:flex;justify-content:space-between;gap:1rem;cursor:pointer;font-size:13px;list-style:none}.group summary::-webkit-details-marker{display:none}
+.group .where{font-weight:600}.group .where::before{content:"\u203A";display:inline-block;width:1em;color:var(--faint);transition:rotate .15s}.group[open] .where::before{rotate:90deg}.group .count{color:var(--faint);flex:none}
+.group[open] summary{margin-bottom:.7rem}
+.flist{list-style:none;margin:0;padding:0;display:grid;gap:.25rem;font:12px var(--mono);max-height:16rem;overflow:auto}.flist li{display:flex;justify-content:space-between;gap:1rem}.flist a{overflow-wrap:anywhere;min-width:0}.flist span{color:var(--faint);flex:none}
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(8.5rem,1fr));gap:.7rem}.flist+.gallery{margin-top:.75rem}
+.gthumb{display:grid;gap:.35rem;font:11.5px var(--mono);min-width:0}.gthumb span{display:flex;justify-content:space-between;gap:.5rem;overflow:hidden}.gthumb small{color:var(--faint);font-size:inherit;flex:none}
+.gthumb img{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:7px;border:1px solid var(--line);display:block}.gthumb:hover img{border-color:var(--accent)}
+.track{border-top:1px solid var(--line);background:var(--s1)}
+.track ol{list-style:none;margin:0;padding:.75rem 1.5rem .85rem;display:flex;gap:.65rem;overflow-x:auto;scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
+.track li{flex:none;width:9.5rem}
+.track a{display:grid;gap:.4rem;padding:.3rem;border-radius:11px;border:1px solid transparent;color:var(--text);transition:background .15s,border-color .15s}
+.track a:hover{text-decoration:none;background:var(--s2)}
+.face{display:block;aspect-ratio:16/9;border-radius:7px;overflow:hidden;background:var(--stage);box-shadow:inset 0 0 0 1px var(--line)}
+.face img{width:100%;height:100%;object-fit:cover;display:block}
+.face.text pre{padding:.5rem .55rem;font-size:9.5px;line-height:1.45;color:var(--dim);height:100%;overflow:hidden;-webkit-mask-image:linear-gradient(#000 60%,transparent);mask-image:linear-gradient(#000 60%,transparent)}
+.cap{display:flex;align-items:center;gap:.4rem;min-width:0;padding:0 .15rem;font-size:12px}
+.cap .n{font:650 11px var(--round);color:var(--faint)}.dot{flex:none;width:7px;height:7px;border-radius:50%;background:var(--tone)}
+.cap .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dim)}
+.track li.bad .face{box-shadow:inset 0 0 0 2px var(--bad)}
+@media(max-width:960px){.app{height:auto;min-height:100vh;overflow:visible}.center{grid-template-columns:minmax(0,1fr);grid-template-areas:"stage" "panel"}
+.stage{min-height:60vh}.views{padding:.5rem 3.5rem 1rem}.panel{border-left:0;border-top:1px solid var(--line)}.track{position:sticky;bottom:0}.stats{display:none}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+@media print{.app{height:auto;display:block}.track,.arrow,.seg,.pager,.ovl{display:none}.center{display:block}.step{display:block!important;break-inside:avoid;margin-bottom:1rem}.stage{background:none}.view{display:none!important}.v-compare{display:grid!important;grid-template-columns:1fr 1fr}}`;
+
+// src/package.ts
 var generated = /* @__PURE__ */ new Set(["manifest.json", "summary.json", "trajectory.json", "index.html", "OPENING.txt", "journal/session-events.jsonl"]);
 var legacyTrajectoryFile = "walkthrough.json";
 var hash2 = (bytes) => createHash4("sha256").update(bytes).digest("hex");
@@ -20352,8 +20607,8 @@ function receiptOutcome(receipt) {
   if (typeof exit?.code === "number" && exit.code !== 0 || exit?.signal) return "failed";
   return Number.isSafeInteger(exit?.code) && exit.code === 0 && exit.signal === null ? "completed" : "uncertain";
 }
-function reconcileOutcome(original, receipts) {
-  const outcomes = [original, ...receipts.map(receiptOutcome)];
+function reconcileOutcome(original, receipts2) {
+  const outcomes = [original, ...receipts2.map(receiptOutcome)];
   if (outcomes.includes("refused")) return "refused";
   if (outcomes.includes("failed")) return "failed";
   return original === "completed" && outcomes.includes("uncertain") ? "uncertain" : original;
@@ -20464,7 +20719,7 @@ async function analyze(root, options2, files) {
       if (value && typeof value === "object") hostRecords.push(value);
     }
   }
-  const receipts = [];
+  const receipts2 = [];
   const retainReceipt = (raw, envelope) => {
     const receipt = object3(raw, "execution receipt");
     for (const key of ["executionId", "actionId", "sessionId"]) {
@@ -20475,16 +20730,24 @@ async function analyze(root, options2, files) {
     const executionId = receipt.executionId ?? envelope?.executionId;
     const actionId = receipt.actionId ?? envelope?.actionId;
     if (executionId === void 0 && actionId === void 0) throw new Error("receipt lacks execution/action identity");
-    receipts.push({ ...receipt, executionId, actionId });
+    receipts2.push({ ...receipt, executionId, actionId });
   };
   for (const event of events.filter((e) => e.kind === "execution-completion")) retainReceipt(event.response, event);
   for (const path of files.filter((p) => /^(?:host\/(?:receipts|receiver-receipts)|state\/receiver\/receipts)\/[^/]+\.json$/.test(p) || /^host\/diagnostics\/[^/]+\.receipt\.json$/.test(p))) retainReceipt(await readJson(root, path));
   const routingRecords = hostRecords.filter((h) => h.because !== void 0 || h.request?.because !== void 0 || h.step !== void 0 || h.request?.step !== void 0);
-  const steps = [], used = /* @__PURE__ */ new Set();
+  const steps = [], used = /* @__PURE__ */ new Set(), details = /* @__PURE__ */ new Map();
+  const commandOutput = (value, exitStatus) => {
+    if (!value) return void 0;
+    const exit = exitStatus ?? value.outcome?.exitStatus ?? value.exitStatus;
+    const stdout = typeof value.stdout === "string" ? value.stdout : typeof value.output === "string" ? value.output : void 0;
+    const stderr = typeof value.stderr === "string" ? value.stderr : void 0;
+    if (exit === void 0 && stdout === void 0 && stderr === void 0) return void 0;
+    return { ...exit ? { exit: exit.code ?? null, signal: exit.signal ?? null } : {}, ...typeof value.timedOut === "boolean" ? { timedOut: value.timedOut } : {}, stdout, stderr };
+  };
   for (const id2 of /* @__PURE__ */ new Set([...starts.keys(), ...refusals.keys(), ...actionRecords.keys()])) {
     const start = starts.get(id2), record3 = actionRecords.get(id2), refusal = refusals.get(id2);
     const source = start ?? refusal ?? record3;
-    if (receipts.some((r) => r.evidenceMode === "diagnostic" && r.executionId === (source.executionId ?? record3?.executionId))) continue;
+    if (receipts2.some((r) => r.evidenceMode === "diagnostic" && r.executionId === (source.executionId ?? record3?.executionId))) continue;
     const plan = start?.snapshotPlan, groupId = plan?.group?.groupId;
     const pair = snapshots2.filter((s) => groupId ? s.groupId === groupId : s.actionId === id2);
     if (pair.filter((s) => s.role === "before").length > 1 || pair.filter((s) => s.role === "after").length > 1) throw new Error(`duplicate action snapshot role: ${id2}`);
@@ -20508,11 +20771,19 @@ async function analyze(root, options2, files) {
     const candidate = fallbackIdentities.size === 1 ? fallback[0] : void 0;
     const host = exactHost ?? (candidate && (!candidate.actionId || candidate.actionId === id2) && (!executionId || !(candidate.executionId ?? candidate.request?.executionId) || (candidate.executionId ?? candidate.request?.executionId) === executionId) ? candidate : void 0);
     const because = source.because ?? host?.because ?? host?.request?.because;
-    const actionReceipts = receipts.filter((r) => (r.actionId === id2 || executionId && r.executionId === executionId) && (r.actionId === void 0 || r.actionId === id2) && (r.executionId === void 0 || executionId === void 0 || r.executionId === executionId));
+    const actionReceipts = receipts2.filter((r) => (r.actionId === id2 || executionId && r.executionId === executionId) && (r.actionId === void 0 || r.actionId === id2) && (r.executionId === void 0 || executionId === void 0 || r.executionId === executionId));
     execution2 = reconcileOutcome(execution2, actionReceipts);
     const completion = completions.get(id2);
+    const argv2 = events.find((e) => e.kind === "execution-start" && executionId && e.executionId === executionId && Array.isArray(e.argv))?.argv;
+    details.set(stepId, {
+      at: source.writtenAt ?? before?.capturedAt,
+      beforeAt: before?.capturedAt,
+      afterAt: after?.capturedAt,
+      ...argv2?.every((w) => typeof w === "string") ? { argv: argv2 } : {},
+      output: commandOutput(actionReceipts.find((r) => commandOutput(r)) ?? completion?.toolOutcome?.value)
+    });
     const originalObserved = refusal?.diagnostic ?? completion?.diagnostic ?? (completion?.toolOutcome ? JSON.stringify(completion.toolOutcome) : void 0);
-    const observed = actionReceipts.length ? `Authoritative receipt outcomes: ${JSON.stringify(actionReceipts.map((r) => ({ executionId: r.executionId, actionId: r.actionId, execution: receiptOutcome(r), outcome: r.outcome })))}
+    const observed2 = actionReceipts.length ? `Authoritative receipt outcomes: ${JSON.stringify(actionReceipts.map((r) => ({ executionId: r.executionId, actionId: r.actionId, execution: receiptOutcome(r), outcome: r.outcome })))}
 Original subprocess/action evidence (not an authoritative input-success verdict): ${JSON.stringify({ refusal: refusal?.diagnostic, state: completion?.state, diagnostic: completion?.diagnostic, toolOutcome: completion?.toolOutcome })}` : originalObserved;
     steps.push({
       id: stepId,
@@ -20523,19 +20794,24 @@ Original subprocess/action evidence (not an authoritative input-success verdict)
       execution: execution2,
       state: record3?.state ?? source.state ?? "unknown",
       expected: host?.step?.expected ?? host?.request?.step?.expected,
-      observed,
+      observed: observed2,
       ...typeof because === "string" ? { because } : {},
       ...pair.length ? { snapshots: { before: before?.path, after: after?.path, groupId, declaredAfterIntervalMs: after?.declaredAfterIntervalMs } } : {}
     });
   }
   const diagnostics = /* @__PURE__ */ new Map();
-  for (const receipt of receipts.filter((r) => r.evidenceMode === "diagnostic")) diagnostics.set(text(receipt.executionId, "diagnostic execution id"), receipt);
+  for (const receipt of receipts2.filter((r) => r.evidenceMode === "diagnostic")) diagnostics.set(text(receipt.executionId, "diagnostic execution id"), receipt);
   for (const [executionId, receipt] of diagnostics) {
     const request = hostRecords.find((h) => h.executionId === executionId && (h.diagnostic === true || h.evidenceMode === "diagnostic") && h.argv);
     const stepId = `diagnostic-${executionId}`;
     if (used.has(stepId)) throw new Error(`duplicate diagnostic review step: ${stepId}`);
     used.add(stepId);
     findings.push(`diagnostic ${executionId} has command evidence only; screenshots were not requested`);
+    details.set(stepId, {
+      at: typeof request?.at === "string" ? request.at : void 0,
+      ...Array.isArray(request?.argv) && request.argv.every((w) => typeof w === "string") ? { argv: request.argv } : {},
+      output: commandOutput(receipt)
+    });
     steps.push({
       id: stepId,
       actionId: executionId,
@@ -20552,17 +20828,19 @@ Original subprocess/action evidence (not an authoritative input-success verdict)
   if (events.some((e) => ["evidence-failure", "capture-status", "resource-stop"].includes(e.kind) && ["incomplete", "uncertain"].includes(e.state))) findings.push("journal records incomplete evidence or a resource stop");
   if (files.some((p) => p.startsWith("state/snapshots/") && p.endsWith(".part"))) findings.push("unfinished snapshot originals retained");
   for (const request of hostRecords.filter((h) => typeof h.because === "string" && typeof h.executionId === "string")) {
-    if (![...starts.values()].some((s) => s.executionId === request.executionId) && !events.some((e) => e.kind === "execution-completion" && e.executionId === request.executionId) && !receipts.some((r) => r.executionId === request.executionId && r.outcome?.kind === "refused")) {
+    if (![...starts.values()].some((s) => s.executionId === request.executionId) && !events.some((e) => e.kind === "execution-completion" && e.executionId === request.executionId) && !receipts2.some((r) => r.executionId === request.executionId && r.outcome?.kind === "refused")) {
       findings.push(`request ${request.executionId} has no retained guest execution`);
     }
   }
   const completeness = findings.length ? "incomplete" : "complete";
-  const receiptFailed = receipts.some((r) => ["refused", "failed"].includes(receiptOutcome(r)));
-  const receiptUncertain = receipts.some((r) => receiptOutcome(r) === "uncertain");
+  const receiptFailed = receipts2.some((r) => ["refused", "failed"].includes(receiptOutcome(r)));
+  const receiptUncertain = receipts2.some((r) => receiptOutcome(r) === "uncertain");
   const execution = receiptFailed || steps.some((s) => s.execution === "failed" || s.execution === "refused") ? "failed" : receiptUncertain || !steps.length || completeness === "incomplete" || steps.some((s) => s.execution !== "completed") ? "uncertain" : "passed";
   if (receiptFailed) findings.push("retained execution receipt reports refusal or failure");
   if (receiptUncertain) findings.push("retained execution receipt reports uncertainty");
-  return { snapshots: snapshots2, steps, incompleteGroups, findings, completeness, execution };
+  const outputs = [];
+  for (const path of files.filter((p) => p.startsWith("extractions/")).sort()) outputs.push({ path, bytes: (await lstat4(join10(root, path))).size });
+  return { snapshots: snapshots2, steps, incompleteGroups, findings, completeness, execution, details, outputs };
 }
 function summary(options2, a) {
   return { formatVersion: 1, ...options2, snapshots: a.completeness, execution: a.execution, humanReview: "pending", findings: a.findings };
@@ -20574,11 +20852,13 @@ async function buildReview(root, a) {
   const trajectory = await buildTrajectory(root, { steps: [...a.steps], execution: a.execution });
   return { ...trajectory, steps: a.steps, outcomes: { ...trajectory.outcomes, recording: a.completeness } };
 }
-var escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 function viewer(options2, a) {
-  const link2 = (step2) => `#step-${encodeURIComponent(step2.id)}`;
+  return renderReviewPage({ ...options2, completeness: a.completeness, execution: a.execution, findings: a.findings, steps: a.steps, details: a.details, outputs: a.outputs });
+}
+function legacyViewer(options2, a) {
+  const link3 = (step2) => `#step-${encodeURIComponent(step2.id)}`;
   const image = (path, role) => path ? `<figure><figcaption>${role}</figcaption><img alt="${role} dispatch snapshot" src="${escapeHtml(path.split("/").map(encodeURIComponent).join("/"))}"></figure>` : `<p>${role}: unavailable \u2014 incomplete evidence</p>`;
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' file:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>Relay review: ${escapeHtml(options2.packageId)}</title><style>body{font:16px system-ui;margin:2rem;color:#202020;background:#fff}main{display:grid;grid-template-columns:17rem 1fr;gap:2rem}nav{position:sticky;top:1rem;align-self:start}article{border:1px solid #aaa;padding:1rem;margin-bottom:2rem;scroll-margin-top:1rem}article:target{outline:4px solid #258}img{max-width:100%;height:auto}.pair{display:grid;grid-template-columns:1fr 1fr;gap:1rem}figure{margin:0}pre{white-space:pre-wrap;overflow-wrap:anywhere}a{color:#136} @media(max-width:700px){main,.pair{display:block}nav{position:static}}</style></head><body><h1>${escapeHtml(options2.packageId)}</h1><p>Snapshot completeness: ${a.completeness} \xB7 Execution: ${a.execution} \xB7 Human review: pending</p><p>Delivery integrity is separate from execution success. Snapshots are dispatch-time evidence, not continuous video.</p><main><nav aria-label="Review steps"><ol>${a.steps.map((s) => `<li><a href="${escapeHtml(link2(s))}">${escapeHtml(s.title)} \u2014 ${s.execution}</a></li>`).join("")}</ol><a href="manifest.json">Manifest</a> \xB7 <a href="summary.json">Summary</a></nav><section>${a.steps.map((s, i) => `<article id="step-${escapeHtml(s.id)}"><h2>${escapeHtml(s.title)}</h2><p>Execution: ${s.execution} \xB7 State: ${escapeHtml(s.state)} \xB7 Input mode: ${escapeHtml(s.inputMode)}</p><p>Routing reason: ${escapeHtml(s.because ?? "Not present in retained host metadata")}</p><p>Expected: ${escapeHtml(s.expected ?? "Not supplied")}</p><pre>Observed: ${escapeHtml(s.observed ?? "No confirmed result")}</pre><p>Declared after interval: ${s.snapshots?.declaredAfterIntervalMs ?? "unavailable"} ms${s.snapshots?.groupId ? ` \xB7 Group: ${escapeHtml(s.snapshots.groupId)}` : ""}</p><div class="pair">${image(s.snapshots?.before, "Before")}${image(s.snapshots?.after, "After")}</div><p>${i ? `<a href="${escapeHtml(link2(a.steps[i - 1]))}">Previous</a> \xB7 ` : ""}<a href="${escapeHtml(link2(s))}">Stable link</a>${i + 1 < a.steps.length ? ` \xB7 <a href="${escapeHtml(link2(a.steps[i + 1]))}">Next</a>` : ""}</p></article>`).join("")}</section></main></body></html>
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' file:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>Relay review: ${escapeHtml(options2.packageId)}</title><style>body{font:16px system-ui;margin:2rem;color:#202020;background:#fff}main{display:grid;grid-template-columns:17rem 1fr;gap:2rem}nav{position:sticky;top:1rem;align-self:start}article{border:1px solid #aaa;padding:1rem;margin-bottom:2rem;scroll-margin-top:1rem}article:target{outline:4px solid #258}img{max-width:100%;height:auto}.pair{display:grid;grid-template-columns:1fr 1fr;gap:1rem}figure{margin:0}pre{white-space:pre-wrap;overflow-wrap:anywhere}a{color:#136} @media(max-width:700px){main,.pair{display:block}nav{position:static}}</style></head><body><h1>${escapeHtml(options2.packageId)}</h1><p>Snapshot completeness: ${a.completeness} \xB7 Execution: ${a.execution} \xB7 Human review: pending</p><p>Delivery integrity is separate from execution success. Snapshots are dispatch-time evidence, not continuous video.</p><main><nav aria-label="Review steps"><ol>${a.steps.map((s) => `<li><a href="${escapeHtml(link3(s))}">${escapeHtml(s.title)} \u2014 ${s.execution}</a></li>`).join("")}</ol><a href="manifest.json">Manifest</a> \xB7 <a href="summary.json">Summary</a></nav><section>${a.steps.map((s, i) => `<article id="step-${escapeHtml(s.id)}"><h2>${escapeHtml(s.title)}</h2><p>Execution: ${s.execution} \xB7 State: ${escapeHtml(s.state)} \xB7 Input mode: ${escapeHtml(s.inputMode)}</p><p>Routing reason: ${escapeHtml(s.because ?? "Not present in retained host metadata")}</p><p>Expected: ${escapeHtml(s.expected ?? "Not supplied")}</p><pre>Observed: ${escapeHtml(s.observed ?? "No confirmed result")}</pre><p>Declared after interval: ${s.snapshots?.declaredAfterIntervalMs ?? "unavailable"} ms${s.snapshots?.groupId ? ` \xB7 Group: ${escapeHtml(s.snapshots.groupId)}` : ""}</p><div class="pair">${image(s.snapshots?.before, "Before")}${image(s.snapshots?.after, "After")}</div><p>${i ? `<a href="${escapeHtml(link3(a.steps[i - 1]))}">Previous</a> \xB7 ` : ""}<a href="${escapeHtml(link3(s))}">Stable link</a>${i + 1 < a.steps.length ? ` \xB7 <a href="${escapeHtml(link3(a.steps[i + 1]))}">Next</a>` : ""}</p></article>`).join("")}</section></main></body></html>
 `;
 }
 async function deliverPackage(rootDir, options2) {
@@ -20656,7 +20936,8 @@ async function verifyDeliveredPackage(rootDir) {
   }
   if (!(await readFile7(join10(root, "state/journal/events.jsonl"))).equals(await readFile7(join10(root, "journal/session-events.jsonl")))) throw new Error("trajectory journal differs from original");
   if (await readFile7(join10(root, "summary.json"), "utf8") !== json(summary(options2, a))) throw new Error("summary disagrees with original evidence");
-  if (await readFile7(join10(root, "index.html"), "utf8") !== viewer(options2, a)) throw new Error("viewer disagrees with original evidence");
+  const page = await readFile7(join10(root, "index.html"), "utf8");
+  if (page !== viewer(options2, a) && page !== legacyViewer(options2, a)) throw new Error("viewer disagrees with original evidence");
   const trajectoryFile = !files.includes("trajectory.json") && files.includes(legacyTrajectoryFile) ? legacyTrajectoryFile : "trajectory.json";
   if (await readFile7(join10(root, trajectoryFile), "utf8") !== json(await buildReview(root, a))) throw new Error("trajectory disagrees with original evidence");
   const acceptance = await verifyPackage(manifest, root);
@@ -28712,7 +28993,7 @@ function crc32(bytes) {
 function pngDimensions(bytes) {
   requireImage(bytes.length >= 33 && bytes.subarray(0, 8).equals(PNG_SIGNATURE), "Invalid PNG signature or header");
   requireImage(bytes.readUInt32BE(8) === 13 && bytes.toString("ascii", 12, 16) === "IHDR", "Invalid PNG IHDR");
-  const size = dimensions(bytes.readUInt32BE(16), bytes.readUInt32BE(20));
+  const size2 = dimensions(bytes.readUInt32BE(16), bytes.readUInt32BE(20));
   const depths = { 0: [1, 2, 4, 8, 16], 2: [8, 16], 3: [1, 2, 4, 8], 4: [8, 16], 6: [8, 16] };
   requireImage(
     depths[bytes[25]]?.includes(bytes[24]) && bytes[26] === 0 && bytes[27] === 0 && bytes[28] <= 1,
@@ -28738,7 +29019,7 @@ function pngDimensions(bytes) {
     } else if (data) dataEnded = true;
     if (type === "IEND") {
       requireImage(length === 0 && data && end === bytes.length, "Invalid PNG end");
-      return size;
+      return size2;
     }
     offset = end;
   }
@@ -28746,15 +29027,15 @@ function pngDimensions(bytes) {
 }
 function jpegDimensions(bytes) {
   requireImage(bytes.length >= 4 && bytes[0] === 255 && bytes[1] === 216, "Invalid JPEG signature");
-  let offset = 2, records = 0, size, scanned = false;
+  let offset = 2, records = 0, size2, scanned = false;
   while (offset < bytes.length) {
     requireImage(++records <= MAX_RECORDS && bytes[offset++] === 255, "Invalid JPEG marker");
     while (offset < bytes.length && bytes[offset] === 255) offset++;
     requireImage(offset < bytes.length, "Truncated JPEG marker");
     const marker = bytes[offset++];
     if (marker === 217) {
-      requireImage(size && scanned && offset === bytes.length, "Invalid JPEG end");
-      return size;
+      requireImage(size2 && scanned && offset === bytes.length, "Invalid JPEG end");
+      return size2;
     }
     requireImage(
       marker !== 0 && marker !== 216 && marker !== 220 && !(marker >= 208 && marker <= 215),
@@ -28764,16 +29045,16 @@ function jpegDimensions(bytes) {
     const length = bytes.readUInt16BE(offset), end = offset + length;
     requireImage(length >= 2 && end <= bytes.length, "Invalid JPEG segment length");
     if (marker >= 192 && marker <= 207 && ![196, 200, 204].includes(marker)) {
-      requireImage((marker === 192 || marker === 194) && !size && length >= 8, "Unsupported or duplicate JPEG frame");
+      requireImage((marker === 192 || marker === 194) && !size2 && length >= 8, "Unsupported or duplicate JPEG frame");
       requireImage(
         bytes[offset + 2] === 8 && [1, 3, 4].includes(bytes[offset + 7]) && length === 8 + 3 * bytes[offset + 7],
         "Invalid JPEG frame header"
       );
-      size = dimensions(bytes.readUInt16BE(offset + 5), bytes.readUInt16BE(offset + 3));
+      size2 = dimensions(bytes.readUInt16BE(offset + 5), bytes.readUInt16BE(offset + 3));
     }
     offset = end;
     if (marker === 218) {
-      requireImage(size && length >= 6, "JPEG scan before frame header");
+      requireImage(size2 && length >= 6, "JPEG scan before frame header");
       scanned = true;
       while (offset < bytes.length) {
         if (bytes[offset] !== 255) {
@@ -28835,7 +29116,7 @@ function inspect(bytes, mimeType) {
       throw new PresentationUnavailableError("Unsupported image MIME type; only PNG, JPEG, and WebP are accepted");
   }
 }
-function decodePng(bytes, size) {
+function decodePng(bytes, size2) {
   const depth = bytes[24], colorType = bytes[25];
   requireImage(bytes[28] === 0, "Interlaced PNG cannot be resampled here");
   const idat = [];
@@ -28851,7 +29132,7 @@ function decodePng(bytes, size) {
   const channels = { 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 }[colorType];
   requireImage(channels !== void 0, "Unsupported PNG colour type");
   requireImage(colorType !== 3 || plte && plte.length % 3 === 0 && plte.length > 0, "Palette PNG lacks its palette");
-  const { width, height } = size;
+  const { width, height } = size2;
   const bitsPerPixel = channels * depth, bpp = Math.max(1, bitsPerPixel >> 3), stride = Math.ceil(width * bitsPerPixel / 8);
   let raw;
   try {
@@ -29023,7 +29304,7 @@ async function prepareImage(bytes, mimeType) {
     );
     const original = Buffer.from(bytes);
     const header = inspect(original, mimeType);
-    let presented = original, size = header, presentedType = mimeType;
+    let presented = original, size2 = header, presentedType = mimeType;
     const raster = mimeType === "image/png" ? decodePng(original, header) : void 0;
     if (header.width > policy.maxWidth || header.height > policy.maxHeight || base64Length(original.length) > policy.maxBytes) {
       requireImage(raster, `${mimeType} original exceeds the preview bounds and only PNG originals are resampled here; retrieve the original with the host read tool`);
@@ -29038,7 +29319,7 @@ async function prepareImage(bytes, mimeType) {
       }
       for (; ; ) {
         presented = encodePng(resample(raster, Math.max(1, width), Math.max(1, height)));
-        size = { width: Math.max(1, width), height: Math.max(1, height) };
+        size2 = { width: Math.max(1, width), height: Math.max(1, height) };
         if (base64Length(presented.length) <= policy.maxBytes) break;
         const nextWidth = Math.max(1, Math.floor(width * 0.75)), nextHeight = Math.max(1, Math.floor(height * 0.75));
         requireImage(nextWidth !== width || nextHeight !== height, "Image cannot be presented within the preview byte bound");
@@ -29048,7 +29329,7 @@ async function prepareImage(bytes, mimeType) {
       presentedType = "image/png";
     }
     const output = inspect(presented, presentedType);
-    requireImage(output.width === size.width && output.height === size.height && output.width <= policy.maxWidth && output.height <= policy.maxHeight, "Presented image dimensions are inconsistent");
+    requireImage(output.width === size2.width && output.height === size2.height && output.width <= policy.maxWidth && output.height <= policy.maxHeight, "Presented image dimensions are inconsistent");
     const data = presented.toString("base64");
     requireImage(data.length > 0 && Buffer.byteLength(data, "utf8") <= policy.maxBytes, "Presented image exceeds the preview byte bound");
     return {
@@ -29056,8 +29337,8 @@ async function prepareImage(bytes, mimeType) {
       presentation: {
         originalWidth: header.width,
         originalHeight: header.height,
-        width: size.width,
-        height: size.height,
+        width: size2.width,
+        height: size2.height,
         mimeType: presentedType,
         sha256: createHash5("sha256").update(presented).digest("hex"),
         bytes: presented.length,

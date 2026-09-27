@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { lstat, readFile, readdir, mkdir, writeFile, rm } from "node:fs/promises";
 import { dirname, join, resolve, parse } from "node:path";
 import { buildManifest, buildTrajectory, verifyPackage, type PackageManifest, type ReviewStep, type SnapshotArtifact } from "@wezzard/relay-driver-host-sdk";
+import { escapeHtml, renderReviewPage, type CommandOutput, type StepDetail } from "./review-page.js";
 
 export interface DeliverPackageOptions {
   packageId: string;
@@ -25,6 +26,9 @@ type Analysis = {
   findings: string[];
   completeness: DeliveryResult["snapshots"];
   execution: DeliveryResult["execution"];
+  // Page-only evidence, kept out of trajectory.json so its schema is unchanged.
+  details: Map<string, StepDetail>;
+  outputs: { path: string; bytes: number }[];
 };
 const generated = new Set(["manifest.json", "summary.json", "trajectory.json", "index.html", "OPENING.txt", "journal/session-events.jsonl"]);
 // Packages built before the trajectory rename wrote `walkthrough.json` instead of `trajectory.json`.
@@ -234,7 +238,17 @@ async function analyze(root: string, options: DeliverPackageOptions, files: stri
   for (const event of events.filter(e => e.kind === "execution-completion")) retainReceipt(event.response, event);
   for (const path of files.filter(p => /^(?:host\/(?:receipts|receiver-receipts)|state\/receiver\/receipts)\/[^/]+\.json$/.test(p) || /^host\/diagnostics\/[^/]+\.receipt\.json$/.test(p))) retainReceipt(await readJson(root, path));
   const routingRecords = hostRecords.filter(h => h.because !== undefined || h.request?.because !== undefined || h.step !== undefined || h.request?.step !== undefined);
-  const steps: Step[] = [], used = new Set<string>();
+  const steps: Step[] = [], used = new Set<string>(), details = new Map<string, StepDetail>();
+  // Only a receipt or tool value that actually carries a command result becomes
+  // the page's exit status and streams; anything else stays raw evidence.
+  const commandOutput = (value: Obj | undefined, exitStatus?: Obj): CommandOutput | undefined => {
+    if (!value) return undefined;
+    const exit = exitStatus ?? value.outcome?.exitStatus ?? value.exitStatus;
+    const stdout = typeof value.stdout === "string" ? value.stdout : typeof value.output === "string" ? value.output : undefined;
+    const stderr = typeof value.stderr === "string" ? value.stderr : undefined;
+    if (exit === undefined && stdout === undefined && stderr === undefined) return undefined;
+    return { ...(exit ? { exit: exit.code ?? null, signal: exit.signal ?? null } : {}), ...(typeof value.timedOut === "boolean" ? { timedOut: value.timedOut } : {}), stdout, stderr };
+  };
   for (const id of new Set([...starts.keys(), ...refusals.keys(), ...actionRecords.keys()])) {
     const start = starts.get(id), record = actionRecords.get(id), refusal = refusals.get(id);
     const source = start ?? refusal ?? record!;
@@ -267,6 +281,10 @@ async function analyze(root: string, options: DeliverPackageOptions, files: stri
     const actionReceipts = receipts.filter(r => (r.actionId === id || (executionId && r.executionId === executionId)) && (r.actionId === undefined || r.actionId === id) && (r.executionId === undefined || executionId === undefined || r.executionId === executionId));
     execution = reconcileOutcome(execution, actionReceipts);
     const completion = completions.get(id);
+    const argv = events.find(e => e.kind === "execution-start" && executionId && e.executionId === executionId && Array.isArray(e.argv))?.argv;
+    details.set(stepId, { at: source.writtenAt ?? before?.capturedAt, beforeAt: before?.capturedAt, afterAt: after?.capturedAt,
+      ...(argv?.every((w: unknown) => typeof w === "string") ? { argv } : {}),
+      output: commandOutput(actionReceipts.find(r => commandOutput(r)) ?? completion?.toolOutcome?.value) });
     const originalObserved = refusal?.diagnostic ?? completion?.diagnostic ?? (completion?.toolOutcome ? JSON.stringify(completion.toolOutcome) : undefined);
     const observed = actionReceipts.length
       ? `Authoritative receipt outcomes: ${JSON.stringify(actionReceipts.map(r => ({ executionId: r.executionId, actionId: r.actionId, execution: receiptOutcome(r), outcome: r.outcome })))}\nOriginal subprocess/action evidence (not an authoritative input-success verdict): ${JSON.stringify({ refusal: refusal?.diagnostic, state: completion?.state, diagnostic: completion?.diagnostic, toolOutcome: completion?.toolOutcome })}`
@@ -286,6 +304,9 @@ async function analyze(root: string, options: DeliverPackageOptions, files: stri
     if (used.has(stepId)) throw new Error(`duplicate diagnostic review step: ${stepId}`);
     used.add(stepId);
     findings.push(`diagnostic ${executionId} has command evidence only; screenshots were not requested`);
+    details.set(stepId, { at: typeof request?.at === "string" ? request.at : undefined,
+      ...(Array.isArray(request?.argv) && request.argv.every((w: unknown) => typeof w === "string") ? { argv: request.argv } : {}),
+      output: commandOutput(receipt) });
     steps.push({ id: stepId, actionId: executionId, inputMode: 'diagnostic', attemptId: request?.attemptId ?? executionId,
       title: request?.step?.title ?? 'Diagnostic command', execution: receiptOutcome(receipt), state: 'diagnostic',
       because: request?.because, expected: request?.step?.expected,
@@ -304,7 +325,9 @@ async function analyze(root: string, options: DeliverPackageOptions, files: stri
   const execution = receiptFailed || steps.some(s => s.execution === "failed" || s.execution === "refused") ? "failed" : receiptUncertain || !steps.length || completeness === "incomplete" || steps.some(s => s.execution !== "completed") ? "uncertain" : "passed";
   if (receiptFailed) findings.push("retained execution receipt reports refusal or failure");
   if (receiptUncertain) findings.push("retained execution receipt reports uncertainty");
-  return { snapshots, steps, incompleteGroups, findings, completeness, execution };
+  const outputs = [];
+  for (const path of files.filter(p => p.startsWith("extractions/")).sort()) outputs.push({ path, bytes: (await lstat(join(root, path))).size });
+  return { snapshots, steps, incompleteGroups, findings, completeness, execution, details, outputs };
 }
 
 function summary(options: DeliverPackageOptions, a: Analysis) {
@@ -319,8 +342,13 @@ async function buildReview(root: string, a: Analysis) {
   const trajectory = await buildTrajectory(root, { steps: [...a.steps], execution: a.execution });
   return { ...trajectory, steps: a.steps, outcomes: { ...trajectory.outcomes, recording: a.completeness } };
 }
-const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 function viewer(options: DeliverPackageOptions, a: Analysis): string {
+  return renderReviewPage({ ...options, completeness: a.completeness, execution: a.execution, findings: a.findings, steps: a.steps, details: a.details, outputs: a.outputs });
+}
+// Packages delivered before the review page redesign carry this page. It stays
+// byte-exact so verification still accepts their index.html, the same way a
+// pre-rename package's walkthrough.json is still accepted.
+function legacyViewer(options: DeliverPackageOptions, a: Analysis): string {
   const link = (step: Step) => `#step-${encodeURIComponent(step.id)}`;
   const image = (path: string | undefined, role: string) => path ? `<figure><figcaption>${role}</figcaption><img alt="${role} dispatch snapshot" src="${escapeHtml(path.split("/").map(encodeURIComponent).join("/"))}"></figure>` : `<p>${role}: unavailable — incomplete evidence</p>`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' file:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>Relay review: ${escapeHtml(options.packageId)}</title><style>body{font:16px system-ui;margin:2rem;color:#202020;background:#fff}main{display:grid;grid-template-columns:17rem 1fr;gap:2rem}nav{position:sticky;top:1rem;align-self:start}article{border:1px solid #aaa;padding:1rem;margin-bottom:2rem;scroll-margin-top:1rem}article:target{outline:4px solid #258}img{max-width:100%;height:auto}.pair{display:grid;grid-template-columns:1fr 1fr;gap:1rem}figure{margin:0}pre{white-space:pre-wrap;overflow-wrap:anywhere}a{color:#136} @media(max-width:700px){main,.pair{display:block}nav{position:static}}</style></head><body><h1>${escapeHtml(options.packageId)}</h1><p>Snapshot completeness: ${a.completeness} · Execution: ${a.execution} · Human review: pending</p><p>Delivery integrity is separate from execution success. Snapshots are dispatch-time evidence, not continuous video.</p><main><nav aria-label="Review steps"><ol>${a.steps.map(s => `<li><a href="${escapeHtml(link(s))}">${escapeHtml(s.title)} — ${s.execution}</a></li>`).join("")}</ol><a href="manifest.json">Manifest</a> · <a href="summary.json">Summary</a></nav><section>${a.steps.map((s, i) => `<article id="step-${escapeHtml(s.id)}"><h2>${escapeHtml(s.title)}</h2><p>Execution: ${s.execution} · State: ${escapeHtml(s.state)} · Input mode: ${escapeHtml(s.inputMode)}</p><p>Routing reason: ${escapeHtml(s.because ?? "Not present in retained host metadata")}</p><p>Expected: ${escapeHtml(s.expected ?? "Not supplied")}</p><pre>Observed: ${escapeHtml(s.observed ?? "No confirmed result")}</pre><p>Declared after interval: ${s.snapshots?.declaredAfterIntervalMs ?? "unavailable"} ms${s.snapshots?.groupId ? ` · Group: ${escapeHtml(s.snapshots.groupId)}` : ""}</p><div class="pair">${image(s.snapshots?.before, "Before")}${image(s.snapshots?.after, "After")}</div><p>${i ? `<a href="${escapeHtml(link(a.steps[i - 1]!))}">Previous</a> · ` : ""}<a href="${escapeHtml(link(s))}">Stable link</a>${i + 1 < a.steps.length ? ` · <a href="${escapeHtml(link(a.steps[i + 1]!))}">Next</a>` : ""}</p></article>`).join("")}</section></main></body></html>\n`;
@@ -402,7 +430,8 @@ export async function verifyDeliveredPackage(rootDir: string): Promise<DeliveryR
   }
   if (!(await readFile(join(root, "state/journal/events.jsonl"))).equals(await readFile(join(root, "journal/session-events.jsonl")))) throw new Error("trajectory journal differs from original");
   if (await readFile(join(root, "summary.json"), "utf8") !== json(summary(options, a))) throw new Error("summary disagrees with original evidence");
-  if (await readFile(join(root, "index.html"), "utf8") !== viewer(options, a)) throw new Error("viewer disagrees with original evidence");
+  const page = await readFile(join(root, "index.html"), "utf8");
+  if (page !== viewer(options, a) && page !== legacyViewer(options, a)) throw new Error("viewer disagrees with original evidence");
   // A legacy package (pre-trajectory rename) still carries walkthrough.json; read whichever this package actually has.
   const trajectoryFile = !files.includes("trajectory.json") && files.includes(legacyTrajectoryFile) ? legacyTrajectoryFile : "trajectory.json";
   if (await readFile(join(root, trajectoryFile), "utf8") !== json(await buildReview(root, a))) throw new Error("trajectory disagrees with original evidence");

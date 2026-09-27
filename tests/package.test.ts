@@ -99,6 +99,36 @@ test('pre-stage diagnostic repair is visible as command-only evidence without fa
   assert.equal((await verifyDeliveredPackage(root)).deliveryVerified, true);
 });
 
+test("review page orders steps by time and reads commands, exit status, output streams and declared outputs", async t => {
+  const { root } = await fixture(t);
+  await save(root, "host/diagnostics/early.request.json", { executionId: "early", evidenceMode: "diagnostic", at: "2026-09-12T23:59:00.000Z", because: "Inspect the guest before acting", argv: ["/bin/zsh", "-c", "ls -la workspace"] });
+  await save(root, "host/diagnostics/early.receipt.json", { executionId: "early", evidenceMode: "diagnostic", outcome: { kind: "completed", exitStatus: { code: 3, signal: null } }, stdout: "listing", stderr: "denied", timeoutMs: 1000 });
+  await save(root, "extractions/evidence/run-1/result.json", { passed: false });
+  await deliverPackage(root, options);
+  const html = await readFile(join(root, "index.html"), "utf8");
+  // The diagnostic ran first, so it is step 01 even though the trajectory lists actions first.
+  assert.ok(html.indexOf('id="step-diagnostic-early"') < html.indexOf('id="step-step-0"'));
+  const diagnostic = html.split('<article id="step-diagnostic-early"')[1]!.split("</article>")[0]!;
+  assert.match(diagnostic, /<span>Step 01 <span class="of">of 02<\/span><\/span><span>Diagnostic<\/span><time>23:59:00 UTC<\/time>/);
+  assert.match(diagnostic, /<h2>Inspect the guest before acting<\/h2>/);
+  // A step without snapshots shows its command and output in the viewport, and its exit status in the panel.
+  assert.match(diagnostic, /<pre class="term-cmd"><span class="prompt" aria-hidden="true">\$<\/span>\/bin\/zsh -c &#39;ls -la workspace&#39;<\/pre>/);
+  assert.match(diagnostic, /<span class="exit bad">exit 3<\/span>/);
+  assert.match(diagnostic, /stdout<\/span><pre>listing<\/pre>/);
+  assert.match(diagnostic, /stderr<\/span><pre>denied<\/pre>/);
+  assert.match(diagnostic, /Screenshots were not requested for this diagnostic/);
+  // Without script, a step is selected as the :target: each thumbnail links to its step, and a step
+  // with snapshots offers its before and compare views as targets inside it.
+  assert.deepEqual([...html.split('<footer class="track"')[1]!.matchAll(/<li[^>]*><a href="([^"]+)"/g)].map(m => m[1]), ["#step-diagnostic-early", "#step-step-0"]);
+  const action = html.split('<article id="step-step-0"')[1]!.split("</article>")[0]!;
+  assert.match(action, /<a class="s-before" href="#step-step-0--before">Before<\/a><a class="s-compare" href="#step-step-0--compare">Compare<\/a>/);
+  assert.match(action, /<div class="view v-before" id="step-step-0--before">/);
+  assert.match(action, /<div class="view v-compare" id="step-step-0--compare">/);
+  assert.match(html, /<span class="where">evidence<\/span><span class="count">1 file · [^<]+<\/span><\/summary><ul class="flist"><li><a href="extractions\/evidence\/run-1\/result.json">run-1\/result.json<\/a>/);
+  assert.doesNotMatch(html, /<script|https?:\/\/|fetch\(/);
+  assert.equal((await verifyDeliveredPackage(root)).deliveryVerified, true);
+});
+
 test("group members each review the shared causal pair", async t => {
   const { root } = await fixture(t, "group");
   const result = await deliverPackage(root, options);
@@ -304,9 +334,9 @@ for (const scenario of ["driver-refused", "driver-uncertain", "transport-uncerta
     assert.match(trajectory.steps[0].observed, /Original subprocess\/action evidence \(not an authoritative input-success verdict\):/);
     assert.ok(trajectory.steps[0].observed.includes(JSON.stringify(completion.toolOutcome)));
     const html = await readFile(join(root, "index.html"), "utf8");
-    assert.match(html, new RegExp(`Click Save — ${expected}`));
-    assert.match(html, new RegExp(`Execution: ${expected} · State:`));
-    assert.doesNotMatch(html, /Execution: completed · State:/);
+    assert.match(html, new RegExp(`<span class="t">Click Save</span></span><span class="sr">${expected}</span>`));
+    assert.match(html, new RegExp(`Execution: </span><span class="verdict [a-z]+"><i aria-hidden="true"></i>${expected}</span>`));
+    assert.doesNotMatch(html, /Execution: <\/span><span class="verdict ok"><i aria-hidden="true"><\/i>completed/);
     assert.match(html, /Authoritative receipt outcomes:/);
     if (scenario === "transport-uncertain") assert.match(html, /connection lost after guest completed/);
     for (const [path, bytes] of originals) assert.deepEqual(await readFile(join(root, path)), bytes, `unmodified original: ${path}`);
@@ -400,9 +430,9 @@ test("repeated valid step IDs retain each real receiver execution's reason and e
     const i = index + 1;
     assert.equal(step.because, `Reason${i}`);
     assert.equal(step.expected, `Expected${i}`);
-    const article = html.split(`<article id="step-${step.id}">`)[1]!.split("</article>")[0]!;
-    assert.match(article, new RegExp(`Routing reason: Reason${i}`));
-    assert.match(article, new RegExp(`Expected: Expected${i}`));
+    const article = html.split(`<article id="step-${step.id}"`)[1]!.split("</article>")[0]!;
+    assert.match(article, new RegExp(`<h3>Reason</h3><p>Reason${i}</p>`));
+    assert.match(article, new RegExp(`<h3>Expected</h3><p>Expected${i}</p>`));
     assert.doesNotMatch(article, new RegExp(`Reason${3 - i}|Expected${3 - i}`));
   }
   for (const [path, bytes] of originals) assert.deepEqual(await readFile(join(root, path)), bytes, path);

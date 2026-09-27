@@ -7,3 +7,9 @@ test-evidence/
 # CI checks vm-service out here to build vmctl for the parity test.
 .ci/
 .release/
+# Agent plans, reviews and troubleshooting reports stay local.
+.plans/
+.reviews/
+.troubleshooting/
+# Generated previews and test output.
+test-results/

@@ -295,6 +295,33 @@ The tool does not invent a default wait or silently substitute stability detecti
 - Recovery checks the owner's retained recording lineages and verified local originals before requiring a reachable guest. Closed or sealed enclosures return `stale-reference`, while already delivered originals remain readable through host tools.
 - Pi's public `resizeImage` helper prepares previews without changing archived originals. Real Pi SDK 0.85.1 tests verify image-bearing errors and `images.blockImages`; offline adapter tests verify non-vision placeholders. These checks do not establish acceptance by the exact affected gateway.
 
+### 6.10 Evidence review page
+
+`/relay-trajectory` opens the delivered package's `index.html`. The page serves a human reviewer who must understand what happened without the agent's conversation.
+
+- The page opens from `file://` with no server, network or script. Its Content-Security-Policy forbids scripts, so navigation uses links, anchors and disclosure elements only.
+- The top row shows the task name and package identifier. Snapshot completeness, execution and human review appear as three separate verdicts, because none of them implies another.
+- Findings that repeat one sentence for many identifiers are stated once with a count. The identifiers remain available inside the finding.
+- Declared outputs are grouped by their declared name, and each file shows its guest path and size. Image outputs show a thumbnail that links to the original. When a package has more than 12 outputs, each group starts folded.
+- The track and the step numbers follow the order in which steps ran. Diagnostics appear where they ran, not after the actions. A step without a retained time keeps its evidence order after the timed steps.
+- Each step leads with the reason it was sent when its title was generated from its command. A title that embeds a whole script is cut to its first line, and the exact command is shown separately.
+- A command result shows the exit status, standard output and standard error separately. An action's receipts are summarized by execution outcome and exit status. The receipt as recorded stays available in a disclosure element.
+- Each snapshot shows its capture time, and the view switch shows the time elapsed between before and after. A diagnostic states that it carries command evidence only.
+- Every step keeps a stable link and links to the previous and next steps in time order.
+- The page is a pure function of the retained evidence. Verification renders it again and requires identical bytes. A package delivered before this page existed still verifies against the page it was delivered with.
+
+**Visual design.** The owner decided on 2026-09-28 that every generated page must be well designed, with a warm, modern look and a three-row layout, so the design belongs to the generator, not to one package.
+
+- The page fills the window in three rows. The top row names the task and package and shows the statistics: steps, actions, diagnostics, start time and span. It also shows the three verdicts as separate pills and an Overview link that carries the number of findings.
+- The center row splits into a main viewport and a right panel. The viewport shows the selected step's snapshot at the largest size that fits, with a switch between After, Before and Compare, which shows both side by side, and the time between them. A step without snapshots shows its command and output in the viewport instead. Arrows on both sides move to the previous and next steps.
+- The right panel shows the selected step's details: its number, kind and time, headline, execution verdict, reason, command, expected and observed results, and facts. Previous, Next and a stable link stay at its foot.
+- The bottom row is a track of every step in time order. Each thumbnail shows the step's after snapshot, or its command when it has no snapshots, with its number, a status dot and its headline. The selected step's thumbnail is outlined.
+- The Overview shows the caveat, the findings and the declared outputs in the viewport, and the package identity, the generated files and the human review status in the panel.
+- Selection uses anchors only: the selected step is the URL's fragment, and a page opened without one shows the first step. The before and compare views are fragments inside their step.
+- The palette is warm: an espresso charcoal surface with an apricot accent when the system uses dark mode, and a cream surface with a burnt orange accent in light mode. Snapshots sit on the darkest surface, so they are the brightest thing on the page. Headings and numbers use a rounded system face, and commands use a monospace face.
+- Four tones carry status and each always appears with its word: green for passed and complete, red for failed and refused, amber for uncertain and incomplete, and rose for human review pending, which is not a warning.
+- Text meets WCAG AA contrast, focus is always visible, motion respects the reduced-motion preference, and a narrow window stacks the viewport above the panel. A printed page lists every step with both snapshots.
+
 ## 7. Empty, partial and failure states
 
 | State | Required experience |
