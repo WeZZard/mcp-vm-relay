@@ -1175,3 +1175,18 @@ test('R4: a lease that arrives after the caller cancelled relay_acquire is renew
   assert.match(failure.message, new RegExp(`${vm}.*retained`), 'the error names the VM that is now owned and retained');
   await f.manager.release(); await f.assertClean();
 });
+
+test('R5: finish records a declared output that was never produced as incomplete and still delivers and releases', { timeout: 30000 }, async t => {
+  const f = await fixture(t);
+  const acquired = await f.manager.acquire(acquireInput({ extractions: [{ name: 'missing', path: 'never-written.txt' }, { name: 'artifact', path: 'artifact.txt' }] }));
+  await f.stage();
+  await f.manager.run(operation('write-artifact', { argv: [process.execPath, '-e', "require('node:fs').writeFileSync('artifact.txt', 'produced')"] }));
+  const delivered: any = await f.manager.finish();
+  assert.equal(delivered.deliveryVerified, true); assert.equal(delivered.execution, 'passed');
+  assert.deepEqual(delivered.incompleteExtractions?.map((item: { name: string }) => item.name), ['missing'], 'the result names the output that could not be extracted');
+  const versions = await readdir(join(acquired.output!, 'extractions/artifact'));
+  assert.equal(await readFile(join(acquired.output!, 'extractions/artifact', versions[0]), 'utf8'), 'produced', 'the outputs that exist are still extracted');
+  const events = await Promise.all((await readdir(join(acquired.output!, 'host/events'))).map(path => json(join(acquired.output!, 'host/events', path))));
+  assert.equal(events.find(event => event.kind === 'extraction-incomplete')?.details.name, 'missing');
+  await f.assertClean(); assert.equal(f.service.releaseCalls, 1);
+});
