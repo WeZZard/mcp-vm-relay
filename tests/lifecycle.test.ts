@@ -204,3 +204,27 @@ test('R1: shutdown behind an operation that never settles is bounded by the grac
   assert.ok((await f.events(owned.hostRoot)).some(event => event.kind === 'renewal-paused'));
   assert.equal(f.fake.releaseCalls, 0);
 });
+
+test('R2: a response written after the client closed its reader ends the session with cleanup, not an unhandled EPIPE', { timeout: 30000 }, async t => {
+  const f = await withService(t);
+  const relay = await f.start(f.fake.url);
+  assert.equal((await relay.call('relay_acquire', acquireArgs)).isError, false);
+  const owned = await f.lease(relay);
+  assert.equal(owned.active, true);
+  const hold = gate();
+  f.fake.execHook = async () => { await hold.promise; return { rc: 1, output: 'fixture failure after the client left' }; };
+  void relay.call('relay_exec', { diagnostic: true, argv: ['/bin/false'] });
+  await f.fake.arrived('/exec');
+  relay.child.stdout.destroy(); // the client's read side is gone; standard input stays open
+  await sleep(200);
+  hold.open(); // the operation fails and the server writes its result to the closed pipe
+  const exit = await exitWithin(relay, 10000);
+  assert.ok(exit, 'the server ends the session');
+  assert.doesNotMatch(relay.stderr(), /EPIPE|Unhandled 'error' event/, 'a closed standard output is a session end, not a crash');
+  assert.equal(exit.code, 0, relay.stderr());
+  const after = await f.lease(relay);
+  assert.equal(after.active, false, 'lease.json records that renewal stopped');
+  assert.equal(after.lease.vm, owned.lease.vm, 'the VM stays owned for an explicit finish or release');
+  assert.ok((await f.events(owned.hostRoot)).some(event => event.kind === 'renewal-paused'), 'a renewal-paused event is written');
+  assert.equal(f.fake.releaseCalls, 0);
+});
