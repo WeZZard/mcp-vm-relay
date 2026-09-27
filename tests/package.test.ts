@@ -54,6 +54,16 @@ async function rewriteJournal(f: Awaited<ReturnType<typeof fixture>>) {
   await save(f.root, "state/journal/events.jsonl", f.events.map(e => JSON.stringify(e)).join("\n") + "\n");
 }
 
+// The page's only script is its arrow-key navigation, admitted by the policy's hash.
+function withoutKeyScript(html: string) {
+  const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)];
+  assert.equal(scripts.length, 1, "the page has exactly one script");
+  const hash = createHash("sha256").update(scripts[0]![1]!).digest("base64");
+  assert.ok(html.includes(`script-src 'sha256-${hash}';`), "the policy admits the script by its hash only");
+  assert.doesNotMatch(html, /script-src[^;]*unsafe/);
+  return html.replace(scripts[0]![0], "");
+}
+
 test("delivers capture-classified package; all originals, viewer, summary, and extractions are checksummed", async t => {
   const { root } = await fixture(t);
   const original = await readFile(join(root, "state/journal/events.jsonl"));
@@ -72,7 +82,7 @@ test("delivers capture-classified package; all originals, viewer, summary, and e
   const html = await readFile(join(root, "index.html"), "utf8");
   assert.match(html, /The user is presenting/);
   assert.match(html, /href="#step-step-0"/);
-  assert.doesNotMatch(html, /<script|https?:\/\/|fetch\(/);
+  assert.doesNotMatch(withoutKeyScript(html), /<script|https?:\/\/|fetch\(/);
 });
 
 test("verification accepts a legacy package that carries walkthrough.json instead of trajectory.json", async t => {
@@ -117,15 +127,16 @@ test("review page orders steps by time and reads commands, exit status, output s
   assert.match(diagnostic, /stdout<\/span><pre>listing<\/pre>/);
   assert.match(diagnostic, /stderr<\/span><pre>denied<\/pre>/);
   assert.match(diagnostic, /Screenshots were not requested for this diagnostic/);
-  // Without script, a step is selected as the :target: each thumbnail links to its step, and a step
-  // with snapshots offers its before and compare views as targets inside it.
+  // Without script, a step is selected as the :target: each thumbnail links to its step, which shows
+  // the compare view, and a step with snapshots offers its before and after views as targets inside it.
   assert.deepEqual([...html.split('<footer class="track"')[1]!.matchAll(/<li[^>]*><a href="([^"]+)"/g)].map(m => m[1]), ["#step-diagnostic-early", "#step-step-0"]);
   const action = html.split('<article id="step-step-0"')[1]!.split("</article>")[0]!;
-  assert.match(action, /<a class="s-before" href="#step-step-0--before">Before<\/a><a class="s-compare" href="#step-step-0--compare">Compare<\/a>/);
+  assert.match(action, /<a class="s-compare" href="#step-step-0">Compare<\/a><a class="s-before" href="#step-step-0--before">Before<\/a><a class="s-after" href="#step-step-0--after">After<\/a>/);
+  assert.match(action, /<div class="view v-compare"><figure class="shot">/);
   assert.match(action, /<div class="view v-before" id="step-step-0--before">/);
-  assert.match(action, /<div class="view v-compare" id="step-step-0--compare">/);
+  assert.match(action, /<div class="view v-after" id="step-step-0--after">/);
   assert.match(html, /<span class="where">evidence<\/span><span class="count">1 file · [^<]+<\/span><\/summary><ul class="flist"><li><a href="extractions\/evidence\/run-1\/result.json">run-1\/result.json<\/a>/);
-  assert.doesNotMatch(html, /<script|https?:\/\/|fetch\(/);
+  assert.doesNotMatch(withoutKeyScript(html), /<script|https?:\/\/|fetch\(/);
   assert.equal((await verifyDeliveredPackage(root)).deliveryVerified, true);
 });
 
@@ -229,7 +240,7 @@ test("offline viewer escapes routing reasons, titles and stable identifiers", as
   await save(f.root, "host/routing.json", { executionId: "execution-1", because: attack });
   await deliverPackage(f.root, options);
   const html = await readFile(join(f.root, "index.html"), "utf8");
-  assert.doesNotMatch(html, /<script/);
+  assert.doesNotMatch(withoutKeyScript(html), /<script/);
   assert.match(html, /&lt;script&gt;/);
   assert.match(html, /%3Cscript%3E/);
 });

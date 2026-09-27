@@ -299,7 +299,7 @@ The tool does not invent a default wait or silently substitute stability detecti
 
 `/relay-trajectory` opens the delivered package's `index.html`. The page serves a human reviewer who must understand what happened without the agent's conversation.
 
-- The page opens from `file://` with no server, network or script. Its Content-Security-Policy forbids scripts, so navigation uses links, anchors and disclosure elements only.
+- The page opens from `file://` with no server or network. Its Content-Security-Policy admits exactly one inline script, the arrow-key navigation, by its hash, and forbids every other script and every network request. All other navigation uses links, anchors and disclosure elements, so the page still works when the script does not run.
 - The top row shows the task name and package identifier. Snapshot completeness, execution and human review appear as three separate verdicts, because none of them implies another.
 - Findings that repeat one sentence for many identifiers are stated once with a count. The identifiers remain available inside the finding.
 - Declared outputs are grouped by their declared name, and each file shows its guest path and size. Image outputs show a thumbnail that links to the original. When a package has more than 12 outputs, each group starts folded.
@@ -310,16 +310,16 @@ The tool does not invent a default wait or silently substitute stability detecti
 - Every step keeps a stable link and links to the previous and next steps in time order.
 - The page is a pure function of the retained evidence. Verification renders it again and requires identical bytes. A package delivered before this page existed still verifies against the page it was delivered with.
 
-**Visual design.** The owner decided on 2026-09-28 that every generated page must be well designed, with a warm, modern look and a three-row layout, so the design belongs to the generator, not to one package.
+**Visual design.** The owner decided on 2026-09-28 that every generated page must be well designed: light, warm, minimal, modern and vivid, with a three-row layout, the compare view by default, and arrow-key navigation between steps. The design belongs to the generator, not to one package.
 
-- The page fills the window in three rows. The top row names the task and package and shows the statistics: steps, actions, diagnostics, start time and span. It also shows the three verdicts as separate pills and an Overview link that carries the number of findings.
-- The center row splits into a main viewport and a right panel. The viewport shows the selected step's snapshot at the largest size that fits, with a switch between After, Before and Compare, which shows both side by side, and the time between them. A step without snapshots shows its command and output in the viewport instead. Arrows on both sides move to the previous and next steps.
+- The page fills the window in three rows. The top row names the task, with the statistics on one line below it: steps, actions, diagnostics, start time and span. It also shows the three verdicts as separate pills and an Overview link that carries the number of findings.
+- The center row splits into a main viewport and a right panel. The viewport shows the selected step's before and after snapshots side by side by default, at the largest size that fits. A switch shows Before or After alone, and it states the time between them. A step without snapshots shows its command and output in the viewport instead. Arrows on both sides move to the previous and next steps.
 - The right panel shows the selected step's details: its number, kind and time, headline, execution verdict, reason, command, expected and observed results, and facts. Previous, Next and a stable link stay at its foot.
 - The bottom row is a track of every step in time order. Each thumbnail shows the step's after snapshot, or its command when it has no snapshots, with its number, a status dot and its headline. The selected step's thumbnail is outlined.
 - The Overview shows the caveat, the findings and the declared outputs in the viewport, and the package identity, the generated files and the human review status in the panel.
-- Selection uses anchors only: the selected step is the URL's fragment, and a page opened without one shows the first step. The before and compare views are fragments inside their step.
-- The palette is warm: an espresso charcoal surface with an apricot accent when the system uses dark mode, and a cream surface with a burnt orange accent in light mode. Snapshots sit on the darkest surface, so they are the brightest thing on the page. Headings and numbers use a rounded system face, and commands use a monospace face.
-- Four tones carry status and each always appears with its word: green for passed and complete, red for failed and refused, amber for uncertain and incomplete, and rose for human review pending, which is not a warning.
+- The selected step is the URL's fragment, and a page opened without one shows the first step. The before and after views are fragments inside their step. The left and right arrow keys move to the previous and next step, and the track keeps the selected thumbnail in view.
+- The palette is light, warm and minimal: a warm ivory canvas with white surfaces on soft warm shadows, and one vivid vermilion-to-marigold accent for the selection, the active view and the step number. The page stays light whatever the system appearance. Regions are separated by space and tone rather than borders, and shapes are round. Snapshots sit on a sand-coloured stage with a soft shadow. Headings and numbers use a rounded system face, and commands use a monospace face.
+- Four tones carry status and each always appears with its word: green for passed and complete, red for failed and refused, amber for uncertain and incomplete, and violet for human review pending, which is not a warning.
 - Text meets WCAG AA contrast, focus is always visible, motion respects the reduced-motion preference, and a narrow window stacks the viewport above the panel. A printed page lists every step with both snapshots.
 
 ## 7. Empty, partial and failure states

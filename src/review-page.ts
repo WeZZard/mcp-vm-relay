@@ -3,9 +3,12 @@
 // The page is a pure function of the package's retained evidence: delivery
 // writes it once, and verification renders it again and requires the same
 // bytes. It therefore reads no clock, no environment and no file beyond the
-// model it is given. It opens from file:// under a policy that forbids
-// scripts, so every interaction is a plain link, an anchor or <details>.
+// model it is given. It opens from file:// under a policy that admits one
+// script, the arrow-key navigation below, by its hash, and forbids every
+// network request. Everything else is a plain link, an anchor or <details>.
 // The visual design is specified in docs/ux-design.md §6.10.
+
+import { createHash } from "node:crypto";
 
 export interface CommandOutput {
   exit?: number | null;
@@ -58,7 +61,8 @@ const time = (iso?: string) => iso && Number.isFinite(Date.parse(iso)) ? new Dat
 const preciseTime = (iso?: string) => iso && Number.isFinite(Date.parse(iso)) ? new Date(iso).toISOString().slice(11, 23) : undefined;
 const duration = (ms: number) => ms < 60_000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.floor(ms / 60_000)} min ${Math.round((ms % 60_000) / 1000)} s`;
 const size = (bytes: number) => bytes >= 1e6 ? `${(bytes / 1e6).toFixed(1)} MB` : bytes >= 1e3 ? `${(bytes / 1e3).toFixed(1)} kB` : `${bytes} B`;
-const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
+const noun = (count: number, word: string) => count === 1 ? word : `${word}s`;
+const plural = (count: number, word: string) => `${count} ${noun(count, word)}`;
 /** Status is carried by one of four tones, and always shown with its word. */
 const tone = (value: string) => ["passed", "complete", "completed"].includes(value) ? "ok"
   : ["failed", "refused"].includes(value) ? "bad" : value === "pending" ? "pend" : "warn";
@@ -156,7 +160,7 @@ function shot(step: ReviewPageStep, detail: StepDetail | undefined, role: "befor
   return `<figure class="shot"><a href="${src(path)}" title="Open the original snapshot"><img alt="${name} dispatch snapshot" src="${src(path)}"></a>${caption}</figure>`;
 }
 
-/** The viewport of a step: its snapshots, with a switch between after, before and both; or its command. */
+/** The viewport of a step: its snapshots, side by side by default, with a switch to either one alone; or its command. */
 function stage(step: ReviewPageStep, detail: StepDetail | undefined, number: string, previous?: ReviewPageStep, next?: ReviewPageStep) {
   const { headline, command } = describe(step, detail);
   const arrows = `${previous ? `<a class="arrow prev" href="${escapeHtml(link(previous))}" aria-label="Previous step">‹</a>` : ""}${next ? `<a class="arrow next" href="${escapeHtml(link(next))}" aria-label="Next step">›</a>` : ""}`;
@@ -168,8 +172,8 @@ function stage(step: ReviewPageStep, detail: StepDetail | undefined, number: str
   const gap = detail?.beforeAt && detail.afterAt ? `+${duration(Date.parse(detail.afterAt) - Date.parse(detail.beforeAt))}` : undefined;
   const id = `step-${step.id}`, href = (suffix: string) => escapeHtml(`#${encodeURIComponent(`${id}${suffix}`)}`);
   return `<section class="stage" aria-label="Step ${number} snapshots">
-<nav class="seg" aria-label="Snapshot view"><a class="s-after" href="${escapeHtml(link(step))}">After</a><a class="s-before" href="${href("--before")}">Before</a><a class="s-compare" href="${href("--compare")}">Compare</a>${gap ? `<span class="gap" title="Time between the before and after snapshots">${gap}</span>` : ""}</nav>
-${arrows}<div class="views"><div class="view v-after">${shot(step, detail, "after")}</div><div class="view v-before" id="${escapeHtml(`${id}--before`)}">${shot(step, detail, "before")}</div><div class="view v-compare" id="${escapeHtml(`${id}--compare`)}">${shot(step, detail, "before")}${shot(step, detail, "after")}</div></div></section>`;
+<nav class="seg" aria-label="Snapshot view"><a class="s-compare" href="${escapeHtml(link(step))}">Compare</a><a class="s-before" href="${href("--before")}">Before</a><a class="s-after" href="${href("--after")}">After</a>${gap ? `<span class="gap" title="Time between the before and after snapshots">${gap}</span>` : ""}</nav>
+${arrows}<div class="views"><div class="view v-compare">${shot(step, detail, "before")}${shot(step, detail, "after")}</div><div class="view v-before" id="${escapeHtml(`${id}--before`)}">${shot(step, detail, "before")}</div><div class="view v-after" id="${escapeHtml(`${id}--after`)}">${shot(step, detail, "after")}</div></div></section>`;
 }
 
 /** The right panel of a step: what it was, why it was sent, and what came back. */
@@ -186,7 +190,7 @@ ${command && step.snapshots ? `<section class="block"><h3>Command</h3><pre class
 <section class="block"><h3>Expected</h3><p>${escapeHtml(step.expected || "Not supplied")}</p></section>
 <section class="block"><h3>Observed</h3>${observed(step, detail?.output, !!step.snapshots)}</section>
 <dl class="facts">${fact("State", escapeHtml(step.state))}${fact("Input", escapeHtml(step.inputMode))}${fact("After interval", interval === undefined ? "unavailable" : `${interval} ms`)}${step.snapshots?.groupId ? fact("Group", escapeHtml(step.snapshots.groupId)) : ""}</dl>
-</div><nav class="pager" aria-label="Step ${number}">${previous ? `<a href="${escapeHtml(link(previous))}">‹ Previous</a>` : `<span class="off">‹ Previous</span>`}<a class="stable" href="${escapeHtml(link(step))}">Stable link</a>${next ? `<a href="${escapeHtml(link(next))}">Next ›</a>` : `<span class="off">Next ›</span>`}</nav></aside>`;
+</div><nav class="pager" aria-label="Step ${number}">${previous ? `<a href="${escapeHtml(link(previous))}" title="Left arrow key">← Previous</a>` : `<span class="off">← Previous</span>`}<a class="stable" href="${escapeHtml(link(step))}">Stable link</a>${next ? `<a href="${escapeHtml(link(next))}" title="Right arrow key">Next →</a>` : `<span class="off">Next →</span>`}</nav></aside>`;
 }
 
 /** One thumbnail of the bottom track: the step's after snapshot, or its command. */
@@ -199,11 +203,26 @@ function thumb(step: ReviewPageStep, detail: StepDetail | undefined, number: str
 
 // Without script, the selected step is the :target. Each rule below ties a
 // step's position to its thumbnail; with no target, the first step shows.
+// The left and right arrow keys move to the previous and next step, and the
+// track keeps the selected thumbnail in view. Links alone cannot bind keys.
+const keys = `(()=>{const steps=()=>[...document.querySelectorAll(".center>.step:not(.overview)")];`
+  + `const current=()=>{let el=null;try{el=document.getElementById(decodeURIComponent(location.hash.slice(1)))}catch{}`
+  + `const step=el&&el.closest(".step");return step?steps().indexOf(step):0};`
+  + `const reveal=()=>{const li=document.querySelectorAll(".track li")[current()];if(li)li.scrollIntoView({block:"nearest",inline:"nearest"})};`
+  + `document.addEventListener("keydown",e=>{if(e.defaultPrevented||e.altKey||e.ctrlKey||e.metaKey||e.shiftKey)return;`
+  + `const t=e.target;if(t instanceof HTMLElement&&(t.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)))return;`
+  + `const d=e.key==="ArrowRight"?1:e.key==="ArrowLeft"?-1:0;if(!d)return;const all=steps(),i=current(),j=i<0?(d>0?0:-1):i+d;`
+  + `if(j<0||j>=all.length)return;e.preventDefault();location.hash=encodeURIComponent(all[j].id)});`
+  + `addEventListener("hashchange",reveal);reveal()})();`;
+const keysPolicy = `'sha256-${createHash("sha256").update(keys).digest("base64")}'`;
+
 // :has() cannot nest, so a step's own target and a target inside it (its
 // before or compare view) are two selectors.
 const selection = (count: number) => !count ? "" : Array.from({ length: count }, (_, i) =>
   `.app:has(.center>.step:nth-of-type(${i + 1}):target) .track li:nth-child(${i + 1}) a,.app:has(.center>.step:nth-of-type(${i + 1}) :target) .track li:nth-child(${i + 1}) a`).join(",")
-  + ",.app:not(:has(.center :target)) .track li:first-child a{border-color:var(--accent);box-shadow:0 0 0 3px var(--ring);background:var(--s2)}";
+  + ",.app:not(:has(.center :target)) .track li:first-child a{background:var(--s2)}"
+  + Array.from({ length: count }, (_, i) => `.app:has(.center>.step:nth-of-type(${i + 1}):target) .track li:nth-child(${i + 1}) .face,.app:has(.center>.step:nth-of-type(${i + 1}) :target) .track li:nth-child(${i + 1}) .face`).join(",")
+  + ",.app:not(:has(.center :target)) .track li:first-child .face{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--accent),0 0 18px var(--ring)}";
 
 export function renderReviewPage(model: ReviewPageModel): string {
   const steps = chronological(model);
@@ -226,7 +245,7 @@ export function renderReviewPage(model: ReviewPageModel): string {
     // A long list of outputs folds each declared name; a short one shows everything.
     return `<details class="group"${model.outputs.length <= 12 ? " open" : ""}><summary><span class="where">${escapeHtml(declared)}</span><span class="count">${plural(files.length, "file")} · ${size(total)}</span></summary>${others.length ? `<ul class="flist">${others.map(f => `<li><a href="${src(f.path)}">${escapeHtml(f.label)}</a><span>${size(f.bytes)}</span></li>`).join("")}</ul>` : ""}${images.length ? `<div class="gallery">${images.map(f => `<a class="gthumb" href="${src(f.path)}"><img loading="lazy" alt="${escapeHtml(f.label)}" src="${src(f.path)}"><span>${escapeHtml(f.label.split("/").at(-1))}<small>${size(f.bytes)}</small></span></a>`).join("")}</div>` : ""}</details>`;
   }).join("");
-  const stat = (label: string, value: string) => `<li><b>${value}</b><span>${label}</span></li>`;
+  const stat = (label: string, value: string) => `<li><b>${value}</b>${label ? ` <span>${label}</span>` : ""}</li>`;
   const pill = (label: string, value: string) => `<li class="pill ${tone(value)}"><span>${label}</span>${verdict(value)}</li>`;
   const overview = `<article class="step overview" id="overview"><section class="stage doc" aria-label="Package overview"><div class="doc-in">
 <h2>Overview</h2><p class="lede">Delivery integrity is separate from execution success. Snapshots are dispatch-time evidence, not continuous video: each shows the screen just before a step was sent and shortly after it returned.</p>
@@ -237,119 +256,122 @@ export function renderReviewPage(model: ReviewPageModel): string {
 <section class="block"><h3>Files</h3><ul class="files"><li><a href="manifest.json">manifest.json</a><span>Checksums of every artifact</span></li><li><a href="summary.json">summary.json</a><span>Verdicts and findings</span></li><li><a href="trajectory.json">trajectory.json</a><span>Steps as recorded</span></li></ul></section>
 <section class="block"><h3>Human review</h3><p>Pending. The relay does not review its own evidence; these verdicts come from retained records only.</p></section></div>
 <nav class="pager">${steps[0] ? `<a href="${escapeHtml(link(steps[0]))}">Start at step 01 ›</a>` : "<span></span>"}</nav></aside></article>`;
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="dark light"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' file:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>Relay review: ${escapeHtml(model.packageId)}</title><style>${css}${selection(steps.length)}</style></head><body>
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' file:; style-src 'unsafe-inline'; script-src ${keysPolicy}; base-uri 'none'; form-action 'none'"><title>Relay review: ${escapeHtml(model.packageId)}</title><style>${css}${selection(steps.length)}</style></head><body>
 <div class="app">
-<header class="top"><div class="brand"><span class="mark" aria-hidden="true"></span><div><h1>${escapeHtml(title)}</h1><p class="pkg">${escapeHtml(model.packageId)}</p></div></div>
-<ul class="stats">${stat("steps", String(steps.length))}${stat("actions", String(actions))}${stat("diagnostics", String(diagnostics))}${times.length ? `${stat("UTC start", time(new Date(Math.min(...times)).toISOString())!)}${stat("span", duration(Math.max(...times) - Math.min(...times)))}` : ""}</ul>
+<header class="top"><div class="brand"><span class="mark" aria-hidden="true"></span><div><h1 title="${escapeHtml(model.packageId)}">${escapeHtml(title)}</h1>
+<ul class="stats">${stat(noun(steps.length, "step"), String(steps.length))}${stat(noun(actions, "action"), String(actions))}${stat(noun(diagnostics, "diagnostic"), String(diagnostics))}${times.length ? `${stat("UTC", time(new Date(Math.min(...times)).toISOString())!)}${stat("", duration(Math.max(...times) - Math.min(...times)))}` : ""}</ul></div></div>
 <ul class="pills">${pill("Snapshots", model.completeness)}${pill("Execution", model.execution)}${pill("Review", "pending")}</ul>
 <a class="ovl${model.findings.length ? " has" : ""}" href="#overview">Overview<span>${model.findings.length}</span></a></header>
 <main class="center">${steps.map((step, i) => `<article id="step-${escapeHtml(step.id)}" class="step ${tone(step.execution)}">${stage(step, model.details.get(step.id), numbers.get(step.id)!, steps[i - 1], steps[i + 1])}${panel(step, model.details.get(step.id), numbers.get(step.id)!, steps.length, steps[i - 1], steps[i + 1])}</article>`).join("\n")}
 ${overview}</main>
 <footer class="track" aria-label="Steps"><ol>${steps.map(step => thumb(step, model.details.get(step.id), numbers.get(step.id)!)).join("")}</ol></footer>
-</div></body></html>
+</div><script>${keys}</script></body></html>
 `;
 }
 
-// Design (docs/ux-design.md §6.10): a warm, quiet workspace. Three rows —
-// the run, the selected step, and the track of steps. Snapshots sit on the
-// darkest surface so they read as the brightest thing on the page; status
-// uses four tones, each with its word.
-const css = `:root{color-scheme:dark;--bg:#171412;--s1:#1f1b18;--s2:#29231f;--s3:#332c27;--line:#3a322c;--line2:#4a4039;--text:#f4ede5;--dim:#c3b7aa;--faint:#9d9185;
---accent:#ff9d5c;--ring:rgba(255,157,92,.28);--stage:#0f0d0c;--glow:rgba(255,157,92,.07);--ok:#93d49a;--bad:#ff8170;--warn:#f4c35e;--pend:#e7a9c0;
+// Design (docs/ux-design.md §6.10): light, warm, minimal and vivid. A warm
+// ivory canvas with white surfaces on soft warm shadows, one vermilion-to-
+// marigold accent, round shapes, and separation by space and tone rather than
+// borders. Status uses four vivid tones, each with its word.
+const css = `:root{color-scheme:light;--bg:#fbf6ef;--s1:#ffffff;--s2:#f7efe5;--s3:#efe3d5;--hair:rgba(90,50,20,.08);--text:#2a1d15;--dim:#5e4b3e;--faint:#7d6a5c;
+--accent:#f0502a;--accent2:#ff9f1a;--grad:linear-gradient(135deg,var(--accent),var(--accent2));--on:#fff;--ring:rgba(240,80,42,.28);--stage:#f3eadf;
+--ok:#0e9f62;--bad:#e23744;--warn:#b87700;--pend:#7a4dff;--shadow:0 1px 2px rgba(90,50,20,.06),0 12px 32px rgba(90,50,20,.10);
 --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;--round:ui-rounded,"SF Pro Rounded",var(--sans);--mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
-@media(prefers-color-scheme:light){:root{color-scheme:light;--bg:#f6f0e8;--s1:#fffaf4;--s2:#f3eadf;--s3:#eadfd2;--line:#e4d8ca;--line2:#d3c4b3;--text:#2b211b;--dim:#62544a;--faint:#7a6b5f;
---accent:#c9561d;--ring:rgba(201,86,29,.22);--stage:#e9e0d5;--glow:rgba(201,86,29,.06);--ok:#2e7d45;--bad:#c23b2a;--warn:#946100;--pend:#a0466f}}
 *{box-sizing:border-box}html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--text);font:14.5px/1.55 var(--sans);-webkit-font-smoothing:antialiased}
 a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline;text-underline-offset:3px}
-:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
-pre{font:12.5px/1.55 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere;margin:0}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:999px}
+pre{font:12.5px/1.6 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere;margin:0}
 b,time,.n,.exit,dd,.gap{font-variant-numeric:tabular-nums}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
-.label,h3,dt{font:600 11px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+.label,h3,dt{font:600 11px/1.3 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
 .quiet{color:var(--faint);margin:0}
 .ok{--tone:var(--ok)}.bad{--tone:var(--bad)}.warn{--tone:var(--warn)}.pend{--tone:var(--pend)}
-.verdict{display:inline-flex;align-items:center;gap:.4rem;font:600 12.5px/1 var(--sans);color:var(--tone,var(--dim));text-transform:capitalize}
-.verdict i{flex:none;width:7px;height:7px;border-radius:50%;background:currentColor}
+.verdict{display:inline-flex;align-items:center;gap:.45rem;font:600 12.5px/1 var(--sans);color:var(--tone,var(--dim));text-transform:capitalize}
+.verdict i{flex:none;width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 0 3px color-mix(in srgb,currentColor 18%,transparent)}
 .app{height:100vh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;grid-template-columns:minmax(0,1fr);overflow:clip}.track{min-width:0}
-.top{display:flex;align-items:center;gap:1.5rem 2rem;flex-wrap:wrap;padding:.85rem 1.5rem;border-bottom:1px solid var(--line);background:var(--s1)}
-.brand{display:flex;align-items:center;gap:.8rem;min-width:0;margin-right:auto}
-.mark{flex:none;width:2.1rem;height:2.1rem;border-radius:10px;background:radial-gradient(circle at 30% 30%,#ffd29a,var(--accent) 55%,#c2410c);box-shadow:inset 0 0 0 1px rgba(255,255,255,.18)}
-h1{font:650 1.2rem/1.2 var(--round);letter-spacing:-.01em;margin:0}.pkg{margin:.1rem 0 0;font:12px var(--mono);color:var(--faint)}
-.stats{display:flex;gap:1.6rem;list-style:none;margin:0;padding:0}.stats li{display:grid}.stats b{font:650 1.05rem/1.2 var(--round)}.stats span{font-size:11.5px;color:var(--faint)}
-.pills{display:flex;gap:.5rem;list-style:none;margin:0;padding:0}
-.pill{display:flex;align-items:center;gap:.55rem;padding:.4rem .7rem;border-radius:999px;background:var(--s2);border:1px solid var(--line);font-size:12px;color:var(--dim)}
-.pill .verdict{font-size:12px}
-.ovl{display:inline-flex;align-items:center;gap:.5rem;padding:.45rem .8rem;border-radius:999px;border:1px solid var(--line2);color:var(--text);font-weight:600;font-size:13px}
-.ovl span{font:650 11px/1 var(--round);padding:.2rem .45rem;border-radius:999px;background:var(--s3);color:var(--dim)}.ovl.has span{background:var(--warn);color:#2b1d05}
-.ovl:hover{text-decoration:none;border-color:var(--accent)}.app:has(#overview:target) .ovl{border-color:var(--accent);box-shadow:0 0 0 3px var(--ring)}
-.center{display:grid;grid-template-columns:minmax(0,1fr) minmax(20rem,26rem);grid-template-areas:"stage panel";min-height:0;overflow:clip}
+.top{display:flex;align-items:center;gap:1rem 2.25rem;flex-wrap:wrap;padding:1.1rem 1.75rem}
+.brand{display:flex;align-items:center;gap:.9rem;min-width:0;margin-right:auto}
+.mark{flex:none;width:1.9rem;height:1.9rem;border-radius:50%;background:var(--grad);box-shadow:0 6px 18px var(--ring)}
+h1{font:700 1.3rem/1.15 var(--round);letter-spacing:-.015em;margin:0}
+.stats{display:flex;flex-wrap:wrap;list-style:none;margin:.3rem 0 0;padding:0;font-size:12.5px;color:var(--faint)}
+.stats li+li::before{content:"·";margin:0 .55rem;color:var(--faint)}.stats b{font:700 12.5px var(--round);color:var(--text)}
+.pills{display:flex;gap:.4rem;list-style:none;margin:0;padding:0}
+.pill{display:flex;align-items:center;gap:.5rem;padding:.42rem .8rem;border-radius:999px;background:color-mix(in srgb,var(--tone) 12%,transparent);font-size:12px;color:var(--dim)}
+.ovl{display:inline-flex;align-items:center;gap:.55rem;padding:.45rem .55rem .45rem .95rem;border-radius:999px;background:var(--s1);box-shadow:var(--shadow);color:var(--text);font-weight:600;font-size:13px}
+.ovl span{display:grid;place-items:center;min-width:1.4rem;height:1.4rem;padding:0 .35rem;font:700 11px/1 var(--round);border-radius:999px;background:var(--s3);color:var(--dim)}
+.ovl.has span{background:var(--grad);color:var(--on)}
+.ovl:hover{text-decoration:none;background:var(--s3)}.app:has(#overview:target) .ovl{box-shadow:0 0 0 2px var(--accent)}
+.center{display:grid;grid-template-columns:minmax(0,1fr) minmax(20rem,25rem);grid-template-areas:"stage panel";gap:0 .75rem;padding:0 .75rem;min-height:0;overflow:clip}
 .step{display:none}.step:is(:target,:has(:target)){display:contents}.center:not(:has(:target))>.step:first-of-type{display:contents}
-.stage{grid-area:stage;position:relative;min-width:0;min-height:0;background:radial-gradient(ellipse at 50% 40%,var(--glow),transparent 70%),var(--stage);display:grid;grid-template-rows:auto minmax(0,1fr);overflow:clip}
-.seg{display:flex;align-items:center;gap:.25rem;justify-self:center;margin:.9rem 0 .2rem;padding:.25rem;border-radius:999px;background:var(--s1);border:1px solid var(--line);z-index:2}
-.seg a{padding:.3rem .85rem;border-radius:999px;color:var(--dim);font-size:12.5px;font-weight:600}.seg a:hover{text-decoration:none;color:var(--text)}
-.seg .gap{font:600 11.5px var(--round);color:var(--faint);padding:0 .6rem 0 .5rem}
-.step:target .s-after,.center:not(:has(:target))>.step:first-of-type .s-after,.step:has(.v-before:target) .s-before,.step:has(.v-compare:target) .s-compare{background:var(--s3);color:var(--text)}
-.views{min-height:0;display:grid;padding:.6rem 4.5rem 1.2rem;overflow:clip}
+.stage{grid-area:stage;position:relative;min-width:0;min-height:0;border-radius:22px;background:radial-gradient(80% 60% at 50% 40%,rgba(255,255,255,.7),transparent 70%),var(--stage);display:grid;grid-template-rows:auto minmax(0,1fr);overflow:clip}
+.seg{display:flex;align-items:center;gap:.2rem;justify-self:center;margin:1rem 0 .25rem;padding:.25rem;border-radius:999px;background:var(--s1);box-shadow:var(--shadow);z-index:2}
+.seg a{padding:.36rem 1rem;border-radius:999px;color:var(--dim);font-size:12.5px;font-weight:600}.seg a:hover{text-decoration:none;color:var(--text)}
+.seg .gap{font:700 11.5px var(--round);color:var(--accent);padding:0 .75rem 0 .55rem}
+.step:target .s-compare,.center:not(:has(:target))>.step:first-of-type .s-compare,.step:has(.v-before:target) .s-before,.step:has(.v-after:target) .s-after{background:var(--grad);color:var(--on)}
+.views{min-height:0;display:grid;padding:.75rem 4.75rem 1.4rem;overflow:clip}
 .view{display:none;min-height:0}
-.step:target .v-after,.center:not(:has(:target))>.step:first-of-type .v-after,.v-before:target{display:grid}
-.v-compare:target{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
-.shot{margin:0;min-height:0;min-width:0;display:grid;grid-template-rows:minmax(0,1fr) auto;gap:.55rem}
+.step:target .v-compare,.center:not(:has(:target))>.step:first-of-type .v-compare{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;align-items:center}
+.v-before:target,.v-after:target{display:grid}
+.shot{margin:0;min-height:0;min-width:0;display:grid;grid-template-rows:minmax(0,1fr) auto;gap:.7rem}
 .shot a{display:grid;place-items:center;min-height:0}
-.shot img{max-width:100%;max-height:100%;object-fit:contain;border-radius:10px;box-shadow:0 1px 0 rgba(255,255,255,.05),0 18px 50px rgba(0,0,0,.45);background:#000}
-.shot figcaption{display:flex;justify-content:center;gap:.8rem;align-items:baseline}.shot figcaption time{font:12px var(--mono);color:var(--faint)}
-.void{display:grid;place-items:center;border:1px dashed var(--line2);border-radius:10px;color:var(--faint);padding:2rem;text-align:center}
-.arrow{position:absolute;top:50%;translate:0 -50%;z-index:3;display:grid;place-items:center;width:2.6rem;height:2.6rem;border-radius:50%;background:var(--s1);border:1px solid var(--line);color:var(--text);font-size:1.5rem;line-height:1}
-.arrow:hover{text-decoration:none;border-color:var(--accent);color:var(--accent)}.arrow.prev{left:1rem}.arrow.next{right:1rem}
-.terminal{grid-template-rows:minmax(0,1fr);place-items:center;padding:2rem 4.5rem}
-.term{width:min(100%,56rem);max-height:100%;overflow:auto;background:var(--s1);border:1px solid var(--line);border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.35)}
-.term-bar{display:flex;align-items:center;gap:1rem;padding:.7rem 1rem;border-bottom:1px solid var(--line);font-size:12px;color:var(--faint);position:sticky;top:0;background:var(--s1)}
-.dots{display:flex;gap:.35rem}.dots i{width:10px;height:10px;border-radius:50%;background:var(--line2)}
-.term-cmd{padding:1rem 1.1rem;font-size:13px;color:var(--text)}.prompt{color:var(--accent);margin-right:.6em;user-select:none}
-.term .stream{margin:0 1.1rem 1rem}.term .quiet,.term-note{margin:0 1.1rem 1rem;font-size:12.5px;color:var(--faint)}
-.stream .label{display:block;margin-bottom:.3rem}.stream pre,.plain,.command{background:var(--stage);border:1px solid var(--line);border-radius:10px;padding:.7rem .85rem;max-height:14rem;overflow:auto;color:var(--text)}
-.panel{grid-area:panel;min-height:0;display:grid;grid-template-rows:minmax(0,1fr) auto;background:var(--s1);border-left:1px solid var(--line)}
-.panel-scroll{overflow:auto;padding:1.3rem 1.4rem 1.5rem;scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
-.eyebrow{display:flex;flex-wrap:wrap;gap:.3rem 1rem;margin:0;font-size:12px;color:var(--faint)}.eyebrow>span:first-child{color:var(--accent);font-weight:650}.eyebrow .of{color:var(--faint);font-weight:500}.eyebrow time{font-family:var(--mono)}
-.panel h2{font:650 1.2rem/1.35 var(--round);letter-spacing:-.005em;margin:.45rem 0 .5rem;overflow-wrap:anywhere}
-.state{margin:0 0 .4rem}
-.block{margin-top:1.15rem;padding-top:1.05rem;border-top:1px solid var(--line)}.block h3{margin:0 0 .45rem}.block p{margin:0;color:var(--dim)}
+.shot img{max-width:100%;max-height:100%;object-fit:contain;border-radius:12px;box-shadow:0 2px 4px rgba(60,30,10,.08),0 18px 44px rgba(60,30,10,.16);background:#fff}
+.shot figcaption{display:flex;justify-content:center;gap:.7rem;align-items:baseline}.shot figcaption time{font:12px var(--mono);color:var(--faint)}
+.v-compare .shot:last-child figcaption .label{color:var(--accent)}
+.void{display:grid;place-items:center;border-radius:14px;background:var(--s1);color:var(--faint);padding:2rem;text-align:center;aspect-ratio:16/9}
+.arrow{position:absolute;top:50%;translate:0 -50%;z-index:3;display:grid;place-items:center;width:2.75rem;height:2.75rem;border-radius:50%;background:rgba(255,255,255,.85);backdrop-filter:blur(8px);color:var(--text);font-size:1.5rem;line-height:1;box-shadow:var(--shadow)}
+.arrow:hover{text-decoration:none;background:var(--grad);color:var(--on)}.arrow.prev{left:1rem}.arrow.next{right:1rem}
+.terminal{grid-template-rows:minmax(0,1fr);place-items:center;padding:2rem 4.75rem}
+.term{width:min(100%,56rem);max-height:100%;overflow:auto;background:var(--s1);border-radius:18px;box-shadow:var(--shadow)}
+.term-bar{display:flex;align-items:center;gap:1rem;padding:.8rem 1.1rem;font-size:12px;color:var(--faint);position:sticky;top:0;background:var(--s1)}
+.dots{display:flex;gap:.35rem}.dots i{width:10px;height:10px;border-radius:50%;background:var(--s3)}.dots i:first-child{background:var(--grad)}
+.term-cmd{padding:.4rem 1.2rem 1.1rem;font-size:13px;color:var(--text)}.prompt{color:var(--accent);margin-right:.6em;user-select:none}
+.term .stream{margin:0 1.2rem 1rem}.term .quiet,.term-note{margin:0 1.2rem 1.1rem;font-size:12.5px;color:var(--faint)}
+.stream .label{display:block;margin-bottom:.35rem}.stream pre,.plain,.command{background:var(--s2);border-radius:12px;padding:.75rem .9rem;max-height:14rem;overflow:auto;color:var(--text)}
+.panel{grid-area:panel;min-height:0;display:grid;grid-template-rows:minmax(0,1fr) auto;background:var(--s1);border-radius:22px;box-shadow:var(--shadow)}
+.panel-scroll{overflow:auto;padding:1.5rem 1.5rem 1.25rem;scrollbar-width:thin;scrollbar-color:var(--s3) transparent}
+.eyebrow{display:flex;flex-wrap:wrap;align-items:baseline;gap:.3rem .9rem;margin:0;font-size:12px;color:var(--faint)}
+.eyebrow>span:first-child{font:700 12.5px var(--round);background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}.eyebrow .of{-webkit-text-fill-color:var(--faint);color:var(--faint);font-weight:500}.eyebrow time{font-family:var(--mono)}
+.panel h2{font:700 1.3rem/1.3 var(--round);letter-spacing:-.01em;margin:.5rem 0 .55rem;overflow-wrap:anywhere}
+.state{margin:0}
+.block{margin-top:1.5rem}.block h3{margin:0 0 .45rem}.block p{margin:0;color:var(--dim)}
 .command{font-size:12px;max-height:9rem}
 .receipts{list-style:none;margin:0 0 .4rem;padding:0;display:grid;gap:.45rem}.receipts li{display:flex;flex-wrap:wrap;gap:.4rem .8rem;align-items:center}.diag{font-size:13px;color:var(--dim)}
-.exit{display:inline-block;font:650 11.5px var(--mono);padding:.2rem .55rem;border-radius:999px;margin-bottom:.5rem}
-.exit.ok{color:var(--ok);background:color-mix(in srgb,var(--ok) 14%,transparent)}.exit.bad{color:var(--bad);background:color-mix(in srgb,var(--bad) 14%,transparent)}
+.exit{display:inline-block;font:700 11.5px var(--mono);padding:.25rem .6rem;border-radius:999px;margin-bottom:.55rem}
+.exit.ok{color:var(--ok);background:color-mix(in srgb,var(--ok) 15%,transparent)}.exit.bad{color:var(--bad);background:color-mix(in srgb,var(--bad) 15%,transparent)}
 .receipts .exit{margin:0}.stream{margin-bottom:.6rem}
 .raw summary{cursor:pointer;font-size:12px;color:var(--faint);width:max-content}.raw summary:hover{color:var(--dim)}.raw pre{margin-top:.5rem;color:var(--faint);font-size:11.5px;max-height:12rem;overflow:auto}
-.facts{display:grid;grid-template-columns:1fr 1fr;gap:.8rem 1rem;margin:1.15rem 0 0;padding-top:1.05rem;border-top:1px solid var(--line)}.facts dd{margin:.2rem 0 0;font:12.5px var(--mono);color:var(--dim);overflow-wrap:anywhere}
+.facts{display:grid;grid-template-columns:1fr 1fr;gap:.9rem 1rem;margin:1.5rem 0 0;padding:1rem 1.1rem;border-radius:14px;background:var(--s2)}.facts dd{margin:.2rem 0 0;font:12.5px var(--mono);color:var(--dim);overflow-wrap:anywhere}
 .facts.stack{grid-template-columns:1fr}
-.pager{display:flex;justify-content:space-between;align-items:center;gap:.5rem;padding:.75rem 1.1rem;border-top:1px solid var(--line);font-size:13px;font-weight:600}
-.pager a{padding:.35rem .7rem;border-radius:8px}.pager a:hover{background:var(--s2);text-decoration:none}.pager .stable{font-weight:500;color:var(--faint)}.pager .off{padding:.35rem .7rem;color:var(--line2)}
-.files{list-style:none;margin:0;padding:0;display:grid;gap:.5rem}.files li{display:grid}.files a{font:12.5px var(--mono)}.files span{font-size:12px;color:var(--faint)}
-.doc{grid-template-rows:minmax(0,1fr);overflow:auto;background:var(--bg)}.doc-in{max-width:52rem;padding:2rem 2.5rem 3rem}
-.doc h2{font:650 1.6rem/1.2 var(--round);margin:0}.lede{color:var(--dim);margin:.6rem 0 0}
-.findings{list-style:none;margin:0;padding:0;display:grid;gap:.5rem}.findings li{padding:.7rem .9rem;border-radius:10px;background:var(--s1);border:1px solid var(--line);border-left:3px solid var(--warn)}
+.pager{display:flex;justify-content:space-between;align-items:center;gap:.5rem;padding:.8rem 1rem 1rem;font-size:13px;font-weight:600}
+.pager a{padding:.45rem .9rem;border-radius:999px;background:var(--s2);color:var(--text)}.pager a:hover{background:var(--grad);color:var(--on);text-decoration:none}
+.pager .stable{background:none;font-weight:500;color:var(--faint)}.pager .stable:hover{background:none;color:var(--text)}.pager .off{padding:.45rem .9rem;color:var(--s3)}
+.files{list-style:none;margin:0;padding:0;display:grid;gap:.6rem}.files li{display:grid}.files a{font:12.5px var(--mono)}.files span{font-size:12px;color:var(--faint)}
+.doc{grid-template-rows:minmax(0,1fr);overflow:auto;background:var(--stage)}.doc-in{max-width:52rem;padding:2.25rem 2.75rem 3rem}
+.doc h2{font:700 1.75rem/1.15 var(--round);letter-spacing:-.015em;margin:0}.lede{color:var(--dim);margin:.7rem 0 0}
+.findings{list-style:none;margin:0;padding:0;display:grid;gap:.5rem}.findings li{padding:.8rem 1rem .8rem 1.1rem;border-radius:14px;background:var(--s1);box-shadow:var(--shadow);position:relative}
+.findings li::before{content:"";position:absolute;left:0;top:.8rem;bottom:.8rem;width:3px;border-radius:0 3px 3px 0;background:var(--warn)}
 .findings summary{cursor:pointer}.findings code{display:block;font:11.5px/1.6 var(--mono);color:var(--faint);margin-top:.4rem;overflow-wrap:anywhere}
-.outputs{display:grid;gap:.5rem}.group{background:var(--s1);border:1px solid var(--line);border-radius:10px;padding:.65rem .9rem}
+.outputs{display:grid;gap:.5rem}.group{background:var(--s1);border-radius:14px;padding:.75rem 1rem;box-shadow:var(--shadow)}
 .group summary{display:flex;justify-content:space-between;gap:1rem;cursor:pointer;font-size:13px;list-style:none}.group summary::-webkit-details-marker{display:none}
-.group .where{font-weight:600}.group .where::before{content:"›";display:inline-block;width:1em;color:var(--faint);transition:rotate .15s}.group[open] .where::before{rotate:90deg}.group .count{color:var(--faint);flex:none}
-.group[open] summary{margin-bottom:.7rem}
-.flist{list-style:none;margin:0;padding:0;display:grid;gap:.25rem;font:12px var(--mono);max-height:16rem;overflow:auto}.flist li{display:flex;justify-content:space-between;gap:1rem}.flist a{overflow-wrap:anywhere;min-width:0}.flist span{color:var(--faint);flex:none}
-.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(8.5rem,1fr));gap:.7rem}.flist+.gallery{margin-top:.75rem}
-.gthumb{display:grid;gap:.35rem;font:11.5px var(--mono);min-width:0}.gthumb span{display:flex;justify-content:space-between;gap:.5rem;overflow:hidden}.gthumb small{color:var(--faint);font-size:inherit;flex:none}
-.gthumb img{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:7px;border:1px solid var(--line);display:block}.gthumb:hover img{border-color:var(--accent)}
-.track{border-top:1px solid var(--line);background:var(--s1)}
-.track ol{list-style:none;margin:0;padding:.75rem 1.5rem .85rem;display:flex;gap:.65rem;overflow-x:auto;scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
-.track li{flex:none;width:9.5rem}
-.track a{display:grid;gap:.4rem;padding:.3rem;border-radius:11px;border:1px solid transparent;color:var(--text);transition:background .15s,border-color .15s}
-.track a:hover{text-decoration:none;background:var(--s2)}
-.face{display:block;aspect-ratio:16/9;border-radius:7px;overflow:hidden;background:var(--stage);box-shadow:inset 0 0 0 1px var(--line)}
+.group .where{font-weight:600}.group .where::before{content:"›";display:inline-block;width:1em;color:var(--accent);transition:rotate .15s}.group[open] .where::before{rotate:90deg}.group .count{color:var(--faint);flex:none}
+.group[open] summary{margin-bottom:.75rem}
+.flist{list-style:none;margin:0;padding:0;display:grid;gap:.3rem;font:12px var(--mono);max-height:16rem;overflow:auto}.flist li{display:flex;justify-content:space-between;gap:1rem}.flist a{overflow-wrap:anywhere;min-width:0}.flist span{color:var(--faint);flex:none}
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(8.5rem,1fr));gap:.75rem}.flist+.gallery{margin-top:.75rem}
+.gthumb{display:grid;gap:.4rem;font:11.5px var(--mono);min-width:0;color:var(--dim)}.gthumb span{display:flex;justify-content:space-between;gap:.5rem;overflow:hidden}.gthumb small{color:var(--faint);font-size:inherit;flex:none}
+.gthumb img{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:10px;display:block;transition:box-shadow .15s}.gthumb:hover img{box-shadow:0 0 0 2px var(--accent)}
+.track ol{list-style:none;margin:0;padding:.85rem 1.75rem 1rem;display:flex;gap:.6rem;overflow-x:auto;scrollbar-width:thin;scrollbar-color:var(--s3) transparent}
+.track li{flex:none;width:9.25rem}
+.track a{display:grid;gap:.45rem;padding:.35rem;border-radius:16px;color:var(--text);transition:background .15s}
+.track a:hover{text-decoration:none;background:var(--s1)}
+.face{display:block;aspect-ratio:16/9;border-radius:11px;overflow:hidden;background:var(--s1);box-shadow:0 1px 2px rgba(90,50,20,.08),0 6px 16px rgba(90,50,20,.08)}
 .face img{width:100%;height:100%;object-fit:cover;display:block}
-.face.text pre{padding:.5rem .55rem;font-size:9.5px;line-height:1.45;color:var(--dim);height:100%;overflow:hidden;-webkit-mask-image:linear-gradient(#000 60%,transparent);mask-image:linear-gradient(#000 60%,transparent)}
-.cap{display:flex;align-items:center;gap:.4rem;min-width:0;padding:0 .15rem;font-size:12px}
-.cap .n{font:650 11px var(--round);color:var(--faint)}.dot{flex:none;width:7px;height:7px;border-radius:50%;background:var(--tone)}
+.face.text pre{padding:.55rem .6rem;font-size:9.5px;line-height:1.45;color:var(--dim);height:100%;overflow:hidden;-webkit-mask-image:linear-gradient(#000 60%,transparent);mask-image:linear-gradient(#000 60%,transparent)}
+.cap{display:flex;align-items:center;gap:.4rem;min-width:0;padding:0 .2rem;font-size:12px}
+.cap .n{font:700 11px var(--round);color:var(--faint)}.dot{flex:none;width:7px;height:7px;border-radius:50%;background:var(--tone)}
 .cap .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dim)}
-.track li.bad .face{box-shadow:inset 0 0 0 2px var(--bad)}
-@media(max-width:960px){.app{height:auto;min-height:100vh;overflow:visible}.center{grid-template-columns:minmax(0,1fr);grid-template-areas:"stage" "panel"}
-.stage{min-height:60vh}.views{padding:.5rem 3.5rem 1rem}.panel{border-left:0;border-top:1px solid var(--line)}.track{position:sticky;bottom:0}.stats{display:none}}
+.track li.bad .face{box-shadow:0 0 0 2px var(--bad)}
+@media(max-width:960px){.app{height:auto;min-height:100vh;overflow:visible}.center{grid-template-columns:minmax(0,1fr);grid-template-areas:"stage" "panel";gap:.75rem}
+.stage{min-height:60vh}.views{padding:.5rem 3.75rem 1rem}.step:target .v-compare,.center:not(:has(:target))>.step:first-of-type .v-compare{grid-template-columns:1fr}.track{position:sticky;bottom:0;background:var(--bg)}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 @media print{.app{height:auto;display:block}.track,.arrow,.seg,.pager,.ovl{display:none}.center{display:block}.step{display:block!important;break-inside:avoid;margin-bottom:1rem}.stage{background:none}.view{display:none!important}.v-compare{display:grid!important;grid-template-columns:1fr 1fr}}`;

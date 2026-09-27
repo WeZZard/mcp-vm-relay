@@ -2048,7 +2048,7 @@ var require_fast_deep_equal = __commonJS({
       if (a === b) return true;
       if (a && b && typeof a == "object" && typeof b == "object") {
         if (a.constructor !== b.constructor) return false;
-        var length, i, keys;
+        var length, i, keys2;
         if (Array.isArray(a)) {
           length = a.length;
           if (length != b.length) return false;
@@ -2059,13 +2059,13 @@ var require_fast_deep_equal = __commonJS({
         if (a.constructor === RegExp) return a.source === b.source && a.flags === b.flags;
         if (a.valueOf !== Object.prototype.valueOf) return a.valueOf() === b.valueOf();
         if (a.toString !== Object.prototype.toString) return a.toString() === b.toString();
-        keys = Object.keys(a);
-        length = keys.length;
+        keys2 = Object.keys(a);
+        length = keys2.length;
         if (length !== Object.keys(b).length) return false;
         for (i = length; i-- !== 0; )
-          if (!Object.prototype.hasOwnProperty.call(b, keys[i])) return false;
+          if (!Object.prototype.hasOwnProperty.call(b, keys2[i])) return false;
         for (i = length; i-- !== 0; ) {
-          var key = keys[i];
+          var key = keys2[i];
           if (!equal(a[key], b[key])) return false;
         }
         return true;
@@ -8931,9 +8931,9 @@ function putProp(target2, key, value) {
   else
     target2[key] = value;
 }
-function mirrorShape(target2, source, keys, wrap) {
+function mirrorShape(target2, source, keys2, wrap) {
   const raw = sourceShape(source);
-  for (const key of keys) {
+  for (const key of keys2) {
     const desc = Object.getOwnPropertyDescriptor(raw, key);
     if (!desc.enumerable)
       continue;
@@ -8974,12 +8974,12 @@ function getElementAtPath(obj, path) {
   return path.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
-  const keys = Object.keys(promisesObj);
-  const promises = keys.map((key) => promisesObj[key]);
+  const keys2 = Object.keys(promisesObj);
+  const promises = keys2.map((key) => promisesObj[key]);
   return Promise.all(promises).then((results) => {
     const resolvedObj = {};
-    for (let i = 0; i < keys.length; i++) {
-      resolvedObj[keys[i]] = results[i];
+    for (let i = 0; i < keys2.length; i++) {
+      resolvedObj[keys2[i]] = results[i];
     }
     return resolvedObj;
   });
@@ -9201,15 +9201,15 @@ function pick(schema, mask) {
 }
 function maskedKeys(schema, mask) {
   const raw = sourceShape(schema);
-  const keys = [];
+  const keys2 = [];
   for (const key of Reflect.ownKeys(mask)) {
     if (!Object.getOwnPropertyDescriptor(raw, key)?.enumerable) {
       throw new Error(`Unrecognized key: "${String(key)}"`);
     }
     if (mask[key])
-      keys.push(key);
+      keys2.push(key);
   }
-  return keys;
+  return keys2;
 }
 function omit(schema, mask) {
   const currDef = schema._zod.def;
@@ -11032,10 +11032,10 @@ function handlePropertyResult(result2, final, key, input, optin, optout) {
 }
 var NO_SYMBOL_KEYS = [];
 function normalizeDef(def) {
-  const keys = Object.keys(def.shape);
+  const keys2 = Object.keys(def.shape);
   const ownSymbols = Object.getOwnPropertySymbols(def.shape);
   const symbolKeys = ownSymbols.length ? ownSymbols : NO_SYMBOL_KEYS;
-  const allKeys = symbolKeys.length ? [...keys, ...symbolKeys] : keys;
+  const allKeys = symbolKeys.length ? [...keys2, ...symbolKeys] : keys2;
   for (const k of allKeys) {
     if (!def.shape?.[k]?._zod?.traits?.has("$ZodType")) {
       throw new Error(`Invalid element at key "${String(k)}": expected a Zod schema`);
@@ -11047,8 +11047,8 @@ function normalizeDef(def) {
     allKeys,
     symbolKeys,
     // string-only: handleCatchall matches it against `for...in`, which never yields a symbol
-    keySet: new Set(keys),
-    numKeys: keys.length,
+    keySet: new Set(keys2),
+    numKeys: keys2.length,
     optionalKeys: new Set(okeys)
   };
 }
@@ -11521,19 +11521,19 @@ function handleIntersectionResults(result2, left, right) {
   let unrecIssue;
   const keyIssues = /* @__PURE__ */ new Map();
   const collect = (iss, side) => {
-    let keys;
+    let keys2;
     if (iss.code === "unrecognized_keys" && !iss.path?.length) {
       unrecIssue ?? (unrecIssue = iss);
-      keys = iss.keys;
+      keys2 = iss.keys;
     } else if (iss.code === "invalid_key" && iss.origin === "record" && iss.path?.length === 1) {
       const k = String(iss.path[0]);
       if (!keyIssues.has(k))
         keyIssues.set(k, iss);
-      keys = [k];
+      keys2 = [k];
     } else {
       return false;
     }
-    for (const k of keys) {
+    for (const k of keys2) {
       if (!unrecKeys.has(k))
         unrecKeys.set(k, {});
       unrecKeys.get(k)[side] = true;
@@ -13207,8 +13207,8 @@ function compactTypeUnion(schema) {
     if (!option || typeof option !== "object")
       return;
     compactTypeUnion(option);
-    const keys = Object.keys(option);
-    if (keys.length !== 1 || keys[0] !== "type")
+    const keys2 = Object.keys(option);
+    if (keys2.length !== 1 || keys2[0] !== "type")
       return;
     const type = option.type;
     for (const member of Array.isArray(type) ? type : [type]) {
@@ -14887,11 +14887,11 @@ var ZodEnum = /* @__PURE__ */ $constructor("ZodEnum", (inst, def) => {
   inst._zod.processJSONSchema = (ctx, json2, params) => enumProcessor(inst, ctx, json2, params);
   inst.enum = def.entries;
   inst.options = [...inst._zod.values];
-  const keys = new Set(Object.keys(def.entries));
+  const keys2 = new Set(Object.keys(def.entries));
   inst.extract = (values, params) => {
     const newEntries = {};
     for (const value of values) {
-      if (keys.has(value)) {
+      if (keys2.has(value)) {
         newEntries[value] = def.entries[value];
       } else
         throw new Error(`Key ${value} not found in enum`);
@@ -14906,7 +14906,7 @@ var ZodEnum = /* @__PURE__ */ $constructor("ZodEnum", (inst, def) => {
   inst.exclude = (values, params) => {
     const newEntries = { ...def.entries };
     for (const value of values) {
-      if (keys.has(value)) {
+      if (keys2.has(value)) {
         delete newEntries[value];
       } else
         throw new Error(`Key ${value} not found in enum`);
@@ -18853,10 +18853,10 @@ var Session = class {
    * transmission; the same outcome states as exec() apply (D14/D17).
    */
   async runScript(localPath, remotePath, language2, options2 = {}) {
-    const { createHash: createHash7 } = await import("node:crypto");
+    const { createHash: createHash8 } = await import("node:crypto");
     const { readFile: readFile12 } = await import("node:fs/promises");
     const bytes = await readFile12(localPath);
-    const scriptSha256 = createHash7("sha256").update(bytes).digest("hex");
+    const scriptSha256 = createHash8("sha256").update(bytes).digest("hex");
     const upload = await this.transport.upload(localPath, { remotePath });
     const executionId = formatId(allocateId("execution"));
     const interpreter = language2 === "python" ? "python3" : language2 === "typescript" ? "tsx" : "node";
@@ -18904,8 +18904,8 @@ var Session = class {
    * remote after receipt. Same outcome states as exec() (D14/D17).
    */
   async runCode(code, language2, options2 = {}) {
-    const { createHash: createHash7 } = await import("node:crypto");
-    const codeSha256 = createHash7("sha256").update(code, "utf8").digest("hex");
+    const { createHash: createHash8 } = await import("node:crypto");
+    const codeSha256 = createHash8("sha256").update(code, "utf8").digest("hex");
     const executionId = formatId(allocateId("execution"));
     const interpreter = language2 === "python" ? "python3" : language2 === "typescript" ? "tsx" : "node";
     const submission = {
@@ -20272,11 +20272,12 @@ var VmTransport = class {
 };
 
 // src/package.ts
-import { createHash as createHash4 } from "node:crypto";
+import { createHash as createHash5 } from "node:crypto";
 import { lstat as lstat4, readFile as readFile7, readdir as readdir4, mkdir as mkdir5, writeFile as writeFile3, rm as rm2 } from "node:fs/promises";
 import { dirname as dirname6, join as join10, resolve as resolve6, parse as parse4 } from "node:path";
 
 // src/review-page.ts
+import { createHash as createHash4 } from "node:crypto";
 var escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 var src = (path) => escapeHtml(path.split("/").map(encodeURIComponent).join("/"));
 var link2 = (step2) => `#step-${encodeURIComponent(step2.id)}`;
@@ -20284,7 +20285,8 @@ var time3 = (iso) => iso && Number.isFinite(Date.parse(iso)) ? new Date(iso).toI
 var preciseTime = (iso) => iso && Number.isFinite(Date.parse(iso)) ? new Date(iso).toISOString().slice(11, 23) : void 0;
 var duration3 = (ms) => ms < 6e4 ? `${(ms / 1e3).toFixed(1)} s` : `${Math.floor(ms / 6e4)} min ${Math.round(ms % 6e4 / 1e3)} s`;
 var size = (bytes) => bytes >= 1e6 ? `${(bytes / 1e6).toFixed(1)} MB` : bytes >= 1e3 ? `${(bytes / 1e3).toFixed(1)} kB` : `${bytes} B`;
-var plural = (count, noun) => `${count} ${noun}${count === 1 ? "" : "s"}`;
+var noun = (count, word) => count === 1 ? word : `${word}s`;
+var plural = (count, word) => `${count} ${noun(count, word)}`;
 var tone = (value) => ["passed", "complete", "completed"].includes(value) ? "ok" : ["failed", "refused"].includes(value) ? "bad" : value === "pending" ? "pend" : "warn";
 var verdict = (value) => `<span class="verdict ${tone(value)}"><i aria-hidden="true"></i>${escapeHtml(value)}</span>`;
 var shellWord = (word) => /^[\w@%+=:,./-]+$/.test(word) ? word : `'${word.replace(/'/g, `'\\''`)}'`;
@@ -20304,9 +20306,9 @@ function groupFindings(findings) {
   const sentence = (text4) => text4.replace(/^./, (c) => c.toUpperCase());
   return [...groups.entries()].map(([key, group]) => {
     if (group.ids.length < 2) return { text: sentence(group.sentence), ids: [] };
-    const [noun, ...rest] = key.split(" ");
+    const [noun2, ...rest] = key.split(" ");
     const verb = rest.join(" ").replace(/^has /, "have ").replace(/^is /, "are ").replace(/^lacks /, "lack ");
-    return { text: `${group.ids.length} ${noun}s ${verb}`, ids: group.ids };
+    return { text: `${group.ids.length} ${noun2}s ${verb}`, ids: group.ids };
   });
 }
 function describe2(step2, detail) {
@@ -20364,8 +20366,8 @@ function stage(step2, detail, number3, previous, next) {
   const gap = detail?.beforeAt && detail.afterAt ? `+${duration3(Date.parse(detail.afterAt) - Date.parse(detail.beforeAt))}` : void 0;
   const id2 = `step-${step2.id}`, href = (suffix) => escapeHtml(`#${encodeURIComponent(`${id2}${suffix}`)}`);
   return `<section class="stage" aria-label="Step ${number3} snapshots">
-<nav class="seg" aria-label="Snapshot view"><a class="s-after" href="${escapeHtml(link2(step2))}">After</a><a class="s-before" href="${href("--before")}">Before</a><a class="s-compare" href="${href("--compare")}">Compare</a>${gap ? `<span class="gap" title="Time between the before and after snapshots">${gap}</span>` : ""}</nav>
-${arrows}<div class="views"><div class="view v-after">${shot(step2, detail, "after")}</div><div class="view v-before" id="${escapeHtml(`${id2}--before`)}">${shot(step2, detail, "before")}</div><div class="view v-compare" id="${escapeHtml(`${id2}--compare`)}">${shot(step2, detail, "before")}${shot(step2, detail, "after")}</div></div></section>`;
+<nav class="seg" aria-label="Snapshot view"><a class="s-compare" href="${escapeHtml(link2(step2))}">Compare</a><a class="s-before" href="${href("--before")}">Before</a><a class="s-after" href="${href("--after")}">After</a>${gap ? `<span class="gap" title="Time between the before and after snapshots">${gap}</span>` : ""}</nav>
+${arrows}<div class="views"><div class="view v-compare">${shot(step2, detail, "before")}${shot(step2, detail, "after")}</div><div class="view v-before" id="${escapeHtml(`${id2}--before`)}">${shot(step2, detail, "before")}</div><div class="view v-after" id="${escapeHtml(`${id2}--after`)}">${shot(step2, detail, "after")}</div></div></section>`;
 }
 function panel(step2, detail, number3, total, previous, next) {
   const { headline, command: command2, reasonShown, kind } = describe2(step2, detail);
@@ -20380,7 +20382,7 @@ ${command2 && step2.snapshots ? `<section class="block"><h3>Command</h3><pre cla
 <section class="block"><h3>Expected</h3><p>${escapeHtml(step2.expected || "Not supplied")}</p></section>
 <section class="block"><h3>Observed</h3>${observed(step2, detail?.output, !!step2.snapshots)}</section>
 <dl class="facts">${fact("State", escapeHtml(step2.state))}${fact("Input", escapeHtml(step2.inputMode))}${fact("After interval", interval2 === void 0 ? "unavailable" : `${interval2} ms`)}${step2.snapshots?.groupId ? fact("Group", escapeHtml(step2.snapshots.groupId)) : ""}</dl>
-</div><nav class="pager" aria-label="Step ${number3}">${previous ? `<a href="${escapeHtml(link2(previous))}">\u2039 Previous</a>` : `<span class="off">\u2039 Previous</span>`}<a class="stable" href="${escapeHtml(link2(step2))}">Stable link</a>${next ? `<a href="${escapeHtml(link2(next))}">Next \u203A</a>` : `<span class="off">Next \u203A</span>`}</nav></aside>`;
+</div><nav class="pager" aria-label="Step ${number3}">${previous ? `<a href="${escapeHtml(link2(previous))}" title="Left arrow key">\u2190 Previous</a>` : `<span class="off">\u2190 Previous</span>`}<a class="stable" href="${escapeHtml(link2(step2))}">Stable link</a>${next ? `<a href="${escapeHtml(link2(next))}" title="Right arrow key">Next \u2192</a>` : `<span class="off">Next \u2192</span>`}</nav></aside>`;
 }
 function thumb(step2, detail, number3) {
   const { headline, command: command2 } = describe2(step2, detail);
@@ -20388,7 +20390,9 @@ function thumb(step2, detail, number3) {
   const face = image ? `<img loading="lazy" alt="" src="${src(image)}">` : `<pre aria-hidden="true"><span class="prompt">$</span>${escapeHtml(command2 ?? headline)}</pre>`;
   return `<li class="${tone(step2.execution)}${step2.inputMode === "diagnostic" ? " diagnostic" : ""}"><a href="${escapeHtml(link2(step2))}" title="${escapeHtml(headline)}"><span class="face${image ? "" : " text"}">${face}</span><span class="cap"><span class="n">${number3}</span><i class="dot" aria-hidden="true"></i><span class="t">${escapeHtml(headline)}</span></span><span class="sr">${escapeHtml(step2.execution)}</span></a></li>`;
 }
-var selection = (count) => !count ? "" : Array.from({ length: count }, (_, i) => `.app:has(.center>.step:nth-of-type(${i + 1}):target) .track li:nth-child(${i + 1}) a,.app:has(.center>.step:nth-of-type(${i + 1}) :target) .track li:nth-child(${i + 1}) a`).join(",") + ",.app:not(:has(.center :target)) .track li:first-child a{border-color:var(--accent);box-shadow:0 0 0 3px var(--ring);background:var(--s2)}";
+var keys = `(()=>{const steps=()=>[...document.querySelectorAll(".center>.step:not(.overview)")];const current=()=>{let el=null;try{el=document.getElementById(decodeURIComponent(location.hash.slice(1)))}catch{}const step=el&&el.closest(".step");return step?steps().indexOf(step):0};const reveal=()=>{const li=document.querySelectorAll(".track li")[current()];if(li)li.scrollIntoView({block:"nearest",inline:"nearest"})};document.addEventListener("keydown",e=>{if(e.defaultPrevented||e.altKey||e.ctrlKey||e.metaKey||e.shiftKey)return;const t=e.target;if(t instanceof HTMLElement&&(t.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)))return;const d=e.key==="ArrowRight"?1:e.key==="ArrowLeft"?-1:0;if(!d)return;const all=steps(),i=current(),j=i<0?(d>0?0:-1):i+d;if(j<0||j>=all.length)return;e.preventDefault();location.hash=encodeURIComponent(all[j].id)});addEventListener("hashchange",reveal);reveal()})();`;
+var keysPolicy = `'sha256-${createHash4("sha256").update(keys).digest("base64")}'`;
+var selection = (count) => !count ? "" : Array.from({ length: count }, (_, i) => `.app:has(.center>.step:nth-of-type(${i + 1}):target) .track li:nth-child(${i + 1}) a,.app:has(.center>.step:nth-of-type(${i + 1}) :target) .track li:nth-child(${i + 1}) a`).join(",") + ",.app:not(:has(.center :target)) .track li:first-child a{background:var(--s2)}" + Array.from({ length: count }, (_, i) => `.app:has(.center>.step:nth-of-type(${i + 1}):target) .track li:nth-child(${i + 1}) .face,.app:has(.center>.step:nth-of-type(${i + 1}) :target) .track li:nth-child(${i + 1}) .face`).join(",") + ",.app:not(:has(.center :target)) .track li:first-child .face{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--accent),0 0 18px var(--ring)}";
 function renderReviewPage(model) {
   const steps = chronological(model);
   const numbers = new Map(steps.map((step2, i) => [step2.id, String(i + 1).padStart(2, "0")]));
@@ -20406,7 +20410,7 @@ function renderReviewPage(model) {
     const total = files.reduce((sum, f) => sum + f.bytes, 0);
     return `<details class="group"${model.outputs.length <= 12 ? " open" : ""}><summary><span class="where">${escapeHtml(declared)}</span><span class="count">${plural(files.length, "file")} \xB7 ${size(total)}</span></summary>${others.length ? `<ul class="flist">${others.map((f) => `<li><a href="${src(f.path)}">${escapeHtml(f.label)}</a><span>${size(f.bytes)}</span></li>`).join("")}</ul>` : ""}${images.length ? `<div class="gallery">${images.map((f) => `<a class="gthumb" href="${src(f.path)}"><img loading="lazy" alt="${escapeHtml(f.label)}" src="${src(f.path)}"><span>${escapeHtml(f.label.split("/").at(-1))}<small>${size(f.bytes)}</small></span></a>`).join("")}</div>` : ""}</details>`;
   }).join("");
-  const stat2 = (label, value) => `<li><b>${value}</b><span>${label}</span></li>`;
+  const stat2 = (label, value) => `<li><b>${value}</b>${label ? ` <span>${label}</span>` : ""}</li>`;
   const pill = (label, value) => `<li class="pill ${tone(value)}"><span>${label}</span>${verdict(value)}</li>`;
   const overview = `<article class="step overview" id="overview"><section class="stage doc" aria-label="Package overview"><div class="doc-in">
 <h2>Overview</h2><p class="lede">Delivery integrity is separate from execution success. Snapshots are dispatch-time evidence, not continuous video: each shows the screen just before a step was sent and shortly after it returned.</p>
@@ -20417,122 +20421,125 @@ function renderReviewPage(model) {
 <section class="block"><h3>Files</h3><ul class="files"><li><a href="manifest.json">manifest.json</a><span>Checksums of every artifact</span></li><li><a href="summary.json">summary.json</a><span>Verdicts and findings</span></li><li><a href="trajectory.json">trajectory.json</a><span>Steps as recorded</span></li></ul></section>
 <section class="block"><h3>Human review</h3><p>Pending. The relay does not review its own evidence; these verdicts come from retained records only.</p></section></div>
 <nav class="pager">${steps[0] ? `<a href="${escapeHtml(link2(steps[0]))}">Start at step 01 \u203A</a>` : "<span></span>"}</nav></aside></article>`;
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="dark light"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' file:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>Relay review: ${escapeHtml(model.packageId)}</title><style>${css}${selection(steps.length)}</style></head><body>
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' file:; style-src 'unsafe-inline'; script-src ${keysPolicy}; base-uri 'none'; form-action 'none'"><title>Relay review: ${escapeHtml(model.packageId)}</title><style>${css}${selection(steps.length)}</style></head><body>
 <div class="app">
-<header class="top"><div class="brand"><span class="mark" aria-hidden="true"></span><div><h1>${escapeHtml(title)}</h1><p class="pkg">${escapeHtml(model.packageId)}</p></div></div>
-<ul class="stats">${stat2("steps", String(steps.length))}${stat2("actions", String(actions))}${stat2("diagnostics", String(diagnostics))}${times.length ? `${stat2("UTC start", time3(new Date(Math.min(...times)).toISOString()))}${stat2("span", duration3(Math.max(...times) - Math.min(...times)))}` : ""}</ul>
+<header class="top"><div class="brand"><span class="mark" aria-hidden="true"></span><div><h1 title="${escapeHtml(model.packageId)}">${escapeHtml(title)}</h1>
+<ul class="stats">${stat2(noun(steps.length, "step"), String(steps.length))}${stat2(noun(actions, "action"), String(actions))}${stat2(noun(diagnostics, "diagnostic"), String(diagnostics))}${times.length ? `${stat2("UTC", time3(new Date(Math.min(...times)).toISOString()))}${stat2("", duration3(Math.max(...times) - Math.min(...times)))}` : ""}</ul></div></div>
 <ul class="pills">${pill("Snapshots", model.completeness)}${pill("Execution", model.execution)}${pill("Review", "pending")}</ul>
 <a class="ovl${model.findings.length ? " has" : ""}" href="#overview">Overview<span>${model.findings.length}</span></a></header>
 <main class="center">${steps.map((step2, i) => `<article id="step-${escapeHtml(step2.id)}" class="step ${tone(step2.execution)}">${stage(step2, model.details.get(step2.id), numbers.get(step2.id), steps[i - 1], steps[i + 1])}${panel(step2, model.details.get(step2.id), numbers.get(step2.id), steps.length, steps[i - 1], steps[i + 1])}</article>`).join("\n")}
 ${overview}</main>
 <footer class="track" aria-label="Steps"><ol>${steps.map((step2) => thumb(step2, model.details.get(step2.id), numbers.get(step2.id))).join("")}</ol></footer>
-</div></body></html>
+</div><script>${keys}</script></body></html>
 `;
 }
-var css = `:root{color-scheme:dark;--bg:#171412;--s1:#1f1b18;--s2:#29231f;--s3:#332c27;--line:#3a322c;--line2:#4a4039;--text:#f4ede5;--dim:#c3b7aa;--faint:#9d9185;
---accent:#ff9d5c;--ring:rgba(255,157,92,.28);--stage:#0f0d0c;--glow:rgba(255,157,92,.07);--ok:#93d49a;--bad:#ff8170;--warn:#f4c35e;--pend:#e7a9c0;
+var css = `:root{color-scheme:light;--bg:#fbf6ef;--s1:#ffffff;--s2:#f7efe5;--s3:#efe3d5;--hair:rgba(90,50,20,.08);--text:#2a1d15;--dim:#5e4b3e;--faint:#7d6a5c;
+--accent:#f0502a;--accent2:#ff9f1a;--grad:linear-gradient(135deg,var(--accent),var(--accent2));--on:#fff;--ring:rgba(240,80,42,.28);--stage:#f3eadf;
+--ok:#0e9f62;--bad:#e23744;--warn:#b87700;--pend:#7a4dff;--shadow:0 1px 2px rgba(90,50,20,.06),0 12px 32px rgba(90,50,20,.10);
 --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;--round:ui-rounded,"SF Pro Rounded",var(--sans);--mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
-@media(prefers-color-scheme:light){:root{color-scheme:light;--bg:#f6f0e8;--s1:#fffaf4;--s2:#f3eadf;--s3:#eadfd2;--line:#e4d8ca;--line2:#d3c4b3;--text:#2b211b;--dim:#62544a;--faint:#7a6b5f;
---accent:#c9561d;--ring:rgba(201,86,29,.22);--stage:#e9e0d5;--glow:rgba(201,86,29,.06);--ok:#2e7d45;--bad:#c23b2a;--warn:#946100;--pend:#a0466f}}
 *{box-sizing:border-box}html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--text);font:14.5px/1.55 var(--sans);-webkit-font-smoothing:antialiased}
 a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline;text-underline-offset:3px}
-:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
-pre{font:12.5px/1.55 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere;margin:0}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:999px}
+pre{font:12.5px/1.6 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere;margin:0}
 b,time,.n,.exit,dd,.gap{font-variant-numeric:tabular-nums}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
-.label,h3,dt{font:600 11px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+.label,h3,dt{font:600 11px/1.3 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
 .quiet{color:var(--faint);margin:0}
 .ok{--tone:var(--ok)}.bad{--tone:var(--bad)}.warn{--tone:var(--warn)}.pend{--tone:var(--pend)}
-.verdict{display:inline-flex;align-items:center;gap:.4rem;font:600 12.5px/1 var(--sans);color:var(--tone,var(--dim));text-transform:capitalize}
-.verdict i{flex:none;width:7px;height:7px;border-radius:50%;background:currentColor}
+.verdict{display:inline-flex;align-items:center;gap:.45rem;font:600 12.5px/1 var(--sans);color:var(--tone,var(--dim));text-transform:capitalize}
+.verdict i{flex:none;width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 0 3px color-mix(in srgb,currentColor 18%,transparent)}
 .app{height:100vh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;grid-template-columns:minmax(0,1fr);overflow:clip}.track{min-width:0}
-.top{display:flex;align-items:center;gap:1.5rem 2rem;flex-wrap:wrap;padding:.85rem 1.5rem;border-bottom:1px solid var(--line);background:var(--s1)}
-.brand{display:flex;align-items:center;gap:.8rem;min-width:0;margin-right:auto}
-.mark{flex:none;width:2.1rem;height:2.1rem;border-radius:10px;background:radial-gradient(circle at 30% 30%,#ffd29a,var(--accent) 55%,#c2410c);box-shadow:inset 0 0 0 1px rgba(255,255,255,.18)}
-h1{font:650 1.2rem/1.2 var(--round);letter-spacing:-.01em;margin:0}.pkg{margin:.1rem 0 0;font:12px var(--mono);color:var(--faint)}
-.stats{display:flex;gap:1.6rem;list-style:none;margin:0;padding:0}.stats li{display:grid}.stats b{font:650 1.05rem/1.2 var(--round)}.stats span{font-size:11.5px;color:var(--faint)}
-.pills{display:flex;gap:.5rem;list-style:none;margin:0;padding:0}
-.pill{display:flex;align-items:center;gap:.55rem;padding:.4rem .7rem;border-radius:999px;background:var(--s2);border:1px solid var(--line);font-size:12px;color:var(--dim)}
-.pill .verdict{font-size:12px}
-.ovl{display:inline-flex;align-items:center;gap:.5rem;padding:.45rem .8rem;border-radius:999px;border:1px solid var(--line2);color:var(--text);font-weight:600;font-size:13px}
-.ovl span{font:650 11px/1 var(--round);padding:.2rem .45rem;border-radius:999px;background:var(--s3);color:var(--dim)}.ovl.has span{background:var(--warn);color:#2b1d05}
-.ovl:hover{text-decoration:none;border-color:var(--accent)}.app:has(#overview:target) .ovl{border-color:var(--accent);box-shadow:0 0 0 3px var(--ring)}
-.center{display:grid;grid-template-columns:minmax(0,1fr) minmax(20rem,26rem);grid-template-areas:"stage panel";min-height:0;overflow:clip}
+.top{display:flex;align-items:center;gap:1rem 2.25rem;flex-wrap:wrap;padding:1.1rem 1.75rem}
+.brand{display:flex;align-items:center;gap:.9rem;min-width:0;margin-right:auto}
+.mark{flex:none;width:1.9rem;height:1.9rem;border-radius:50%;background:var(--grad);box-shadow:0 6px 18px var(--ring)}
+h1{font:700 1.3rem/1.15 var(--round);letter-spacing:-.015em;margin:0}
+.stats{display:flex;flex-wrap:wrap;list-style:none;margin:.3rem 0 0;padding:0;font-size:12.5px;color:var(--faint)}
+.stats li+li::before{content:"\xB7";margin:0 .55rem;color:var(--faint)}.stats b{font:700 12.5px var(--round);color:var(--text)}
+.pills{display:flex;gap:.4rem;list-style:none;margin:0;padding:0}
+.pill{display:flex;align-items:center;gap:.5rem;padding:.42rem .8rem;border-radius:999px;background:color-mix(in srgb,var(--tone) 12%,transparent);font-size:12px;color:var(--dim)}
+.ovl{display:inline-flex;align-items:center;gap:.55rem;padding:.45rem .55rem .45rem .95rem;border-radius:999px;background:var(--s1);box-shadow:var(--shadow);color:var(--text);font-weight:600;font-size:13px}
+.ovl span{display:grid;place-items:center;min-width:1.4rem;height:1.4rem;padding:0 .35rem;font:700 11px/1 var(--round);border-radius:999px;background:var(--s3);color:var(--dim)}
+.ovl.has span{background:var(--grad);color:var(--on)}
+.ovl:hover{text-decoration:none;background:var(--s3)}.app:has(#overview:target) .ovl{box-shadow:0 0 0 2px var(--accent)}
+.center{display:grid;grid-template-columns:minmax(0,1fr) minmax(20rem,25rem);grid-template-areas:"stage panel";gap:0 .75rem;padding:0 .75rem;min-height:0;overflow:clip}
 .step{display:none}.step:is(:target,:has(:target)){display:contents}.center:not(:has(:target))>.step:first-of-type{display:contents}
-.stage{grid-area:stage;position:relative;min-width:0;min-height:0;background:radial-gradient(ellipse at 50% 40%,var(--glow),transparent 70%),var(--stage);display:grid;grid-template-rows:auto minmax(0,1fr);overflow:clip}
-.seg{display:flex;align-items:center;gap:.25rem;justify-self:center;margin:.9rem 0 .2rem;padding:.25rem;border-radius:999px;background:var(--s1);border:1px solid var(--line);z-index:2}
-.seg a{padding:.3rem .85rem;border-radius:999px;color:var(--dim);font-size:12.5px;font-weight:600}.seg a:hover{text-decoration:none;color:var(--text)}
-.seg .gap{font:600 11.5px var(--round);color:var(--faint);padding:0 .6rem 0 .5rem}
-.step:target .s-after,.center:not(:has(:target))>.step:first-of-type .s-after,.step:has(.v-before:target) .s-before,.step:has(.v-compare:target) .s-compare{background:var(--s3);color:var(--text)}
-.views{min-height:0;display:grid;padding:.6rem 4.5rem 1.2rem;overflow:clip}
+.stage{grid-area:stage;position:relative;min-width:0;min-height:0;border-radius:22px;background:radial-gradient(80% 60% at 50% 40%,rgba(255,255,255,.7),transparent 70%),var(--stage);display:grid;grid-template-rows:auto minmax(0,1fr);overflow:clip}
+.seg{display:flex;align-items:center;gap:.2rem;justify-self:center;margin:1rem 0 .25rem;padding:.25rem;border-radius:999px;background:var(--s1);box-shadow:var(--shadow);z-index:2}
+.seg a{padding:.36rem 1rem;border-radius:999px;color:var(--dim);font-size:12.5px;font-weight:600}.seg a:hover{text-decoration:none;color:var(--text)}
+.seg .gap{font:700 11.5px var(--round);color:var(--accent);padding:0 .75rem 0 .55rem}
+.step:target .s-compare,.center:not(:has(:target))>.step:first-of-type .s-compare,.step:has(.v-before:target) .s-before,.step:has(.v-after:target) .s-after{background:var(--grad);color:var(--on)}
+.views{min-height:0;display:grid;padding:.75rem 4.75rem 1.4rem;overflow:clip}
 .view{display:none;min-height:0}
-.step:target .v-after,.center:not(:has(:target))>.step:first-of-type .v-after,.v-before:target{display:grid}
-.v-compare:target{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
-.shot{margin:0;min-height:0;min-width:0;display:grid;grid-template-rows:minmax(0,1fr) auto;gap:.55rem}
+.step:target .v-compare,.center:not(:has(:target))>.step:first-of-type .v-compare{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;align-items:center}
+.v-before:target,.v-after:target{display:grid}
+.shot{margin:0;min-height:0;min-width:0;display:grid;grid-template-rows:minmax(0,1fr) auto;gap:.7rem}
 .shot a{display:grid;place-items:center;min-height:0}
-.shot img{max-width:100%;max-height:100%;object-fit:contain;border-radius:10px;box-shadow:0 1px 0 rgba(255,255,255,.05),0 18px 50px rgba(0,0,0,.45);background:#000}
-.shot figcaption{display:flex;justify-content:center;gap:.8rem;align-items:baseline}.shot figcaption time{font:12px var(--mono);color:var(--faint)}
-.void{display:grid;place-items:center;border:1px dashed var(--line2);border-radius:10px;color:var(--faint);padding:2rem;text-align:center}
-.arrow{position:absolute;top:50%;translate:0 -50%;z-index:3;display:grid;place-items:center;width:2.6rem;height:2.6rem;border-radius:50%;background:var(--s1);border:1px solid var(--line);color:var(--text);font-size:1.5rem;line-height:1}
-.arrow:hover{text-decoration:none;border-color:var(--accent);color:var(--accent)}.arrow.prev{left:1rem}.arrow.next{right:1rem}
-.terminal{grid-template-rows:minmax(0,1fr);place-items:center;padding:2rem 4.5rem}
-.term{width:min(100%,56rem);max-height:100%;overflow:auto;background:var(--s1);border:1px solid var(--line);border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.35)}
-.term-bar{display:flex;align-items:center;gap:1rem;padding:.7rem 1rem;border-bottom:1px solid var(--line);font-size:12px;color:var(--faint);position:sticky;top:0;background:var(--s1)}
-.dots{display:flex;gap:.35rem}.dots i{width:10px;height:10px;border-radius:50%;background:var(--line2)}
-.term-cmd{padding:1rem 1.1rem;font-size:13px;color:var(--text)}.prompt{color:var(--accent);margin-right:.6em;user-select:none}
-.term .stream{margin:0 1.1rem 1rem}.term .quiet,.term-note{margin:0 1.1rem 1rem;font-size:12.5px;color:var(--faint)}
-.stream .label{display:block;margin-bottom:.3rem}.stream pre,.plain,.command{background:var(--stage);border:1px solid var(--line);border-radius:10px;padding:.7rem .85rem;max-height:14rem;overflow:auto;color:var(--text)}
-.panel{grid-area:panel;min-height:0;display:grid;grid-template-rows:minmax(0,1fr) auto;background:var(--s1);border-left:1px solid var(--line)}
-.panel-scroll{overflow:auto;padding:1.3rem 1.4rem 1.5rem;scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
-.eyebrow{display:flex;flex-wrap:wrap;gap:.3rem 1rem;margin:0;font-size:12px;color:var(--faint)}.eyebrow>span:first-child{color:var(--accent);font-weight:650}.eyebrow .of{color:var(--faint);font-weight:500}.eyebrow time{font-family:var(--mono)}
-.panel h2{font:650 1.2rem/1.35 var(--round);letter-spacing:-.005em;margin:.45rem 0 .5rem;overflow-wrap:anywhere}
-.state{margin:0 0 .4rem}
-.block{margin-top:1.15rem;padding-top:1.05rem;border-top:1px solid var(--line)}.block h3{margin:0 0 .45rem}.block p{margin:0;color:var(--dim)}
+.shot img{max-width:100%;max-height:100%;object-fit:contain;border-radius:12px;box-shadow:0 2px 4px rgba(60,30,10,.08),0 18px 44px rgba(60,30,10,.16);background:#fff}
+.shot figcaption{display:flex;justify-content:center;gap:.7rem;align-items:baseline}.shot figcaption time{font:12px var(--mono);color:var(--faint)}
+.v-compare .shot:last-child figcaption .label{color:var(--accent)}
+.void{display:grid;place-items:center;border-radius:14px;background:var(--s1);color:var(--faint);padding:2rem;text-align:center;aspect-ratio:16/9}
+.arrow{position:absolute;top:50%;translate:0 -50%;z-index:3;display:grid;place-items:center;width:2.75rem;height:2.75rem;border-radius:50%;background:rgba(255,255,255,.85);backdrop-filter:blur(8px);color:var(--text);font-size:1.5rem;line-height:1;box-shadow:var(--shadow)}
+.arrow:hover{text-decoration:none;background:var(--grad);color:var(--on)}.arrow.prev{left:1rem}.arrow.next{right:1rem}
+.terminal{grid-template-rows:minmax(0,1fr);place-items:center;padding:2rem 4.75rem}
+.term{width:min(100%,56rem);max-height:100%;overflow:auto;background:var(--s1);border-radius:18px;box-shadow:var(--shadow)}
+.term-bar{display:flex;align-items:center;gap:1rem;padding:.8rem 1.1rem;font-size:12px;color:var(--faint);position:sticky;top:0;background:var(--s1)}
+.dots{display:flex;gap:.35rem}.dots i{width:10px;height:10px;border-radius:50%;background:var(--s3)}.dots i:first-child{background:var(--grad)}
+.term-cmd{padding:.4rem 1.2rem 1.1rem;font-size:13px;color:var(--text)}.prompt{color:var(--accent);margin-right:.6em;user-select:none}
+.term .stream{margin:0 1.2rem 1rem}.term .quiet,.term-note{margin:0 1.2rem 1.1rem;font-size:12.5px;color:var(--faint)}
+.stream .label{display:block;margin-bottom:.35rem}.stream pre,.plain,.command{background:var(--s2);border-radius:12px;padding:.75rem .9rem;max-height:14rem;overflow:auto;color:var(--text)}
+.panel{grid-area:panel;min-height:0;display:grid;grid-template-rows:minmax(0,1fr) auto;background:var(--s1);border-radius:22px;box-shadow:var(--shadow)}
+.panel-scroll{overflow:auto;padding:1.5rem 1.5rem 1.25rem;scrollbar-width:thin;scrollbar-color:var(--s3) transparent}
+.eyebrow{display:flex;flex-wrap:wrap;align-items:baseline;gap:.3rem .9rem;margin:0;font-size:12px;color:var(--faint)}
+.eyebrow>span:first-child{font:700 12.5px var(--round);background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}.eyebrow .of{-webkit-text-fill-color:var(--faint);color:var(--faint);font-weight:500}.eyebrow time{font-family:var(--mono)}
+.panel h2{font:700 1.3rem/1.3 var(--round);letter-spacing:-.01em;margin:.5rem 0 .55rem;overflow-wrap:anywhere}
+.state{margin:0}
+.block{margin-top:1.5rem}.block h3{margin:0 0 .45rem}.block p{margin:0;color:var(--dim)}
 .command{font-size:12px;max-height:9rem}
 .receipts{list-style:none;margin:0 0 .4rem;padding:0;display:grid;gap:.45rem}.receipts li{display:flex;flex-wrap:wrap;gap:.4rem .8rem;align-items:center}.diag{font-size:13px;color:var(--dim)}
-.exit{display:inline-block;font:650 11.5px var(--mono);padding:.2rem .55rem;border-radius:999px;margin-bottom:.5rem}
-.exit.ok{color:var(--ok);background:color-mix(in srgb,var(--ok) 14%,transparent)}.exit.bad{color:var(--bad);background:color-mix(in srgb,var(--bad) 14%,transparent)}
+.exit{display:inline-block;font:700 11.5px var(--mono);padding:.25rem .6rem;border-radius:999px;margin-bottom:.55rem}
+.exit.ok{color:var(--ok);background:color-mix(in srgb,var(--ok) 15%,transparent)}.exit.bad{color:var(--bad);background:color-mix(in srgb,var(--bad) 15%,transparent)}
 .receipts .exit{margin:0}.stream{margin-bottom:.6rem}
 .raw summary{cursor:pointer;font-size:12px;color:var(--faint);width:max-content}.raw summary:hover{color:var(--dim)}.raw pre{margin-top:.5rem;color:var(--faint);font-size:11.5px;max-height:12rem;overflow:auto}
-.facts{display:grid;grid-template-columns:1fr 1fr;gap:.8rem 1rem;margin:1.15rem 0 0;padding-top:1.05rem;border-top:1px solid var(--line)}.facts dd{margin:.2rem 0 0;font:12.5px var(--mono);color:var(--dim);overflow-wrap:anywhere}
+.facts{display:grid;grid-template-columns:1fr 1fr;gap:.9rem 1rem;margin:1.5rem 0 0;padding:1rem 1.1rem;border-radius:14px;background:var(--s2)}.facts dd{margin:.2rem 0 0;font:12.5px var(--mono);color:var(--dim);overflow-wrap:anywhere}
 .facts.stack{grid-template-columns:1fr}
-.pager{display:flex;justify-content:space-between;align-items:center;gap:.5rem;padding:.75rem 1.1rem;border-top:1px solid var(--line);font-size:13px;font-weight:600}
-.pager a{padding:.35rem .7rem;border-radius:8px}.pager a:hover{background:var(--s2);text-decoration:none}.pager .stable{font-weight:500;color:var(--faint)}.pager .off{padding:.35rem .7rem;color:var(--line2)}
-.files{list-style:none;margin:0;padding:0;display:grid;gap:.5rem}.files li{display:grid}.files a{font:12.5px var(--mono)}.files span{font-size:12px;color:var(--faint)}
-.doc{grid-template-rows:minmax(0,1fr);overflow:auto;background:var(--bg)}.doc-in{max-width:52rem;padding:2rem 2.5rem 3rem}
-.doc h2{font:650 1.6rem/1.2 var(--round);margin:0}.lede{color:var(--dim);margin:.6rem 0 0}
-.findings{list-style:none;margin:0;padding:0;display:grid;gap:.5rem}.findings li{padding:.7rem .9rem;border-radius:10px;background:var(--s1);border:1px solid var(--line);border-left:3px solid var(--warn)}
+.pager{display:flex;justify-content:space-between;align-items:center;gap:.5rem;padding:.8rem 1rem 1rem;font-size:13px;font-weight:600}
+.pager a{padding:.45rem .9rem;border-radius:999px;background:var(--s2);color:var(--text)}.pager a:hover{background:var(--grad);color:var(--on);text-decoration:none}
+.pager .stable{background:none;font-weight:500;color:var(--faint)}.pager .stable:hover{background:none;color:var(--text)}.pager .off{padding:.45rem .9rem;color:var(--s3)}
+.files{list-style:none;margin:0;padding:0;display:grid;gap:.6rem}.files li{display:grid}.files a{font:12.5px var(--mono)}.files span{font-size:12px;color:var(--faint)}
+.doc{grid-template-rows:minmax(0,1fr);overflow:auto;background:var(--stage)}.doc-in{max-width:52rem;padding:2.25rem 2.75rem 3rem}
+.doc h2{font:700 1.75rem/1.15 var(--round);letter-spacing:-.015em;margin:0}.lede{color:var(--dim);margin:.7rem 0 0}
+.findings{list-style:none;margin:0;padding:0;display:grid;gap:.5rem}.findings li{padding:.8rem 1rem .8rem 1.1rem;border-radius:14px;background:var(--s1);box-shadow:var(--shadow);position:relative}
+.findings li::before{content:"";position:absolute;left:0;top:.8rem;bottom:.8rem;width:3px;border-radius:0 3px 3px 0;background:var(--warn)}
 .findings summary{cursor:pointer}.findings code{display:block;font:11.5px/1.6 var(--mono);color:var(--faint);margin-top:.4rem;overflow-wrap:anywhere}
-.outputs{display:grid;gap:.5rem}.group{background:var(--s1);border:1px solid var(--line);border-radius:10px;padding:.65rem .9rem}
+.outputs{display:grid;gap:.5rem}.group{background:var(--s1);border-radius:14px;padding:.75rem 1rem;box-shadow:var(--shadow)}
 .group summary{display:flex;justify-content:space-between;gap:1rem;cursor:pointer;font-size:13px;list-style:none}.group summary::-webkit-details-marker{display:none}
-.group .where{font-weight:600}.group .where::before{content:"\u203A";display:inline-block;width:1em;color:var(--faint);transition:rotate .15s}.group[open] .where::before{rotate:90deg}.group .count{color:var(--faint);flex:none}
-.group[open] summary{margin-bottom:.7rem}
-.flist{list-style:none;margin:0;padding:0;display:grid;gap:.25rem;font:12px var(--mono);max-height:16rem;overflow:auto}.flist li{display:flex;justify-content:space-between;gap:1rem}.flist a{overflow-wrap:anywhere;min-width:0}.flist span{color:var(--faint);flex:none}
-.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(8.5rem,1fr));gap:.7rem}.flist+.gallery{margin-top:.75rem}
-.gthumb{display:grid;gap:.35rem;font:11.5px var(--mono);min-width:0}.gthumb span{display:flex;justify-content:space-between;gap:.5rem;overflow:hidden}.gthumb small{color:var(--faint);font-size:inherit;flex:none}
-.gthumb img{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:7px;border:1px solid var(--line);display:block}.gthumb:hover img{border-color:var(--accent)}
-.track{border-top:1px solid var(--line);background:var(--s1)}
-.track ol{list-style:none;margin:0;padding:.75rem 1.5rem .85rem;display:flex;gap:.65rem;overflow-x:auto;scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
-.track li{flex:none;width:9.5rem}
-.track a{display:grid;gap:.4rem;padding:.3rem;border-radius:11px;border:1px solid transparent;color:var(--text);transition:background .15s,border-color .15s}
-.track a:hover{text-decoration:none;background:var(--s2)}
-.face{display:block;aspect-ratio:16/9;border-radius:7px;overflow:hidden;background:var(--stage);box-shadow:inset 0 0 0 1px var(--line)}
+.group .where{font-weight:600}.group .where::before{content:"\u203A";display:inline-block;width:1em;color:var(--accent);transition:rotate .15s}.group[open] .where::before{rotate:90deg}.group .count{color:var(--faint);flex:none}
+.group[open] summary{margin-bottom:.75rem}
+.flist{list-style:none;margin:0;padding:0;display:grid;gap:.3rem;font:12px var(--mono);max-height:16rem;overflow:auto}.flist li{display:flex;justify-content:space-between;gap:1rem}.flist a{overflow-wrap:anywhere;min-width:0}.flist span{color:var(--faint);flex:none}
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(8.5rem,1fr));gap:.75rem}.flist+.gallery{margin-top:.75rem}
+.gthumb{display:grid;gap:.4rem;font:11.5px var(--mono);min-width:0;color:var(--dim)}.gthumb span{display:flex;justify-content:space-between;gap:.5rem;overflow:hidden}.gthumb small{color:var(--faint);font-size:inherit;flex:none}
+.gthumb img{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:10px;display:block;transition:box-shadow .15s}.gthumb:hover img{box-shadow:0 0 0 2px var(--accent)}
+.track ol{list-style:none;margin:0;padding:.85rem 1.75rem 1rem;display:flex;gap:.6rem;overflow-x:auto;scrollbar-width:thin;scrollbar-color:var(--s3) transparent}
+.track li{flex:none;width:9.25rem}
+.track a{display:grid;gap:.45rem;padding:.35rem;border-radius:16px;color:var(--text);transition:background .15s}
+.track a:hover{text-decoration:none;background:var(--s1)}
+.face{display:block;aspect-ratio:16/9;border-radius:11px;overflow:hidden;background:var(--s1);box-shadow:0 1px 2px rgba(90,50,20,.08),0 6px 16px rgba(90,50,20,.08)}
 .face img{width:100%;height:100%;object-fit:cover;display:block}
-.face.text pre{padding:.5rem .55rem;font-size:9.5px;line-height:1.45;color:var(--dim);height:100%;overflow:hidden;-webkit-mask-image:linear-gradient(#000 60%,transparent);mask-image:linear-gradient(#000 60%,transparent)}
-.cap{display:flex;align-items:center;gap:.4rem;min-width:0;padding:0 .15rem;font-size:12px}
-.cap .n{font:650 11px var(--round);color:var(--faint)}.dot{flex:none;width:7px;height:7px;border-radius:50%;background:var(--tone)}
+.face.text pre{padding:.55rem .6rem;font-size:9.5px;line-height:1.45;color:var(--dim);height:100%;overflow:hidden;-webkit-mask-image:linear-gradient(#000 60%,transparent);mask-image:linear-gradient(#000 60%,transparent)}
+.cap{display:flex;align-items:center;gap:.4rem;min-width:0;padding:0 .2rem;font-size:12px}
+.cap .n{font:700 11px var(--round);color:var(--faint)}.dot{flex:none;width:7px;height:7px;border-radius:50%;background:var(--tone)}
 .cap .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dim)}
-.track li.bad .face{box-shadow:inset 0 0 0 2px var(--bad)}
-@media(max-width:960px){.app{height:auto;min-height:100vh;overflow:visible}.center{grid-template-columns:minmax(0,1fr);grid-template-areas:"stage" "panel"}
-.stage{min-height:60vh}.views{padding:.5rem 3.5rem 1rem}.panel{border-left:0;border-top:1px solid var(--line)}.track{position:sticky;bottom:0}.stats{display:none}}
+.track li.bad .face{box-shadow:0 0 0 2px var(--bad)}
+@media(max-width:960px){.app{height:auto;min-height:100vh;overflow:visible}.center{grid-template-columns:minmax(0,1fr);grid-template-areas:"stage" "panel";gap:.75rem}
+.stage{min-height:60vh}.views{padding:.5rem 3.75rem 1rem}.step:target .v-compare,.center:not(:has(:target))>.step:first-of-type .v-compare{grid-template-columns:1fr}.track{position:sticky;bottom:0;background:var(--bg)}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 @media print{.app{height:auto;display:block}.track,.arrow,.seg,.pager,.ovl{display:none}.center{display:block}.step{display:block!important;break-inside:avoid;margin-bottom:1rem}.stage{background:none}.view{display:none!important}.v-compare{display:grid!important;grid-template-columns:1fr 1fr}}`;
 
 // src/package.ts
 var generated = /* @__PURE__ */ new Set(["manifest.json", "summary.json", "trajectory.json", "index.html", "OPENING.txt", "journal/session-events.jsonl"]);
 var legacyTrajectoryFile = "walkthrough.json";
-var hash2 = (bytes) => createHash4("sha256").update(bytes).digest("hex");
+var hash2 = (bytes) => createHash5("sha256").update(bytes).digest("hex");
 var json = (value) => JSON.stringify(value, null, 2) + "\n";
 function object3(value, label) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`invalid ${label}`);
@@ -21407,8 +21414,8 @@ function Values(value) {
 function DeepEqualObject(left, right) {
   if (!IsObject(right))
     return false;
-  const keys = Keys(left);
-  return IsEqual(keys.length, Keys(right).length) && keys.every((key) => IsDeepEqual(left[key], right[key]));
+  const keys2 = Keys(left);
+  return IsEqual(keys2.length, Keys(right).length) && keys2.every((key) => IsDeepEqual(left[key], right[key]));
 }
 function DeepEqualArray(left, right) {
   return IsArray(right) && IsEqual(left.length, right.length) && left.every((_, index) => IsDeepEqual(left[index], right[index]));
@@ -21879,8 +21886,8 @@ function IsTypeScriptEnumLike(value) {
   return guard_exports.IsObjectNotArray(value);
 }
 function TypeScriptEnumToEnumValues(type) {
-  const keys = guard_exports.Keys(type).filter((key) => isNaN(key));
-  return keys.reduce((result2, key) => [...result2, type[key]], []);
+  const keys2 = guard_exports.Keys(type).filter((key) => isNaN(key));
+  return keys2.reduce((result2, key) => [...result2, type[key]], []);
 }
 
 // node_modules/typebox/build/type/types/enum.mjs
@@ -22521,8 +22528,8 @@ function CompositePropertyKey(left, right, key) {
   return key in left ? key in right ? CompositeProperty(left[key], right[key]) : left[key] : key in right ? right[key] : Never();
 }
 function CompositeProperties(left, right) {
-  const keys = /* @__PURE__ */ new Set([...guard_exports.Keys(left), ...guard_exports.Keys(right)]);
-  const result2 = [...keys].reduce((result3, key) => {
+  const keys2 = /* @__PURE__ */ new Set([...guard_exports.Keys(left), ...guard_exports.Keys(right)]);
+  const result2 = [...keys2].reduce((result3, key) => {
     return { ...result3, [key]: CompositePropertyKey(left, right, key) };
   }, {});
   return result2;
@@ -23904,8 +23911,8 @@ function ExtendsProperty(inferred, left, right) {
     IsInfer(right) && IsNever(right.extends) ? ExtendsFalse() : Match3(ExtendsLeft(inferred, left, right), (inferred2) => ExtendsPropertyOptional(inferred2, left, right), () => ExtendsFalse())
   );
 }
-function ExtractInferredProperties(keys, properties) {
-  return keys.reduce((result2, key) => {
+function ExtractInferredProperties(keys2, properties) {
+  return keys2.reduce((result2, key) => {
     return key in properties ? IsExtendsTrueLike(properties[key]) ? { ...result2, ...properties[key].inferred } : Unreachable() : Unreachable();
   }, {});
 }
@@ -23933,12 +23940,12 @@ function RecordMergeInferred(left, right) {
     };
   }, left);
 }
-function ExtendsRecordComparer(properties, keys, type, result2) {
-  return guard_exports.ShiftLeft(keys, (left, right) => Match3(ExtendsLeft({}, properties[left], type), (inferred) => ExtendsRecordComparer(properties, right, type, RecordMergeInferred(result2, inferred)), () => ExtendsFalse()), () => ExtendsTrue(result2));
+function ExtendsRecordComparer(properties, keys2, type, result2) {
+  return guard_exports.ShiftLeft(keys2, (left, right) => Match3(ExtendsLeft({}, properties[left], type), (inferred) => ExtendsRecordComparer(properties, right, type, RecordMergeInferred(result2, inferred)), () => ExtendsFalse()), () => ExtendsTrue(result2));
 }
 function ExtendsObjectToRecord(inferred, properties, _pattern, value) {
-  const keys = guard_exports.Keys(properties);
-  const result2 = ExtendsRecordComparer(properties, keys, value, inferred);
+  const keys2 = guard_exports.Keys(properties);
+  const result2 = ExtendsRecordComparer(properties, keys2, value, inferred);
   return result2;
 }
 function ExtendsObject(inferred, left, right) {
@@ -24117,14 +24124,14 @@ function CyclicCheck(stack, context, type) {
 }
 
 // node_modules/typebox/build/type/engine/cyclic/candidates.mjs
-function ResolveCandidateKeys(context, keys) {
-  return keys.reduce((result2, left) => {
+function ResolveCandidateKeys(context, keys2) {
+  return keys2.reduce((result2, left) => {
     return CyclicCheck([left], context, context[left]) ? [...result2, left] : result2;
   }, []);
 }
 function CyclicCandidates(context) {
-  const keys = PropertyKeys(context);
-  const result2 = ResolveCandidateKeys(context, keys);
+  const keys2 = PropertyKeys(context);
+  const result2 = ResolveCandidateKeys(context, keys2);
   return result2;
 }
 
@@ -24181,8 +24188,8 @@ function CyclicInterface(context, heritage, properties) {
   return evaluatedInterface;
 }
 function CyclicDefinitions(context, dependencies) {
-  const keys = guard_exports.Keys(context).filter((key) => dependencies.includes(key));
-  return keys.reduce((result2, key) => {
+  const keys2 = guard_exports.Keys(context).filter((key) => dependencies.includes(key));
+  return keys2.reduce((result2, key) => {
     const type = context[key];
     const instantiatedType = IsInterfaceDeferred(type) ? CyclicInterface(context, type.parameters[0], type.parameters[1]) : type;
     return { ...result2, [key]: instantiatedType };
@@ -24632,13 +24639,13 @@ function ExtractInstantiate(context, state, left, right, options2) {
 }
 
 // node_modules/typebox/build/type/engine/helpers/keys_to_indexer.mjs
-function KeysToLiterals(keys) {
-  return keys.reduce((result2, left) => {
+function KeysToLiterals(keys2) {
+  return keys2.reduce((result2, left) => {
     return IsLiteralValue(left) ? [...result2, Literal(left)] : result2;
   }, []);
 }
-function KeysToIndexer(keys) {
-  const literals = KeysToLiterals(keys);
+function KeysToIndexer(keys2) {
+  const literals = KeysToLiterals(keys2);
   const result2 = Union(literals);
   return result2;
 }
@@ -24827,25 +24834,25 @@ function IndexProperty(properties, key) {
   const result2 = ExpandThis(properties, selectedType);
   return result2;
 }
-function IndexProperties(properties, keys) {
-  return keys.reduce((result2, left) => {
+function IndexProperties(properties, keys2) {
+  return keys2.reduce((result2, left) => {
     return [...result2, IndexProperty(properties, left)];
   }, []);
 }
 function FromIndexer(properties, indexer) {
-  const keys = ToIndexableKeys(indexer);
-  const variants = IndexProperties(properties, keys);
+  const keys2 = ToIndexableKeys(indexer);
+  const variants = IndexProperties(properties, keys2);
   const result2 = EvaluateUnion(variants);
   return result2;
 }
 var NumericKeyPattern = new RegExp(IntegerKey);
-function NumericKeys(keys) {
-  const result2 = keys.filter((key) => NumericKeyPattern.test(key));
+function NumericKeys(keys2) {
+  const result2 = keys2.filter((key) => NumericKeyPattern.test(key));
   return result2;
 }
 function FromIndexerNumber(properties) {
-  const keys = PropertyKeys(properties);
-  const numericKeys = NumericKeys(keys);
+  const keys2 = PropertyKeys(properties);
+  const numericKeys = NumericKeys(keys2);
   const variants = IndexProperties(properties, numericKeys);
   const result2 = EvaluateUnion(variants);
   return result2;
@@ -24948,8 +24955,8 @@ function FromArray4(_type) {
 }
 
 // node_modules/typebox/build/type/engine/keyof/from_object.mjs
-function FromPropertyKeys(keys) {
-  const result2 = keys.reduce((result3, left) => {
+function FromPropertyKeys(keys2) {
+  const result2 = keys2.reduce((result3, left) => {
     return IsLiteralValue(left) ? [...result3, Literal(ConvertToIntegerKey(left))] : Unreachable();
   }, []);
   return result2;
@@ -25133,9 +25140,9 @@ function ToIndexable(type) {
 }
 
 // node_modules/typebox/build/type/engine/omit/from_type.mjs
-function FromKeys(properties, keys) {
+function FromKeys(properties, keys2) {
   const result2 = guard_exports.Keys(properties).reduce((result3, key) => {
-    return keys.includes(key) ? result3 : { ...result3, [key]: properties[key] };
+    return keys2.includes(key) ? result3 : { ...result3, [key]: properties[key] };
   }, {});
   return result2;
 }
@@ -25252,16 +25259,16 @@ function Pick(type, indexer_or_keys, options2 = {}) {
 }
 
 // node_modules/typebox/build/type/engine/pick/from_type.mjs
-function FromKeys2(properties, keys) {
+function FromKeys2(properties, keys2) {
   const result2 = guard_exports.Keys(properties).reduce((result3, key) => {
-    return keys.includes(key) ? memory_exports.Assign(result3, { [key]: properties[key] }) : result3;
+    return keys2.includes(key) ? memory_exports.Assign(result3, { [key]: properties[key] }) : result3;
   }, {});
   return result2;
 }
 function FromType16(type, indexer) {
   const indexable = ToIndexable(type);
-  const keys = ToIndexableKeys(indexer);
-  const applied = FromKeys2(indexable, keys);
+  const keys2 = ToIndexableKeys(indexer);
+  const applied = FromKeys2(indexable, keys2);
   const result2 = _Object_(applied);
   return result2;
 }
@@ -25979,16 +25986,16 @@ function IsUnevaluatedProperties(schema) {
 var CheckContext = class {
   constructor() {
     const indices = /* @__PURE__ */ new Set();
-    const keys = /* @__PURE__ */ new Set();
-    this.stack = [{ indices, keys }];
+    const keys2 = /* @__PURE__ */ new Set();
+    this.stack = [{ indices, keys: keys2 }];
   }
   // ----------------------------------------------------------------
   // Stack
   // ----------------------------------------------------------------
   Push() {
     const indices = /* @__PURE__ */ new Set();
-    const keys = /* @__PURE__ */ new Set();
-    this.stack.push({ indices, keys });
+    const keys2 = /* @__PURE__ */ new Set();
+    this.stack.push({ indices, keys: keys2 });
     return true;
   }
   Pop() {
@@ -26329,15 +26336,15 @@ function ErrorDependencies(stack, context, schemaPath, instancePath, schema, val
 // node_modules/typebox/build/schema/engine/dependentRequired.mjs
 function CheckDependentRequired(_stack, _context, schema, value) {
   const isLength = guard_exports.IsEqual(guard_exports.Keys(value).length, 0);
-  const isEvery = guard_exports.Every(guard_exports.Entries(schema.dependentRequired), 0, ([key, keys]) => {
-    return !guard_exports.HasPropertyKey(value, key) || keys.every((key2) => guard_exports.HasPropertyKey(value, key2));
+  const isEvery = guard_exports.Every(guard_exports.Entries(schema.dependentRequired), 0, ([key, keys2]) => {
+    return !guard_exports.HasPropertyKey(value, key) || keys2.every((key2) => guard_exports.HasPropertyKey(value, key2));
   });
   return isLength || isEvery;
 }
 function ErrorDependentRequired(_stack, context, schemaPath, instancePath, schema, value) {
   const isLength = guard_exports.IsEqual(guard_exports.Keys(value).length, 0);
-  const isEveryEntry = guard_exports.EveryAll(guard_exports.Entries(schema.dependentRequired), 0, ([key, keys]) => {
-    return !guard_exports.HasPropertyKey(value, key) || guard_exports.EveryAll(keys, 0, (dependency) => guard_exports.HasPropertyKey(value, dependency) || context.AddError("dependentRequired", schemaPath, instancePath, { property: key, dependencies: keys }));
+  const isEveryEntry = guard_exports.EveryAll(guard_exports.Entries(schema.dependentRequired), 0, ([key, keys2]) => {
+    return !guard_exports.HasPropertyKey(value, key) || guard_exports.EveryAll(keys2, 0, (dependency) => guard_exports.HasPropertyKey(value, dependency) || context.AddError("dependentRequired", schemaPath, instancePath, { property: key, dependencies: keys2 }));
   });
   return isLength || isEveryEntry;
 }
@@ -27683,17 +27690,17 @@ function ErrorUnevaluatedItems(stack, context, schemaPath, instancePath, schema,
 
 // node_modules/typebox/build/schema/engine/unevaluatedProperties.mjs
 function CheckUnevaluatedProperties(stack, context, schema, value) {
-  const keys = context.GetKeys();
+  const keys2 = context.GetKeys();
   return guard_exports.Every(guard_exports.Entries(value), 0, ([key, prop]) => {
-    return keys.has(key) || CheckSchema(stack, context, schema.unevaluatedProperties, prop) && context.AddKey(key);
+    return keys2.has(key) || CheckSchema(stack, context, schema.unevaluatedProperties, prop) && context.AddKey(key);
   });
 }
 function ErrorUnevaluatedProperties(stack, context, schemaPath, instancePath, schema, value) {
-  const keys = context.GetKeys();
+  const keys2 = context.GetKeys();
   const unevaluatedProperties = [];
   const isUnevaluatedProperties = guard_exports.EveryAll(guard_exports.Entries(value), 0, ([key, prop]) => {
     const nextContext = new ErrorContext();
-    const isEvaluatedProperty = keys.has(key) || ErrorSchema(stack, nextContext, schemaPath, instancePath, schema.unevaluatedProperties, prop) && context.AddKey(key);
+    const isEvaluatedProperty = keys2.has(key) || ErrorSchema(stack, nextContext, schemaPath, instancePath, schema.unevaluatedProperties, prop) && context.AddKey(key);
     if (!isEvaluatedProperty)
       unevaluatedProperties.push(key);
     return isEvaluatedProperty;
@@ -28175,9 +28182,9 @@ function FromNumber5(_context, _type, value) {
 
 // node_modules/typebox/build/value/convert/from_additional.mjs
 function FromAdditionalProperties(context, entries, additionalProperties, value) {
-  const keys = guard_exports.Keys(value);
+  const keys2 = guard_exports.Keys(value);
   for (const [regexp, _] of entries) {
-    for (const key of keys) {
+    for (const key of keys2) {
       if (!regexp.test(key)) {
         value[key] = FromType21(context, additionalProperties, value[key]);
       }
@@ -28194,9 +28201,9 @@ function IsOptionalUndefined(property, key, value) {
 // node_modules/typebox/build/value/convert/from_object.mjs
 function FromProperties5(context, type, value) {
   const entries = guard_exports.EntriesRegExp(type.properties);
-  const keys = guard_exports.Keys(value);
+  const keys2 = guard_exports.Keys(value);
   for (const [regexp, property] of entries) {
-    for (const key of keys) {
+    for (const key of keys2) {
       if (!regexp.test(key) || IsOptionalUndefined(property, key, value))
         continue;
       value[key] = FromType21(context, property, value[key]);
@@ -28211,9 +28218,9 @@ function FromObject11(context, type, value) {
 // node_modules/typebox/build/value/convert/from_record.mjs
 function FromPatternProperties(context, type, value) {
   const entries = guard_exports.EntriesRegExp(type.patternProperties);
-  const keys = guard_exports.Keys(value);
+  const keys2 = guard_exports.Keys(value);
   for (const [regexp, schema] of entries) {
-    for (const key of keys) {
+    for (const key of keys2) {
       if (regexp.test(key)) {
         value[key] = FromType21(context, schema, value[key]);
       }
@@ -28934,7 +28941,7 @@ import { join as join12, dirname as dirname7, extname } from "node:path";
 import { randomUUID as randomUUID5 } from "node:crypto";
 
 // src/image-presentation.ts
-import { createHash as createHash5 } from "node:crypto";
+import { createHash as createHash6 } from "node:crypto";
 import { deflateSync, inflateSync } from "node:zlib";
 var IMAGE_PRESENTATION_POLICY = Object.freeze({
   version: 1,
@@ -29340,7 +29347,7 @@ async function prepareImage(bytes, mimeType) {
         width: size2.width,
         height: size2.height,
         mimeType: presentedType,
-        sha256: createHash5("sha256").update(presented).digest("hex"),
+        sha256: createHash6("sha256").update(presented).digest("hex"),
         bytes: presented.length,
         transformed: presentedType !== mimeType || !original.equals(presented),
         policy
@@ -29892,7 +29899,7 @@ async function refreshEvidenceState(incoming, destination, archiveRoot, options2
 }
 
 // src/targets.ts
-import { createHash as createHash6 } from "node:crypto";
+import { createHash as createHash7 } from "node:crypto";
 import { mkdir as mkdir9, readFile as readFile10, rename as rename5, writeFile as writeFile4 } from "node:fs/promises";
 import { join as join14 } from "node:path";
 import { randomUUID as randomUUID6 } from "node:crypto";
@@ -29945,7 +29952,7 @@ function tarballUrl(pin, registry2 = process.env.MCP_VM_RELAY_NPM_REGISTRY ?? "h
 }
 function integrityMatches(bytes, integrity) {
   const [algorithm, expected] = integrity.split("-", 2);
-  return algorithm === "sha512" && !!expected && createHash6("sha512").update(bytes).digest("base64") === expected;
+  return algorithm === "sha512" && !!expected && createHash7("sha512").update(bytes).digest("base64") === expected;
 }
 var registrySource = async (pin, signal) => {
   const response = await fetch(tarballUrl(pin), { signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(12e4)]) : AbortSignal.timeout(12e4) });
@@ -29956,7 +29963,7 @@ async function cachedTarball(cacheRoot, pin, source = registrySource, signal) {
   const path = join14(cacheRoot, tarballName(pin));
   try {
     const bytes2 = await readFile10(path);
-    if (integrityMatches(bytes2, pin.integrity)) return { path, sha256: createHash6("sha256").update(bytes2).digest("hex") };
+    if (integrityMatches(bytes2, pin.integrity)) return { path, sha256: createHash7("sha256").update(bytes2).digest("hex") };
   } catch (error2) {
     if (error2.code !== "ENOENT") throw error2;
   }
@@ -29966,7 +29973,7 @@ async function cachedTarball(cacheRoot, pin, source = registrySource, signal) {
   const temporary = `${path}.${randomUUID6()}.tmp`;
   await writeFile4(temporary, bytes, { mode: 384 });
   await rename5(temporary, path);
-  return { path, sha256: createHash6("sha256").update(bytes).digest("hex") };
+  return { path, sha256: createHash7("sha256").update(bytes).digest("hex") };
 }
 
 // src/json-schema.ts

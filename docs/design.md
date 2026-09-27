@@ -119,7 +119,7 @@ acceptance remain separate from that inventory.
 | Cleanup | Use explicit completion or release and lease expiration without silently defeating agent recovery. |
 | Probe scope | Distinguish host observations from guest readiness. |
 | Installation | npm (`npm install -g @wezzard/mcp-vm-relay` or `npx @wezzard/mcp-vm-relay`), the Claude Code plugin, or `pi install npm:@wezzard/mcp-vm-relay` via pi-mcp-adapter; pi-vm-relay's git-based `pi install` is retired, and there is no tarball distribution |
-| Evidence review page | Owner decision, 2026-09-28: every delivered package's `index.html` must be well designed, warm and modern, with a top row for the run, a center row of snapshot viewport and step panel, and a bottom track of step thumbnails. The generator is redesigned, not a single page; see [UX §6.10](ux-design.md#610-evidence-review-page). |
+| Evidence review page | Owner decision, 2026-09-28: every delivered package's `index.html` must be well designed: light, warm, minimal, modern and vivid, with a top row for the run, a center row of snapshot viewport and step panel, and a bottom track of step thumbnails. The viewport compares before and after by default, and the arrow keys move between steps; the page's policy therefore admits that one script by its hash. The generator is redesigned, not a single page; see [UX §6.10](ux-design.md#610-evidence-review-page). |
 
 ## Design boundaries
 
