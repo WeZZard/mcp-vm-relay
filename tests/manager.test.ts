@@ -805,7 +805,9 @@ test('abort during a dispatched operation retains its receipt and VM without rep
   await assert.rejects(f.manager.run(operation('cancel-run'), controller.signal), /cancel dispatched run/);
   assert.equal(f.service.receiverCalls, 1); await f.assertRetained();
   f.service.receiverHook = undefined;
-  assert.equal((await f.manager.run(operation('after-abort'))).outcome.kind, 'completed');
+  // Cancellation stops the wait, not the guest command (R6): let the cancelled receiver finish before the next run.
+  while (f.service.receiverActive) await new Promise(done => setTimeout(done, 20));
+  const afterAbort = await f.manager.run(operation('after-abort')); assert.equal(afterAbort.outcome.kind, 'completed', JSON.stringify(afterAbort.outcome));
   assert.equal(f.service.receiverCalls, 2); await f.manager.release(); await f.assertClean();
 });
 
@@ -1211,7 +1213,7 @@ test('R6: release does not wait behind a cancelled diagnostic command whose gues
   hold.resolve(); // let the held guest answer come, so a failing case still tears down
   assert.equal(observed, 'settled', 'a cancelled command must stop waiting for its guest answer, so the queued release can run');
   await released; await f.assertClean();
-  assert.equal(f.service.leases.has(acquired.vm), false);
+  assert.equal(f.service.leases.has(acquired.vm!), false);
 });
 
 test('R6: release does not wait behind a cancelled recorded run whose receiver answer never comes', { timeout: 30000 }, async t => {
@@ -1227,5 +1229,5 @@ test('R6: release does not wait behind a cancelled recorded run whose receiver a
   hold.resolve(); // let the held guest answer come, so a failing case still tears down
   assert.equal(observed, 'settled', 'a cancelled run must stop waiting for the receiver, so the queued release can run');
   await released; await f.assertClean();
-  assert.equal(f.service.leases.has(acquired.vm), false);
+  assert.equal(f.service.leases.has(acquired.vm!), false);
 });

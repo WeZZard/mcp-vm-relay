@@ -465,7 +465,7 @@ export class RelayManager {
     if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 3600000) throw new Error('timeoutMs must be an integer from 1 to 3600000');
     if (input.diagnostic && input.kind !== 'exec') throw new Error('diagnostic is only supported for exec');
     if (e.delivered) throw new Error('Evidence already sealed; release this VM explicitly');
-    if (input.diagnostic) return this.diagnostic(input, timeoutMs);
+    if (input.diagnostic) return this.diagnostic(input, timeoutMs, signal);
     if (e.pendingReset) throw new Error('Recording reset is pending; retry stage to reconcile it, or use diagnostic exec');
     if (!e.staged || !this.session || !this.transport) throw new Error('Use relay_stage before a run, or relay_exec diagnostic=true for setup diagnosis and repair');
     let argv: string[] | undefined, callTimeoutMs = timeoutMs;
@@ -483,6 +483,8 @@ export class RelayManager {
     this.transport.because = record.because;
     this.transport.timeoutMs = input.kind === 'mcp' ? callTimeoutMs + MCP_START_ALLOWANCE_MS + 15000 : timeoutMs;
     this.transport.diagnostic = false;
+    // A cancelled run stops waiting for the receiver's answer; its outcome is then uncertain, never replayed.
+    this.transport.signal = signal;
     const options = { step: record.step, snapshots: record.snapshots, cwd: join(e.guestRoot, 'workspace') };
     let result;
     if (input.kind === 'exec' || input.kind === 'mcp') {
@@ -830,7 +832,7 @@ export class RelayManager {
     await this.save();
     await this.log('operation-failed', undefined, { error: String(error), leaseRetained: !e.released });
   }
-  private async diagnostic(input: RunInput, timeoutMs: number) {
+  private async diagnostic(input: RunInput, timeoutMs: number, signal?: AbortSignal) {
     const e = this.current();
     if (!input.argv?.length || input.snapshots?.group) throw new Error('Diagnostic exec requires argv and cannot join a snapshot group');
     const executionId = `diagnostic-${randomUUID()}`;
@@ -839,7 +841,8 @@ export class RelayManager {
     let result;
     try {
       const argv = e.staged ? ['/bin/sh', '-c', 'cd "$1" || exit; shift; exec "$@"', 'relay-diagnostic', join(e.guestRoot, 'workspace'), ...input.argv] : input.argv;
-      const r = await this.channel.exec(e.lease!.vm, argv, timeoutMs);
+      // A cancelled command stops waiting for the guest; the outcome is then uncertain.
+      const r = await this.channel.exec(e.lease!.vm, argv, timeoutMs, { signal });
       // vm-service returns one stream with stdout and stderr interleaved; report it once, as what it is.
       result = { executionId, outcome: { kind: 'completed' as const, exitStatus: { code: r.code, signal: null } }, output: r.stdout, outputStreams: 'stdout and stderr combined' };
     } catch (error) { result = { executionId, outcome: { kind: 'uncertain' as const, diagnostic: String(error) }, output: '', outputStreams: 'stdout and stderr combined' }; }

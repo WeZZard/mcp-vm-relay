@@ -20183,6 +20183,8 @@ var VmTransport = class {
   because = "";
   timeoutMs = 12e4;
   diagnostic = false;
+  /** The current run's cancellation: a cancelled dispatch stops waiting for the receiver and is reported as uncertain. */
+  signal;
   response;
   async send(request) {
     if (!this.because.trim()) throw new Error("Run execution intent is required");
@@ -20207,7 +20209,7 @@ var VmTransport = class {
         INVOKE,
         join9(this.guestRoot, "receiver.mjs"),
         remote
-      ], this.timeoutMs + 18e4 + wait);
+      ], this.timeoutMs + 18e4 + wait, { signal: this.signal });
       if (result2.code !== 0) throw new Error(`Receiver exit ${result2.code}: ${result2.stderr.slice(0, 1e3)}`);
       const guestReceipt = join9(this.guestRoot, "state", "receiver", "receipts", `${request.executionId}.json`);
       const originalReceipt = join9(this.hostRoot, "receiver-receipts", `${request.executionId}.json`);
@@ -30191,7 +30193,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
         if (!Number.isSafeInteger(timeoutMs2) || timeoutMs2 < 1 || timeoutMs2 > 36e5) throw new Error("timeoutMs must be an integer from 1 to 3600000");
         if (input.diagnostic && input.kind !== "exec") throw new Error("diagnostic is only supported for exec");
         if (e.delivered) throw new Error("Evidence already sealed; release this VM explicitly");
-        if (input.diagnostic) return this.diagnostic(input, timeoutMs2);
+        if (input.diagnostic) return this.diagnostic(input, timeoutMs2, signal);
         if (e.pendingReset) throw new Error("Recording reset is pending; retry stage to reconcile it, or use diagnostic exec");
         if (!e.staged || !this.session || !this.transport) throw new Error("Use relay_stage before a run, or relay_exec diagnostic=true for setup diagnosis and repair");
         let argv2, callTimeoutMs = timeoutMs2;
@@ -30207,6 +30209,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
         this.transport.because = record3.because;
         this.transport.timeoutMs = input.kind === "mcp" ? callTimeoutMs + MCP_START_ALLOWANCE_MS + 15e3 : timeoutMs2;
         this.transport.diagnostic = false;
+        this.transport.signal = signal;
         const options2 = { step: record3.step, snapshots: record3.snapshots, cwd: join15(e.guestRoot, "workspace") };
         let result2;
         if (input.kind === "exec" || input.kind === "mcp") {
@@ -30616,7 +30619,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
     await this.save();
     await this.log("operation-failed", void 0, { error: String(error2), leaseRetained: !e.released });
   }
-  async diagnostic(input, timeoutMs2) {
+  async diagnostic(input, timeoutMs2, signal) {
     const e = this.current();
     if (!input.argv?.length || input.snapshots?.group) throw new Error("Diagnostic exec requires argv and cannot join a snapshot group");
     const executionId = `diagnostic-${randomUUID7()}`;
@@ -30625,7 +30628,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
     let result2;
     try {
       const argv2 = e.staged ? ["/bin/sh", "-c", 'cd "$1" || exit; shift; exec "$@"', "relay-diagnostic", join15(e.guestRoot, "workspace"), ...input.argv] : input.argv;
-      const r = await this.channel.exec(e.lease.vm, argv2, timeoutMs2);
+      const r = await this.channel.exec(e.lease.vm, argv2, timeoutMs2, { signal });
       result2 = { executionId, outcome: { kind: "completed", exitStatus: { code: r.code, signal: null } }, output: r.stdout, outputStreams: "stdout and stderr combined" };
     } catch (error2) {
       result2 = { executionId, outcome: { kind: "uncertain", diagnostic: String(error2) }, output: "", outputStreams: "stdout and stderr combined" };

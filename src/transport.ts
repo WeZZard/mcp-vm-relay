@@ -20,6 +20,8 @@ export class VmTransport implements SessionTransport {
   because = '';
   timeoutMs = 120000;
   diagnostic = false;
+  /** The current run's cancellation: a cancelled dispatch stops waiting for the receiver and is reported as uncertain. */
+  signal?: AbortSignal;
   response?: FramedResponse & { stdout?: string; stderr?: string; timeoutMs?: number; evidenceMode?: string; terminationConfirmed?: boolean };
   constructor(readonly transfer: Transfer, readonly guestRoot: string, readonly hostRoot: string, readonly cuaDriver: string) {}
   async send(request: FramedRequest): Promise<FramedResponse> {
@@ -38,7 +40,7 @@ export class VmTransport implements SessionTransport {
       const result = await this.transfer.vm.exec(this.transfer.name, [
         '/usr/bin/env', `RELAY_RUNTIME_ROOT=${this.guestRoot}`, `RELAY_CUA_DRIVER=${this.cuaDriver}`, `RELAY_MCP_HOST=${join(this.guestRoot, 'mcp-host.mjs')}`,
         this.transfer.node, '-e', INVOKE, join(this.guestRoot, 'receiver.mjs'), remote,
-      ], this.timeoutMs + 180000 + wait);
+      ], this.timeoutMs + 180000 + wait, { signal: this.signal });
       if (result.code !== 0) throw new Error(`Receiver exit ${result.code}: ${result.stderr.slice(0, 1000)}`);
       const guestReceipt = join(this.guestRoot, 'state', 'receiver', 'receipts', `${request.executionId}.json`);
       const originalReceipt = join(this.hostRoot, 'receiver-receipts', `${request.executionId}.json`);

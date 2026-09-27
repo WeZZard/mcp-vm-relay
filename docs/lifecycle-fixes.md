@@ -86,6 +86,8 @@ flowchart TD
 - The diagnostic `exec` path and `VmTransport.send` pass the caller's abort signal to vm-service's `exec` request.
 - A cancelled request stops waiting for the HTTP response; it does not stop the guest process, and the result is reported as `uncertain`, which keeps the VM and is never replayed.
 - The receiver's receipt for a cancelled dispatch records the outcome as uncertain, as for any other lost response.
+- Because the guest command keeps running, an operation submitted right after a cancellation can meet the receiver lock of the cancelled one and be reported as uncertain. It is never replayed, and the VM is kept.
+- The existing test "abort during a dispatched operation retains its receipt and VM without replay" now waits for the cancelled guest command to finish before it submits the next run.
 
 ## Verification
 
