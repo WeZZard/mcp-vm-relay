@@ -130,7 +130,10 @@ class FixtureService {
     if (match[2] === 'heartbeat') {
       this.heartbeatCount++; if (this.receiverActive) this.heartbeatDuringExec.resolve();
       await this.heartbeatHook?.();
-      return this.respond(res, this.failHeartbeat ? 503 : 200, this.failHeartbeat ? { error: 'fixture heartbeat lost' } : { ...lease, ttl_hours_remaining: body.ttl_hours });
+      if (this.failHeartbeat) return this.respond(res, 503, { error: 'fixture heartbeat lost' });
+      // As vm-service does, a renewal moves the expiry to now + ttl_hours.
+      lease.ttl_expires_at = Date.now() / 1000 + body.ttl_hours * 3600;
+      return this.respond(res, 200, { ...lease, ttl_hours_remaining: body.ttl_hours });
     }
     if (match[2] === 'release') {
       this.releaseCalls++;

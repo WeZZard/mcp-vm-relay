@@ -5,7 +5,7 @@
 | Document type | Decision record and design note |
 | Scope | How the MCP server ends a session, and how `acquire`, `finish` and `release` behave at the edges of the lease lifecycle |
 | Base | Published 0.6.1 source (`bec0ba4`) |
-| Status | Decisions R1–R6 and R8 (owner decision PS-D12) are implemented with reproducer tests. R7 has a reproducer test only and waits for the owner's decision. |
+| Status | Decisions R1–R6, R8 (owner decision PS-D12) and H6 are implemented with reproducer tests. R7 has a reproducer test only and waits for the owner's decision. |
 | Authority | [Technical design, Section 5](technical-design.md#5-lease-lifecycle-persistence-and-recovery) remains the lifecycle contract. This note records the corrections made to meet it and the two points where it changes it. |
 
 ## Context
@@ -32,6 +32,7 @@
 | R6 | `release` and shutdown wait behind a guest command that cannot be cancelled. | Pass the tool call's abort signal through to the vm-service `exec` request for diagnostic commands and for the receiver dispatch, so a cancelled command stops waiting and the next queued operation can run. |
 | R7 | A failed `finish` keeps the VM. | No change; this is documented behavior. The owner decides whether a failed delivery should release. A skipped reproducer documents the current behavior. |
 | R8 | The relay state grows about 14 MiB per recorded step, and `finish` fails once the state passes 512 MiB or 10,000 files. | Resolved by owner decision PS-D12 (below): relay evidence has no size limit, so the 512 MiB / 10,000-file bound on delivering the relay state is removed. |
+| H6 | The relay acquires and renews each lease for its whole `ttlHours`, so a client that crashes leaves its VM leased for up to that whole TTL. | The relay tracks the lease's own deadline (`startedAt + ttlHours`) and renews vm-service in short windows (default 15 minutes), never past the deadline, and not at all at its end. A graceful pause sends one final renewal for the remaining TTL, so a paused VM is still retained until its TTL. Settled with the design reviewer. |
 
 ### Owner decision PS-D12: relay evidence has no size limit
 
@@ -64,7 +65,7 @@ flowchart TD
     Q -->|settles within the grace period| X["exit"]
     Q -->|grace period passes| A["abort in-flight tool calls"]
     A -->|cleanup settles within 5 s| X
-    A -->|still blocked| P["pause renewal without the queue: clear the heartbeat, write active false and renewal-paused"]
+    A -->|still blocked| P["pause renewal without the queue: clear the heartbeat, renew once for the remaining TTL (H6), write active false and renewal-paused"]
     P --> X
 ```
 
@@ -72,7 +73,7 @@ flowchart TD
 - Each tool call's signal is combined with a server-wide shutdown signal, so the server can cancel in-flight calls after the grace period.
 - `cleanup` is serialized behind the in-flight operation, so a `finish` or `release` in flight completes before renewal is paused.
 - After a completed `release` or `finish` there is no lease left to pause, so `cleanup` only releases the owner lock.
-- The direct pause after the grace period does not wait for the operation queue; it clears the heartbeat timer, writes `active: false` to `lease.json` and logs `renewal-paused`, and the process then exits.
+- The direct pause after the grace period does not wait for the operation queue; it clears the heartbeat timer, renews the lease once for its remaining TTL (H6, bounded by a 10-second request timeout), writes `active: false` to `lease.json` and logs `renewal-paused`, and the process then exits.
 - The owner lock helper exits when the parent's pipe closes, so the lock is released with the process.
 - Errors on standard output after the first one are absorbed by the same handler, so repeated failed writes cannot raise an unhandled error.
 
@@ -123,6 +124,15 @@ flowchart TD
 - When the state does not fit, the operation fails before the pull with a diagnostic that names the bytes needed, the bytes free and the shortfall. This is a precondition, not a limit: `finish` keeps the VM, so the agent can free space and call `relay_finish` again. A `release` still releases, as it does for any delivery failure, and records the diagnostic in `<package>.delivery-error.json`.
 - The guest scan hashes every byte of what it inventories, so its timeout is no longer a fixed 120 seconds. It is 120 seconds plus 125 ms per MiB (8 MiB/s of hashing). A stat-only walk sizes the tree first; a staged file's known size and the inventory taken before a pull size the scans that follow them without that walk.
 
+### Lease renewal in short windows (H6)
+
+- The lease's deadline is `startedAt + ttlHours`, computed from `lease.json`, so a restarted server keeps the same deadline.
+- `acquire` asks vm-service for the renewal window, or for the whole TTL when that is shorter. `ManagerOptions.renewalWindowMs` sets the window; the default is 15 minutes.
+- Each heartbeat renews the lesser of the window and the time left until the deadline, so no renewal reaches past it. The heartbeat interval is at most a third of the window (60 seconds by default).
+- vm-service refuses a `ttl_hours` below 0.1 hours. With less than 6 minutes left, the renewal before already ends at the deadline, so the relay stops renewing, sets `active: false` and logs `renewal-stopped`. It never releases the VM for this.
+- A graceful pause (`cleanup` for every session end, `settle`, and the last-resort `pauseNow` after the shutdown grace period) first lets an in-flight renewal land, then sends one renewal for the remaining TTL, records the confirmed expiry and logs `renewal-paused`. A failed final renewal is logged as `final-renewal-failed` and does not stop the pause.
+- The effect is that a client that crashes without a graceful pause leaves its VM leased for at most one window, plus the backend grace period, instead of the whole TTL. The README promise that a paused VM is retained until its TTL for an explicit finish or release still holds.
+
 ## Verification
 
 - Each item R1 to R6 has a reproducer test that was committed on its own and failed on the unfixed source for the stated reason, followed by a separate fix commit.
@@ -154,6 +164,11 @@ flowchart TD
 | PS-D12 host disk | `tests/evidence-merge.test.ts` | "refresh falls back to copying when incoming is on another volume, and keeps incoming" |
 | PS-D12 free space | `tests/manager.test.ts` | "finish fails before pulling the relay state when the evidence volume has too little free space, names the shortfall and keeps the VM" |
 | PS-D12 scan timeout | `tests/transfer.test.ts` | "the guest scan timeout grows with the bytes it hashes instead of a fixed 120 s" |
+| H6 | `tests/manager.test.ts` | "H6: acquire and each heartbeat ask vm-service for a 15-minute window, not the lease's whole TTL" |
+| H6 | `tests/manager.test.ts` | "H6: renewal never reaches past the lease's own deadline and stops at its end" |
+| H6 | `tests/manager.test.ts` | "H6: a graceful pause (cleanup) sends one final renewal for the lease's remaining TTL" |
+| H6 | `tests/manager.test.ts` | "H6: a graceful pause (settle) sends one final renewal for the lease's remaining TTL" |
+| H6 | `tests/lifecycle.test.ts` | "H6: closing stdin sends one final renewal for the lease's remaining TTL, after renewing only a short window" |
 
 - Run the suite with `npm run check`, which builds `dist/`, type-checks and runs `npm test`.
 - The end-to-end suite with headless Claude Code (`npm run test:e2e`) was not run for these fixes.

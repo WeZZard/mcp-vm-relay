@@ -29741,6 +29741,8 @@ function checkArguments(schema, args) {
 }
 
 // src/manager.ts
+var RENEWAL_WINDOW_MS = 15 * 6e4;
+var MIN_RENEWAL_MS = 0.1 * 36e5;
 var RELAY_RUN_OUTPUTS = "relay-run";
 var MCP_START_ALLOWANCE_MS = 6e4;
 var MAX_TOOL_IMAGES = 4;
@@ -29777,6 +29779,7 @@ var RelayManager = class {
   transport;
   timer;
   heartbeating = false;
+  renewal;
   queue = Promise.resolve();
   initialized = false;
   ownerLock;
@@ -30106,7 +30109,7 @@ var RelayManager = class {
         this.enclosure.acquisitionInFlight = true;
         await this.save();
         try {
-          this.enclosure.lease = await this.vm.acquire({ purpose, image: input.image, env: input.env ?? "none", ttl_hours: ttlHours, wait: true, ...input.vnc === void 0 ? {} : { vnc: input.vnc } }, { signal });
+          this.enclosure.lease = await this.vm.acquire({ purpose, image: input.image, env: input.env ?? "none", ttl_hours: Math.min(this.renewalWindowMs(), ttlHours * 36e5) / 36e5, wait: true, ...input.vnc === void 0 ? {} : { vnc: input.vnc } }, { signal });
           this.enclosure.acquisitionInFlight = false;
         } catch (error2) {
           if (signal?.aborted && error2 === signal.reason || error2 instanceof VmServiceError && error2.status !== void 0 && error2.status >= 400 && error2.status < 500) this.enclosure.acquisitionInFlight = false;
@@ -30130,23 +30133,58 @@ var RelayManager = class {
       }
     });
   }
+  renewalWindowMs() {
+    const ms = this.options.renewalWindowMs ?? RENEWAL_WINDOW_MS;
+    if (!Number.isFinite(ms) || ms < MIN_RENEWAL_MS) throw new Error("renewalWindowMs must be at least 0.1 hours");
+    return ms;
+  }
+  /** Milliseconds left until the lease's own deadline, startedAt + ttlHours. */
+  remainingMs(e) {
+    return Date.parse(e.startedAt) + e.ttlHours * 36e5 - Date.now();
+  }
   startHeartbeat() {
     if (this.timer || !this.enclosure?.lease) return;
+    if (this.remainingMs(this.enclosure) < MIN_RENEWAL_MS) {
+      this.enclosure.active = false;
+      return;
+    }
     this.enclosure.active = true;
-    const ms = this.options.heartbeatMs ?? Math.min(6e4, this.enclosure.ttlHours * 36e5 / 3);
+    const ms = this.options.heartbeatMs ?? Math.min(6e4, this.renewalWindowMs() / 3);
     this.timer = setInterval(() => {
       void this.heartbeat();
     }, ms);
     this.timer.unref();
   }
-  async heartbeat() {
+  heartbeat() {
     const e = this.enclosure;
-    if (!e?.lease || e.released || this.heartbeating) return;
+    if (!e?.lease || e.released || this.heartbeating) return this.renewal ?? Promise.resolve();
     this.heartbeating = true;
+    return this.renewal = this.renew(e, e.lease).finally(() => {
+      this.heartbeating = false;
+      this.renewal = void 0;
+    });
+  }
+  /** Stop renewing at the lease's own deadline; the VM is retained until the backend expires it. */
+  async stopRenewal(e) {
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = void 0;
+    }
+    if (this.enclosure !== e || e.released) return;
+    e.active = false;
+    await this.save();
+    await this.log("renewal-stopped", void 0, { reason: "the lease reached its own TTL", deadline: new Date(Date.parse(e.startedAt) + e.ttlHours * 36e5).toISOString(), expiresAt: e.expiresAt ?? e.lease?.ttl_expires_at });
+  }
+  async renew(e, lease) {
     try {
+      const remaining = this.remainingMs(e);
+      if (remaining < MIN_RENEWAL_MS) {
+        await this.stopRenewal(e);
+        return;
+      }
       this.assertBinding();
       await this.assertBackend();
-      const renewed = await this.vm.heartbeat(e.lease.vm, { ttl_hours: e.ttlHours }, { timeoutMs: 1e4 });
+      const renewed = await this.vm.heartbeat(lease.vm, { ttl_hours: Math.min(this.renewalWindowMs(), remaining) / 36e5 }, { timeoutMs: 1e4 });
       if (this.enclosure !== e || e.released) return;
       e.expiresAt = renewed.ttl_expires_at;
       e.guestState = renewed.state;
@@ -30167,8 +30205,6 @@ var RelayManager = class {
         }
       }).catch(() => {
       });
-    } finally {
-      this.heartbeating = false;
     }
   }
   async guarded(signal, fn) {
@@ -30786,10 +30822,34 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
       clearInterval(this.timer);
       this.timer = void 0;
     }
-    if (this.enclosure) {
-      this.enclosure.active = false;
+    const e = this.enclosure;
+    if (e) {
+      await this.finalRenewal(e);
+      e.active = false;
       await this.save();
-      await this.log("renewal-paused", void 0, { reason: reason2, expiresAt: this.enclosure.expiresAt ?? this.enclosure.lease?.ttl_expires_at });
+      await this.log("renewal-paused", void 0, { reason: reason2, expiresAt: e.expiresAt ?? e.lease?.ttl_expires_at });
+    }
+  }
+  /**
+   * H6: renewal renews only a short window, so pausing it renews once for the
+   * rest of the lease's own TTL, and the paused VM is retained until that TTL
+   * for an explicit finish or release. A failure is recorded, not thrown.
+   */
+  async finalRenewal(e) {
+    if (!e.lease || e.released) return;
+    await this.renewal?.catch(() => {
+    });
+    const remaining = this.remainingMs(e);
+    if (remaining < MIN_RENEWAL_MS) return;
+    try {
+      const renewed = await this.vm.heartbeat(e.lease.vm, { ttl_hours: remaining / 36e5 }, { timeoutMs: 1e4 });
+      if (this.enclosure === e && !e.released) {
+        e.expiresAt = renewed.ttl_expires_at;
+        e.guestState = renewed.state;
+      }
+    } catch (error2) {
+      await this.log("final-renewal-failed", void 0, { error: String(error2), expiresAt: e.expiresAt ?? e.lease.ttl_expires_at }).catch(() => {
+      });
     }
   }
   async settle() {

@@ -100,7 +100,7 @@ test('initialized active lease and scheduled heartbeat survive search and diagno
     while ((heartbeats.length === count || internals.heartbeating) && performance.now() < deadline) await nextTurn();
     assert.equal(heartbeats.length, count + 1);
     assert.equal(internals.heartbeating, false);
-    assert.deepEqual(heartbeats.at(-1), { ttl_hours: 2 });
+    assert.deepEqual(heartbeats.at(-1), { ttl_hours: 0.25 }, 'renewal asks for the 15-minute window (H6), not the 2-hour TTL');
     await unchanged();
   };
   await pulse();

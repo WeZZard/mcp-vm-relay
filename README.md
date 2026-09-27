@@ -49,7 +49,7 @@ adds nothing Claude-Code-specific beyond the marketplace packaging and the
 | `/relay-status`, `/relay-trajectory` commands | `/mcp-vm-relay-status` and `/mcp-vm-relay-trajectory` in pi, `/mcp-vm-relay:status` and `/mcp-vm-relay:trajectory` in Claude Code; each asks the assistant to call `relay_status` or `relay_trajectory` |
 | prompt-composed enclosure | the `vm-relay-operator` agent definition (Claude Code only), limited to the relay's tools and read-only file tools |
 | typed image blocks in a run result, with pi's `tool_result` hook keeping the error flag | MCP image content blocks in the tool result, with the MCP `isError` flag set beside them |
-| session shutdown pauses lease renewal | the same when the server's stdio closes or it is signalled: renewal pauses, the recording detaches, the VM is retained for an explicit `relay_finish` or `relay_release`, and the vm-service TTL is the backstop |
+| session shutdown pauses lease renewal | the same when the server's stdio closes or it is signalled: renewal pauses after one final renewal for the rest of the lease's TTL, the recording detaches, the VM is retained until that TTL for an explicit `relay_finish` or `relay_release`, and the vm-service TTL is the backstop |
 | the settled agent pauses renewal | none: MCP has no such hook, so the instructions and each run tool's description say "finish or release before you return" |
 
 ## Install
@@ -187,7 +187,8 @@ tarball it checked.
 - One server session owns at most one VM. Another task needs a separate acquisition.
 - An operation failure retains the VM so the agent can inspect, repair and submit a new operation. Failed and uncertain operations are never automatically replayed.
 - Use `finish` to deliver evidence and release, or `release` to abandon explicitly. A declared output that was never produced is recorded as incomplete (`incompleteExtractions`) rather than failing `finish`. A failed delivery retains the VM; a release failure retains ownership until destruction is verified.
-- When the session ends (the client closes the server's standard input, a write to its standard output fails, or it is signalled), lease renewal pauses and the recording detaches; the VM is not destroyed. A `finish` or `release` already in flight completes first, for up to the shutdown grace period; after that the operation is cancelled and renewal pauses without it. The backend TTL and grace period handle abandoned leases. Status reports the last confirmed expiration time.
+- When the session ends (the client closes the server's standard input, a write to its standard output fails, or it is signalled), the relay renews the lease once for the rest of its TTL, then renewal pauses and the recording detaches; the VM is not destroyed and is retained until its TTL for an explicit finish or release. A `finish` or `release` already in flight completes first, for up to the shutdown grace period; after that the operation is cancelled and renewal pauses without it. The backend TTL and grace period handle abandoned leases. Status reports the last confirmed expiration time.
+- While the session is live, the relay tracks the lease's own deadline (its start plus `ttlHours`) and renews vm-service only 15 minutes ahead at a time, never past that deadline, and stops renewing at it. A client that crashes without ending its session therefore leaves its VM leased for at most about 15 minutes, plus the backend's grace period, rather than its whole TTL.
 - A restarted server with the same `MCP_VM_RELAY_SESSION` reconciles its durable ownership and reattaches the recording session without replaying prior work. Context compaction does not reset VM state; `probe` reports the owned state without relying on earlier messages.
 - A run tool's `timeoutMs` defaults to 120,000 ms and accepts integers up to 3,600,000 ms. It bounds command execution, not the snapshot delay or the lease lifetime. A timeout reports confirmed termination or uncertainty and keeps the VM available.
 - `relay_exec` with `diagnostic: true` records command diagnosis or repair without screenshots, for explicitly requested diagnosis when capture is unavailable. Before staging it runs through vm-service in the guest's default directory; after staging in the recording workspace. It cannot join a snapshot group and is not visual verification.
@@ -317,8 +318,8 @@ as command-only steps without screenshots. `finish` verifies the package before
 destroying the VM; a failed delivery removes only the derived files it created
 and retains the VM for a corrected attempt. Cleanup checks the read-only host
 Tart inventory (the selected one, when an environment is selected) before
-claiming destruction. Leases default to 4 hours with a heartbeat; the
-vm-service reaper is the final backstop for process death.
+claiming destruction. Leases default to 4 hours, renewed 15 minutes at a
+time up to that TTL; the vm-service reaper is the final backstop for process death.
 
 Relay evidence has no size limit (owner decision PS-D12): screenshots are
 delivered as captured, never scaled, compressed, deduplicated or budgeted, and
