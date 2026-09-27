@@ -4,6 +4,20 @@ import { mkdir, readFile, rename, writeFile, lstat, readdir, open } from 'node:f
 import { dirname, join, resolve, relative, isAbsolute } from 'node:path';
 
 export const hash = (bytes: string | Buffer) => createHash('sha256').update(bytes).digest('hex');
+/** Hash a file in chunks, so a file of any size can be hashed (one read is limited to 2 GiB). */
+export async function hashFile(path: string): Promise<{ sha256: string; bytes: number }> {
+  const file = await open(path, 'r');
+  try {
+    const digest = createHash('sha256'), chunk = Buffer.alloc(8 * 1024 * 1024);
+    let bytes = 0;
+    for (;;) {
+      const { bytesRead } = await file.read(chunk, 0, chunk.length, null);
+      if (!bytesRead) break;
+      digest.update(chunk.subarray(0, bytesRead)); bytes += bytesRead;
+    }
+    return { sha256: digest.digest('hex'), bytes };
+  } finally { await file.close(); }
+}
 export async function jsonFile(path: string, value: unknown) {
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   const tmp = `${path}.${randomUUID()}.tmp`;
@@ -28,8 +42,8 @@ export async function inventory(root: string): Promise<Array<{ path: string; sha
     if (info.isDirectory()) {
       for (const name of (await readdir(path)).sort()) await walk(join(path, name));
     } else if (info.isFile()) {
-      const bytes = await readFile(path);
-      result.push({ path: relative(root, path), sha256: hash(bytes), bytes: bytes.length });
+      const { sha256, bytes } = await hashFile(path);
+      result.push({ path: relative(root, path), sha256, bytes });
     } else throw new Error(`Not a regular file: ${path}`);
   }
   await walk(root);

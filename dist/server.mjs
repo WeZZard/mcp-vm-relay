@@ -19606,9 +19606,25 @@ import { randomUUID as randomUUID3 } from "node:crypto";
 // src/util.ts
 import { spawn as spawn3 } from "node:child_process";
 import { createHash as createHash3, randomUUID as randomUUID2 } from "node:crypto";
-import { mkdir as mkdir3, readFile as readFile5, rename as rename3, lstat as lstat2, readdir as readdir3, open as open3 } from "node:fs/promises";
+import { mkdir as mkdir3, rename as rename3, lstat as lstat2, readdir as readdir3, open as open3 } from "node:fs/promises";
 import { dirname as dirname4, join as join7, resolve as resolve4, relative as relative3, isAbsolute as isAbsolute3 } from "node:path";
 var hash = (bytes) => createHash3("sha256").update(bytes).digest("hex");
+async function hashFile(path) {
+  const file = await open3(path, "r");
+  try {
+    const digest = createHash3("sha256"), chunk = Buffer.alloc(8 * 1024 * 1024);
+    let bytes = 0;
+    for (; ; ) {
+      const { bytesRead } = await file.read(chunk, 0, chunk.length, null);
+      if (!bytesRead) break;
+      digest.update(chunk.subarray(0, bytesRead));
+      bytes += bytesRead;
+    }
+    return { sha256: digest.digest("hex"), bytes };
+  } finally {
+    await file.close();
+  }
+}
 async function jsonFile(path, value) {
   await mkdir3(dirname4(path), { recursive: true, mode: 448 });
   const tmp = `${path}.${randomUUID2()}.tmp`;
@@ -19642,8 +19658,8 @@ async function inventory(root) {
     if (info.isDirectory()) {
       for (const name of (await readdir3(path)).sort()) await walk(join7(path, name));
     } else if (info.isFile()) {
-      const bytes = await readFile5(path);
-      result2.push({ path: relative3(root, path), sha256: hash(bytes), bytes: bytes.length });
+      const { sha256, bytes } = await hashFile(path);
+      result2.push({ path: relative3(root, path), sha256, bytes });
     } else throw new Error(`Not a regular file: ${path}`);
   }
   await walk(root);
@@ -19684,7 +19700,8 @@ async function command(argv2, options2 = {}) {
 }
 
 // src/transfer.ts
-var MAX_BYTES = 512 * 1024 * 1024;
+var STAGING_MAX_BYTES = 512 * 1024 * 1024;
+var STAGING_MAX_FILES = 1e4;
 var MAX_IMAGE_BYTES = 64 * 1024 * 1024;
 var MAX_IMAGE_METADATA_BYTES = 4 * 1024 * 1024;
 var ImageTransferError = class extends Error {
@@ -19733,9 +19750,10 @@ async function assertHostPath(root, target2, allowMissing = false) {
   }
 }
 var GUEST_PATH = `function check(root,target,missing=false){root=p.resolve(root);target=p.resolve(target);const rel=p.relative(root,target);if(rel==='..'||rel.startsWith('../')||p.isAbsolute(rel))throw Error('Path must be inside '+root+': '+target);let f=root;for(const part of ['',...(rel?rel.split('/'):[])]){if(part)f=p.join(f,part);try{if(fs.lstatSync(f).isSymbolicLink())throw Error('symlink ancestor '+f);}catch(e){if(missing&&e.code==='ENOENT')return;throw e;}}}`;
+var GUEST_DIGEST = `function digest(f,size){const fd=fs.openSync(f,'r');try{const h=c.createHash('sha256'),b=Buffer.alloc(8388608);let n=0,r;while((r=fs.readSync(fd,b,0,b.length,null))>0){h.update(b.subarray(0,r));n+=r;}if(n!==size)throw Error('Source changed during inventory');return h.digest('hex');}finally{fs.closeSync(fd);}}`;
 var PREPARE = `const fs=require('fs'),p=require('path');${GUEST_PATH}const [root,target]=process.argv.slice(1);check(root,target,true);fs.mkdirSync(p.dirname(target),{recursive:true,mode:448});check(root,target,true);`;
-var SCAN = `const fs=require('fs'),p=require('path'),c=require('crypto');${GUEST_PATH}const [root,approved,frame,frameRoot]=process.argv.slice(1),out=[];let total=0;check(approved,root);function walk(f){let s=fs.lstatSync(f);if(s.isSymbolicLink())throw Error('symlink '+f);if(s.isDirectory()){for(const n of fs.readdirSync(f).sort())walk(p.join(f,n));}else if(s.isFile()){total+=s.size;if(total>536870912||out.length>=10000)throw Error('extraction exceeds 512MiB / 10000 files');const b=fs.readFileSync(f);if(b.length!==s.size)throw Error('Source changed during inventory');out.push({path:p.relative(root,f),sha256:c.createHash('sha256').update(b).digest('hex'),bytes:b.length});}else throw Error('special file '+f);}walk(root);check(approved,root);check(frameRoot,frame,true);fs.mkdirSync(p.dirname(frame),{recursive:true,mode:448});check(frameRoot,frame,true);const b=Buffer.from(JSON.stringify(out));fs.writeFileSync(frame,b,{flag:'wx',mode:384});console.log(JSON.stringify({path:frame,sha256:c.createHash('sha256').update(b).digest('hex'),bytes:b.length}));`;
-var FILE_FACT = `const fs=require('fs'),p=require('path'),c=require('crypto');${GUEST_PATH}const [root,file]=process.argv.slice(1);check(root,file);const s=fs.lstatSync(file);if(!s.isFile()||s.size>536870912)throw Error('Invalid frame file');const b=fs.readFileSync(file);if(b.length!==s.size)throw Error('Source changed during inventory');check(root,file);console.log(JSON.stringify({path:file,sha256:c.createHash('sha256').update(b).digest('hex'),bytes:b.length}));`;
+var SCAN = `const fs=require('fs'),p=require('path'),c=require('crypto');${GUEST_PATH}${GUEST_DIGEST}const [root,approved,frame,frameRoot]=process.argv.slice(1),out=[];check(approved,root);function walk(f){let s=fs.lstatSync(f);if(s.isSymbolicLink())throw Error('symlink '+f);if(s.isDirectory()){for(const n of fs.readdirSync(f).sort())walk(p.join(f,n));}else if(s.isFile()){out.push({path:p.relative(root,f),sha256:digest(f,s.size),bytes:s.size});}else throw Error('special file '+f);}walk(root);check(approved,root);check(frameRoot,frame,true);fs.mkdirSync(p.dirname(frame),{recursive:true,mode:448});check(frameRoot,frame,true);const b=Buffer.from(JSON.stringify(out));fs.writeFileSync(frame,b,{flag:'wx',mode:384});console.log(JSON.stringify({path:frame,sha256:c.createHash('sha256').update(b).digest('hex'),bytes:b.length}));`;
+var FILE_FACT = `const fs=require('fs'),p=require('path'),c=require('crypto');${GUEST_PATH}${GUEST_DIGEST}const [root,file]=process.argv.slice(1);check(root,file);const s=fs.lstatSync(file);if(!s.isFile())throw Error('Invalid frame file');const sha256=digest(file,s.size);check(root,file);console.log(JSON.stringify({path:file,sha256,bytes:s.size}));`;
 var REMOVE_FRAME = `const fs=require('fs'),p=require('path');${GUEST_PATH}const [root,file]=process.argv.slice(1);check(root,file,true);fs.rmSync(file,{force:true});`;
 var IMAGE_FACT = `const fs=require('fs'),p=require('path'),c=require('crypto');${GUEST_PATH}
 const [root,file,limit='67108864',kind='image']=process.argv.slice(1);
@@ -19760,7 +19778,7 @@ try {
 }catch(e){console.log(JSON.stringify({error:e.imageCode||(e.code==='ENOENT'?'image-missing':/symlink|Path must be inside|ELOOP|ENOTDIR/.test(e.message)?'unsafe-path':'transfer-failed'),message:e.message}));}`;
 function validFact(value) {
   const f = value;
-  return !!f && typeof f === "object" && typeof f.path === "string" && typeof f.sha256 === "string" && /^[a-f0-9]{64}$/.test(f.sha256) && Number.isSafeInteger(f.bytes) && f.bytes >= 0 && f.bytes <= MAX_BYTES;
+  return !!f && typeof f === "object" && typeof f.path === "string" && typeof f.sha256 === "string" && /^[a-f0-9]{64}$/.test(f.sha256) && Number.isSafeInteger(f.bytes) && f.bytes >= 0;
 }
 var Transfer = class {
   constructor(vm, name, node2, options2 = {}) {
@@ -19802,7 +19820,7 @@ var Transfer = class {
     await assertHostPath(approvedLocalRoot, local);
     const info = await lstat3(local);
     if (!info.isFile()) throw new Error(`Expected regular file: ${local}`);
-    if (info.size > MAX_BYTES) throw new Error("Staging exceeds 512 MiB");
+    if (info.size > STAGING_MAX_BYTES) throw new Error("Staging exceeds 512 MiB");
     const bytes = await readFile6(local), before = hash(bytes);
     const guestRoot = this.options.guestRoot ?? dirname5(remote);
     await this.checked([this.node, "-e", PREPARE, guestRoot, remote]);
@@ -19820,7 +19838,7 @@ var Transfer = class {
   async pushTree(local, remote, approvedLocalRoot = local) {
     await assertHostPath(approvedLocalRoot, local);
     const files = await inventory(local);
-    if (files.length > 1e4 || files.reduce((sum, file) => sum + file.bytes, 0) > MAX_BYTES) throw new Error("Staging exceeds 512MiB / 10000 files");
+    if (files.length > STAGING_MAX_FILES || files.reduce((sum, file) => sum + file.bytes, 0) > STAGING_MAX_BYTES) throw new Error("Staging exceeds 512MiB / 10000 files");
     const result2 = [];
     for (const file of files) {
       const staged = await this.pushFile(within(local, file.path), within(remote, file.path), approvedLocalRoot);
@@ -20100,17 +20118,14 @@ var Transfer = class {
       const fact = JSON.parse(await this.checked([this.node, "-e", SCAN, remote, approvedRoot, frame, guestRoot], 12e4));
       if (!validFact(fact) || fact.path !== frame) throw new Error("Invalid remote inventory frame");
       const result2 = JSON.parse((await this.pullFrame(frame, join8(hostDirectory, "inventory.json"), guestRoot, tempRoot, fact)).toString("utf8"));
-      if (!Array.isArray(result2) || result2.length > 1e4) throw new Error("Invalid remote inventory");
-      let total = 0;
+      if (!Array.isArray(result2)) throw new Error("Invalid remote inventory");
       const paths2 = /* @__PURE__ */ new Set();
       for (const file of result2) {
         if (!validFact(file) || paths2.has(file.path)) throw new Error("Invalid remote file fact");
         if (file.path) within("/inventory", file.path);
         else if (result2.length !== 1) throw new Error("Invalid remote inventory root file");
         paths2.add(file.path);
-        total += file.bytes;
       }
-      if (total > MAX_BYTES) throw new Error("Extraction exceeds 512 MiB");
       return result2;
     } finally {
       try {
@@ -20136,8 +20151,8 @@ var Transfer = class {
       await this.guestPath(approvedRoot, remote);
       await assertHostPath(localRoot, local);
       if (!(await lstat3(local)).isFile()) throw new Error("Invalid extraction file");
-      const bytes = await readFile6(local);
-      if (hash(bytes) !== before[0].sha256 || bytes.length !== before[0].bytes) throw new Error(`Extraction checksum mismatch: ${remote}`);
+      const pulled = await hashFile(local);
+      if (pulled.sha256 !== before[0].sha256 || pulled.bytes !== before[0].bytes) throw new Error(`Extraction checksum mismatch: ${remote}`);
     } else {
       await mkdir4(local, { recursive: true, mode: 448 });
       for (const file of before) {

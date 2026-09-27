@@ -5,7 +5,7 @@
 | Document type | Decision record and design note |
 | Scope | How the MCP server ends a session, and how `acquire`, `finish` and `release` behave at the edges of the lease lifecycle |
 | Base | Published 0.6.1 source (`bec0ba4`) |
-| Status | Decisions R1–R6 are implemented with reproducer tests. R8 is decided by owner decision PS-D12, and its implementation follows the reproducer. R7 has a reproducer test only and waits for the owner's decision. |
+| Status | Decisions R1–R6 and R8 (owner decision PS-D12) are implemented with reproducer tests. R7 has a reproducer test only and waits for the owner's decision. |
 | Authority | [Technical design, Section 5](technical-design.md#5-lease-lifecycle-persistence-and-recovery) remains the lifecycle contract. This note records the corrections made to meet it and the two points where it changes it. |
 
 ## Context
@@ -104,12 +104,22 @@ flowchart TD
 - Because the guest command keeps running, an operation submitted right after a cancellation can meet the receiver lock of the cancelled one and be reported as uncertain. It is never replayed, and the VM is kept.
 - The existing test "abort during a dispatched operation retains its receipt and VM without replay" now waits for the cancelled guest command to finish before it submits the next run.
 
+### Relay state of any size
+
+- The guest inventory walks the relay state without a total-size or file-count bound, and it hashes each file in chunks, so a single file larger than one Node.js read (2 GiB) is inventoried too.
+- The host inventory and the single-file pull check hash in chunks for the same reason.
+- The inventory frame, the list of file facts, has no count limit; it still travels as a hashed file and never on the `exec` output.
+- `pushFile` and `pushTree` keep the 512 MiB and 10,000-file bound, because that bound limits what a client stages into the guest, not the evidence.
+- The 64 MiB check on one image original (`src/transfer.ts`, `src/images.ts`, `src/guest/receiver.ts`) is unchanged.
+
 ## Verification
 
 - Each item R1 to R6 has a reproducer test that was committed on its own and failed on the unfixed source for the stated reason, followed by a separate fix commit.
 - The server tests start the built `dist/server.mjs` against an in-process fake vm-service or a closed port, with a temporary state directory, registry, project and home directory, and a fake `tart` script.
 - The tests never use a real VM, the live vm-service, the real Tart or `vmctl`.
-- The reproducers for R3 (session identity), R7 and R8 are marked `todo` with the note "waiting for the owner's decision", and they assert the current behavior.
+- The reproducers for R3 (session identity) and R7 are marked `todo` with the note "waiting for the owner's decision", and they assert the current behavior.
+- The R8 reproducer was a `todo` test until owner decision PS-D12; it now asserts the decision and failed on the source before the bound was removed.
+- The R7 reproducer makes packaging fail with an injected corrupt pull of a state file, because an oversized state no longer fails.
 
 | Item | Test file | Test |
 |---|---|---|
@@ -125,7 +135,9 @@ flowchart TD
 | R6 | `tests/manager.test.ts` | "R6: release does not wait behind a cancelled diagnostic command whose guest answer never comes" |
 | R6 | `tests/manager.test.ts` | "R6: release does not wait behind a cancelled recorded run whose receiver answer never comes" |
 | R7 (todo) | `tests/manager.test.ts` | "R7 (owner decision): a finish whose packaging fails keeps the VM and does not release it" |
-| R8 (todo) | `tests/transfer.test.ts` | "R8 (owner decision): relay state of about 14 MiB per recorded step passes the 512 MiB transfer bound at step 37, so packaging fails" |
+| R8 | `tests/transfer.test.ts` | "R8 (PS-D12): relay state of about 14 MiB per recorded step scans and pulls past 512 MiB at step 37" |
+| R8 | `tests/transfer.test.ts` | "file framing scans more than 10000 files: delivering relay evidence has no file-count bound (PS-D12)" |
+| R8 | `tests/transfer.test.ts` | "remote inventory scans a file over 512 MiB, and over one Node.js read, without carrying its bytes; it rejects special files" |
 
 - Run the suite with `npm run check`, which builds `dist/`, type-checks and runs `npm test`.
 - The end-to-end suite with headless Claude Code (`npm run test:e2e`) was not run for these fixes.
