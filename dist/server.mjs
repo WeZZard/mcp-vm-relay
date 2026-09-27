@@ -20288,7 +20288,7 @@ var size = (bytes) => bytes >= 1e6 ? `${(bytes / 1e6).toFixed(1)} MB` : bytes >=
 var noun = (count, word) => count === 1 ? word : `${word}s`;
 var plural = (count, word) => `${count} ${noun(count, word)}`;
 var erred = (step2) => tone(step2.execution) !== "ok";
-var tone = (value) => ["passed", "complete", "completed"].includes(value) ? "ok" : ["failed", "refused"].includes(value) ? "bad" : value === "pending" ? "pend" : "warn";
+var tone = (value) => ["passed", "complete", "completed"].includes(value) ? "ok" : ["failed", "refused"].includes(value) ? "bad" : "warn";
 var verdict = (value) => `<span class="verdict ${tone(value)}"><i aria-hidden="true"></i>${escapeHtml(value)}</span>`;
 var shellWord = (word) => /^[\w@%+=:,./-]+$/.test(word) ? word : `'${word.replace(/'/g, `'\\''`)}'`;
 function chronological(model) {
@@ -20371,7 +20371,7 @@ function stage(step2, detail, number3, around) {
 <nav class="seg" aria-label="Snapshot view"><a class="s-compare" href="${escapeHtml(link2(step2))}">Compare</a><a class="s-before" href="${href("--before")}">Before</a><a class="s-after" href="${href("--after")}">After</a>${gap ? `<span class="gap" title="Time between the before and after snapshots">${gap}</span>` : ""}</nav>
 ${arrows}<div class="views"><div class="view v-compare">${shot(step2, detail, "before")}${shot(step2, detail, "after")}</div><div class="view v-before" id="${escapeHtml(`${id2}--before`)}">${shot(step2, detail, "before")}</div><div class="view v-after" id="${escapeHtml(`${id2}--after`)}">${shot(step2, detail, "after")}</div></div></section>`;
 }
-function panel(step2, detail, number3, total) {
+function panel(step2, detail, number3, total, concerns) {
   const { headline, command: command2, reasonShown, kind } = describe2(step2, detail);
   const interval2 = step2.snapshots?.declaredAfterIntervalMs;
   const at = time3(detail?.at);
@@ -20379,6 +20379,7 @@ function panel(step2, detail, number3, total) {
   return `<aside class="panel" aria-label="Step ${number3} details"><div class="panel-scroll">
 <p class="eyebrow"><span>Step ${number3} <span class="of">of ${String(total).padStart(2, "0")}</span></span><span>${kind}</span>${at ? `<time>${at} UTC</time>` : ""}<a class="permalink" href="${escapeHtml(link2(step2))}" title="Stable link to this step" aria-label="Stable link to step ${number3}">${linkIcon}</a></p>
 <h2>${escapeHtml(headline)}</h2><p class="state"><span class="sr">Execution: </span>${verdict(step2.execution)}</p>
+${concerns.length ? `<section class="concern"><h3>Why this step affects the verdicts</h3><ul>${concerns.map((c) => `<li><span class="label">${escapeHtml(c.verdict)}</span><p>${escapeHtml(c.text)}</p></li>`).join("")}</ul></section>` : ""}
 ${reasonShown ? `<section class="block"><h3>Reason</h3><p>${escapeHtml(step2.because ?? "Not present in retained host metadata")}</p></section>` : ""}
 ${command2 && step2.snapshots ? `<section class="block"><h3>Command</h3><pre class="command">${escapeHtml(command2)}</pre></section>` : ""}
 <section class="block"><h3>Expected</h3><p>${escapeHtml(step2.expected || "Not supplied")}</p></section>
@@ -20387,13 +20388,13 @@ ${command2 && step2.snapshots ? `<section class="block"><h3>Command</h3><pre cla
 </div></aside>`;
 }
 var linkIcon = `<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M6.6 9.4l2.8-2.8M7.2 4.6l.9-.9a2.8 2.8 0 0 1 4 4l-.9.9M8.8 11.4l-.9.9a2.8 2.8 0 0 1-4-4l.9-.9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
-function thumb(step2, detail, number3) {
+function thumb(step2, detail, number3, flagged) {
   const { headline, command: command2 } = describe2(step2, detail);
   const image = step2.snapshots?.after ?? step2.snapshots?.before;
   const face = image ? `<img loading="lazy" alt="" src="${src(image)}">` : `<pre aria-hidden="true"><span class="prompt">$</span>${escapeHtml(command2 ?? headline)}</pre>`;
-  return `<li class="${tone(step2.execution)}${step2.inputMode === "diagnostic" ? " diagnostic" : ""}${erred(step2) ? " err" : ""}"><a href="${escapeHtml(link2(step2))}" title="${escapeHtml(headline)}"><span class="face${image ? "" : " text"}">${face}</span><span class="cap"><span class="n">${number3}</span><i class="dot" aria-hidden="true"></i><span class="t">${escapeHtml(headline)}</span></span><span class="sr">${escapeHtml(step2.execution)}</span></a></li>`;
+  return `<li class="${tone(step2.execution)}${step2.inputMode === "diagnostic" ? " diagnostic" : ""}${erred(step2) ? " err" : ""}"><a href="${escapeHtml(link2(step2))}" title="${escapeHtml(headline)}"><span class="face${image ? "" : " text"}">${face}${flagged ? `<span class="flag" title="This step affects the verdicts">!</span>` : ""}</span><span class="cap"><span class="n">${number3}</span><i class="dot" aria-hidden="true"></i><span class="t">${escapeHtml(headline)}</span></span><span class="sr">${escapeHtml(step2.execution)}</span></a></li>`;
 }
-var keys = `(()=>{const steps=()=>[...document.querySelectorAll(".center>.step:not(.overview)")];const current=()=>{let el=null;try{el=document.getElementById(decodeURIComponent(location.hash.slice(1)))}catch{}const step=el&&el.closest(".step");return step?steps().indexOf(step):0};const focused=()=>{const f=document.getElementById("focus-errors");return!!(f&&f.checked)};let last="";const reveal=()=>{const i=current();if(i>=0)last=location.hash;const li=document.querySelectorAll(".track li")[i];if(li)li.scrollIntoView({block:"nearest",inline:"nearest"})};document.addEventListener("keydown",e=>{if(e.defaultPrevented||e.altKey||e.ctrlKey||e.metaKey||e.shiftKey)return;const t=e.target;if(t instanceof HTMLElement&&(t.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)))return;const d=e.key==="ArrowRight"?1:e.key==="ArrowLeft"?-1:0;if(!d)return;const all=steps();let j=current();if(j<0){if(d<0)return;j=-1}do j+=d;while(j>=0&&j<all.length&&focused()&&!all[j].classList.contains("err"));if(j<0||j>=all.length)return;e.preventDefault();location.hash=encodeURIComponent(all[j].id)});const tab=document.querySelector(".tabs .t-traj");if(tab)tab.addEventListener("click",e=>{if(last){e.preventDefault();location.hash=last}});addEventListener("hashchange",reveal);reveal()})();`;
+var keys = `(()=>{const steps=()=>[...document.querySelectorAll(".center>.step:not(.overview)")];const current=()=>{let el=null;try{el=document.getElementById(decodeURIComponent(location.hash.slice(1)))}catch{}const step=el&&el.closest(".step");return step?steps().indexOf(step):0};const focused=()=>{const f=document.getElementById("focus-errors");return!!(f&&f.checked)};let last="";const reveal=()=>{const i=current();if(i>=0)last=location.hash;const li=document.querySelectorAll(".track li")[i];if(li)li.scrollIntoView({block:"nearest",inline:"nearest"})};document.addEventListener("keydown",e=>{if(e.defaultPrevented||e.altKey||e.ctrlKey||e.metaKey||e.shiftKey)return;const t=e.target;if(t instanceof HTMLElement&&(t.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)))return;const d=e.key==="ArrowRight"?1:e.key==="ArrowLeft"?-1:0;if(!d)return;const all=steps();let j=current();if(j<0){if(d<0)return;j=-1}do j+=d;while(j>=0&&j<all.length&&focused()&&!all[j].classList.contains("err"));if(j<0||j>=all.length)return;e.preventDefault();location.hash=encodeURIComponent(all[j].id)});const tab=document.querySelector(".tabs .t-traj");if(tab)tab.addEventListener("click",e=>{if(last){e.preventDefault();location.hash=last}});addEventListener("hashchange",()=>{try{document.querySelectorAll(":popover-open").forEach(p=>p.hidePopover())}catch{}reveal()});reveal()})();`;
 var keysPolicy = `'sha256-${createHash4("sha256").update(keys).digest("base64")}'`;
 var selection = (count) => !count ? "" : Array.from({ length: count }, (_, i) => `.app:has(.center>.step:nth-of-type(${i + 1}):target) .track li:nth-child(${i + 1}) a,.app:has(.center>.step:nth-of-type(${i + 1}) :target) .track li:nth-child(${i + 1}) a`).join(",") + ",.app:not(:has(.center :target)) .track li:first-child a{background:var(--s2)}" + Array.from({ length: count }, (_, i) => `.app:has(.center>.step:nth-of-type(${i + 1}):target) .track li:nth-child(${i + 1}) .face,.app:has(.center>.step:nth-of-type(${i + 1}) :target) .track li:nth-child(${i + 1}) .face`).join(",") + ",.app:not(:has(.center :target)) .track li:first-child .face{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--accent),0 0 18px var(--ring)}";
 function renderReviewPage(model) {
@@ -20402,6 +20403,9 @@ function renderReviewPage(model) {
   const times = steps.map((s) => Date.parse(model.details.get(s.id)?.at ?? "")).filter(Number.isFinite);
   const diagnostics = steps.filter((s) => s.inputMode === "diagnostic").length, actions = steps.length - diagnostics;
   const errors = steps.filter(erred).length;
+  const concerns = /* @__PURE__ */ new Map();
+  for (const [key, label] of [["snapshots", `Snapshots ${model.completeness}`], ["execution", `Execution ${model.execution}`]])
+    for (const reason2 of model.reasons[key]) for (const id2 of reason2.stepIds) concerns.set(id2, [...concerns.get(id2) ?? [], { verdict: label, text: reason2.text }]);
   const title = /^relay-(.+)-[0-9a-f]{8}$/.exec(model.taskId)?.[1] ?? model.taskId;
   const uuid2 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
   const byName = /* @__PURE__ */ new Map();
@@ -20415,36 +20419,41 @@ function renderReviewPage(model) {
     return `<details class="group"${model.outputs.length <= 12 ? " open" : ""}><summary><span class="where">${escapeHtml(declared)}</span><span class="count">${plural(files.length, "file")} \xB7 ${size(total)}</span></summary>${others.length ? `<ul class="flist">${others.map((f) => `<li><a href="${src(f.path)}">${escapeHtml(f.label)}</a><span>${size(f.bytes)}</span></li>`).join("")}</ul>` : ""}${images.length ? `<div class="gallery">${images.map((f) => `<a class="gthumb" href="${src(f.path)}"><img loading="lazy" alt="${escapeHtml(f.label)}" src="${src(f.path)}"><span>${escapeHtml(f.label.split("/").at(-1))}<small>${size(f.bytes)}</small></span></a>`).join("")}</div>` : ""}</details>`;
   }).join("");
   const stat2 = (label, value) => `<li><b>${value}</b>${label ? ` <span>${label}</span>` : ""}</li>`;
-  const pill = (label, value) => `<li class="pill ${tone(value)}"><span>${label}</span>${verdict(value)}</li>`;
+  const merged = (reasons) => [...reasons.reduce((all, r) => all.set(r.text, [.../* @__PURE__ */ new Set([...all.get(r.text) ?? [], ...r.stepIds])]), /* @__PURE__ */ new Map())].map(([text4, stepIds]) => ({ text: text4, stepIds }));
+  const stepLinks = (ids) => ids.map((id2) => `<a href="${escapeHtml(`#step-${encodeURIComponent(id2)}`)}">Step ${numbers.get(id2) ?? "?"}</a>`).join("");
+  const reasonList = (reasons) => `<ul class="reasons">${merged(reasons).map((r) => `<li><p>${escapeHtml(r.text)}</p>${r.stepIds.length ? `<p class="steps">${stepLinks(r.stepIds)}</p>` : ""}</li>`).join("")}</ul>`;
+  const why = (key, value) => key === "snapshots" ? `Why snapshots are ${value}` : value === "failed" ? "Why execution failed" : `Why execution is ${value}`;
+  const pill = (key, label, value) => model.reasons[key].length ? `<li class="pill ${tone(value)}"><button type="button" popovertarget="why-${key}" title="${why(key, value)}"><span>${label}</span>${verdict(value)}<span class="q" aria-hidden="true">?</span></button><div class="why" id="why-${key}" popover><h3>${why(key, value)}</h3>${reasonList(model.reasons[key])}</div></li>` : `<li class="pill ${tone(value)}"><span>${label}</span>${verdict(value)}</li>`;
+  const verdictBlock = (key, label, value, fine) => `<div class="vblock"><h4>${label} ${verdict(value)}</h4>${model.reasons[key].length ? `<p class="vwhy">${why(key, value)}:</p>${reasonList(model.reasons[key])}` : `<p class="quiet">${fine}</p>`}</div>`;
   const overview = `<article class="step overview" id="overview"><section class="stage doc" aria-label="Package overview"><div class="doc-in">
 <h2>Overview</h2><p class="lede">Delivery integrity is separate from execution success. Snapshots are dispatch-time evidence, not continuous video: each shows the screen just before a step was sent and shortly after it returned.</p>
-<section class="block"><h3>Findings \xB7 ${model.findings.length}</h3>${model.findings.length ? `<ul class="findings">${groupFindings(model.findings).map((g) => `<li>${g.ids.length ? `<details><summary>${escapeHtml(g.text)}</summary><code>${g.ids.map(escapeHtml).join("<br>")}</code></details>` : escapeHtml(g.text)}</li>`).join("")}</ul>` : `<p class="quiet">No findings.</p>`}</section>
+<section class="block"><h3>Verdicts</h3>${verdictBlock("snapshots", "Snapshots", model.completeness, "Every snapshot the steps declared is present and tied to its step.")}${verdictBlock("execution", "Execution", model.execution, "Every step completed, and every retained receipt confirms it.")}</section>
+<section class="block"><h3>Findings as recorded \xB7 ${model.findings.length}</h3>${model.findings.length ? `<ul class="findings">${groupFindings(model.findings).map((g) => `<li>${g.ids.length ? `<details><summary>${escapeHtml(g.text)}</summary><code>${g.ids.map(escapeHtml).join("<br>")}</code></details>` : escapeHtml(g.text)}</li>`).join("")}</ul>` : `<p class="quiet">No findings.</p>`}</section>
 <section class="block"><h3>Declared outputs \xB7 ${model.outputs.length}</h3>${outputs ? `<div class="outputs">${outputs}</div>` : `<p class="quiet">No declared outputs were delivered.</p>`}</section></div></section>
 <aside class="panel" aria-label="Package"><div class="panel-scroll"><p class="eyebrow"><span>Package</span></p><h2>${escapeHtml(title)}</h2>
 <dl class="facts stack"><div><dt>Package</dt><dd>${escapeHtml(model.packageId)}</dd></div><div><dt>Task</dt><dd>${escapeHtml(model.taskId)}</dd></div><div><dt>Session</dt><dd>${escapeHtml(model.sessionId)}</dd></div></dl>
-<section class="block"><h3>Files</h3><ul class="files"><li><a href="manifest.json">manifest.json</a><span>Checksums of every artifact</span></li><li><a href="summary.json">summary.json</a><span>Verdicts and findings</span></li><li><a href="trajectory.json">trajectory.json</a><span>Steps as recorded</span></li></ul></section>
-<section class="block"><h3>Human review</h3><p>Pending. The relay does not review its own evidence; these verdicts come from retained records only.</p></section></div>
+<section class="block"><h3>Files</h3><ul class="files"><li><a href="manifest.json">manifest.json</a><span>Checksums of every artifact</span></li><li><a href="summary.json">summary.json</a><span>Verdicts and findings</span></li><li><a href="trajectory.json">trajectory.json</a><span>Steps as recorded</span></li></ul></section></div>
 <nav class="pager">${steps[0] ? `<a href="${escapeHtml(link2(steps[0]))}">Start at step 01 \u203A</a>` : "<span></span>"}</nav></aside></article>`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' file:; style-src 'unsafe-inline'; script-src ${keysPolicy}; base-uri 'none'; form-action 'none'"><title>Relay review: ${escapeHtml(model.packageId)}</title><style>${css}${selection(steps.length)}</style></head><body>
 <div class="app">
 <header class="top"><div class="brand"><span class="mark" aria-hidden="true"></span><div><h1 title="${escapeHtml(model.packageId)}">${escapeHtml(title)}</h1>
 <ul class="stats">${stat2(noun(steps.length, "step"), String(steps.length))}${stat2(noun(actions, "action"), String(actions))}${stat2(noun(diagnostics, "diagnostic"), String(diagnostics))}${times.length ? `${stat2("UTC", time3(new Date(Math.min(...times)).toISOString()))}${stat2("", duration3(Math.max(...times) - Math.min(...times)))}` : ""}</ul></div></div>
 <nav class="tabs" aria-label="View"><a class="t-traj" href="${steps[0] ? escapeHtml(link2(steps[0])) : "#"}">Trajectory</a><a class="t-over" href="#overview">Overview<span class="${model.findings.length ? "has" : ""}">${model.findings.length}</span></a></nav>
-<ul class="pills">${pill("Snapshots", model.completeness)}${pill("Execution", model.execution)}${pill("Review", "pending")}</ul></header>
+<ul class="pills">${pill("snapshots", "Snapshots", model.completeness)}${pill("execution", "Execution", model.execution)}</ul></header>
 <main class="center">${steps.map((step2, i) => `<article id="step-${escapeHtml(step2.id)}" class="step ${tone(step2.execution)}${erred(step2) ? " err" : ""}">${stage(step2, model.details.get(step2.id), numbers.get(step2.id), {
     previous: steps[i - 1],
     next: steps[i + 1],
     previousError: steps.slice(0, i).findLast(erred),
     nextError: steps.slice(i + 1).find(erred)
-  })}${panel(step2, model.details.get(step2.id), numbers.get(step2.id), steps.length)}</article>`).join("\n")}
+  })}${panel(step2, model.details.get(step2.id), numbers.get(step2.id), steps.length, concerns.get(step2.id) ?? [])}</article>`).join("\n")}
 ${overview}</main>
-<footer class="track" aria-label="Steps"><label class="focus" title="Highlight the steps with errors, and move between them with the arrows"><input type="checkbox" id="focus-errors"${errors ? "" : " disabled"}>Focus on errors<span>${errors}</span></label><ol>${steps.map((step2) => thumb(step2, model.details.get(step2.id), numbers.get(step2.id))).join("")}</ol></footer>
+<footer class="track" aria-label="Steps"><label class="focus" title="Highlight the steps with errors, and move between them with the arrows"><input type="checkbox" id="focus-errors"${errors ? "" : " disabled"}>Focus on errors<span>${errors}</span></label><ol>${steps.map((step2) => thumb(step2, model.details.get(step2.id), numbers.get(step2.id), concerns.has(step2.id))).join("")}</ol></footer>
 </div><script>${keys}</script></body></html>
 `;
 }
 var css = `:root{color-scheme:light;--bg:#fbf6ef;--s1:#ffffff;--s2:#f7efe5;--s3:#efe3d5;--hair:rgba(90,50,20,.08);--text:#2a1d15;--dim:#5e4b3e;--faint:#7d6a5c;
 --accent:#f0502a;--accent2:#ff9f1a;--grad:linear-gradient(135deg,var(--accent),var(--accent2));--on:#fff;--ring:rgba(240,80,42,.28);--stage:#f3eadf;
---ok:#0e9f62;--bad:#e23744;--warn:#b87700;--pend:#7a4dff;--shadow:0 1px 2px rgba(90,50,20,.06),0 12px 32px rgba(90,50,20,.10);
+--ok:#0e9f62;--bad:#e23744;--warn:#b87700;--shadow:0 1px 2px rgba(90,50,20,.06),0 12px 32px rgba(90,50,20,.10);
 --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;--round:ui-rounded,"SF Pro Rounded",var(--sans);--mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
 *{box-sizing:border-box}html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--text);font:14.5px/1.55 var(--sans);-webkit-font-smoothing:antialiased}
@@ -20455,7 +20464,7 @@ b,time,.n,.exit,dd,.gap{font-variant-numeric:tabular-nums}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .label,h3,dt{font:600 11px/1.3 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
 .quiet{color:var(--faint);margin:0}
-.ok{--tone:var(--ok)}.bad{--tone:var(--bad)}.warn{--tone:var(--warn)}.pend{--tone:var(--pend)}
+.ok{--tone:var(--ok)}.bad{--tone:var(--bad)}.warn{--tone:var(--warn)}
 .verdict{display:inline-flex;align-items:center;gap:.45rem;font:600 12.5px/1 var(--sans);color:var(--tone,var(--dim));text-transform:capitalize}
 .verdict i{flex:none;width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 0 3px color-mix(in srgb,currentColor 18%,transparent)}
 .app{height:100vh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;grid-template-columns:minmax(0,1fr);overflow:clip}.track{min-width:0;position:relative;z-index:0;display:grid}
@@ -20464,12 +20473,24 @@ b,time,.n,.exit,dd,.gap{font-variant-numeric:tabular-nums}
 .mark{flex:none;width:1.9rem;height:1.9rem;border-radius:50%;background:var(--grad);box-shadow:0 6px 18px var(--ring)}
 h1{font:700 1.3rem/1.15 var(--round);letter-spacing:-.015em;margin:0}
 .stats{display:flex;flex-wrap:wrap;gap:.15rem 1rem;list-style:none;margin:.3rem 0 0;padding:0;font-size:12.5px;color:var(--faint)}.stats b{font:700 12.5px var(--round);color:var(--text)}
-.pills{justify-self:end;display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:.4rem;list-style:none;margin:0;padding:0}.pills li,.stats li{white-space:nowrap}
+.pills{justify-self:end;display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:.4rem;list-style:none;margin:0;padding:0}.pills>li,.stats>li{white-space:nowrap}
 .pill{display:flex;align-items:center;gap:.5rem;padding:.42rem .8rem;border-radius:999px;background:color-mix(in srgb,var(--tone) 12%,transparent);font-size:12px;color:var(--dim)}
 .tabs{justify-self:center;display:flex;gap:.2rem;padding:.25rem;border-radius:999px;background:var(--s2)}
 .tabs a{display:inline-flex;align-items:center;gap:.5rem;padding:.4rem 1rem;border-radius:999px;color:var(--dim);font-size:13px;font-weight:600}.tabs a:hover{text-decoration:none;color:var(--text)}
 .tabs a span{display:grid;place-items:center;min-width:1.35rem;height:1.35rem;padding:0 .35rem;font:700 11px/1 var(--round);border-radius:999px;background:var(--s3);color:var(--dim)}.tabs a span.has{background:var(--grad);color:var(--on)}
 .app:not(:has(#overview:target)) .t-traj,.app:has(#overview:target) .t-over{background:var(--s1);color:var(--text);box-shadow:var(--shadow)}
+.pill button{all:unset;display:flex;align-items:center;gap:.5rem;cursor:pointer}.pill:has(button){padding-right:.45rem}.pill:has(button):hover{background:color-mix(in srgb,var(--tone) 20%,transparent)}
+.pill button:focus-visible{outline:2px solid var(--accent);outline-offset:6px;border-radius:999px}
+.q{display:grid;place-items:center;width:1.1rem;height:1.1rem;border-radius:50%;background:var(--tone);color:var(--on);font:700 10.5px/1 var(--round)}
+.why{white-space:normal;text-align:left;position:fixed;inset:auto;top:4.6rem;right:1.75rem;margin:0;width:min(26rem,calc(100vw - 2rem));max-height:calc(100vh - 6rem);overflow:auto;padding:1.1rem 1.25rem 1.2rem;border:0;border-radius:18px;background:var(--s1);color:var(--text);box-shadow:0 2px 6px rgba(90,50,20,.08),0 24px 60px rgba(90,50,20,.22)}
+.why h3{margin:0 0 .8rem;font:700 15px/1.3 var(--round);letter-spacing:0;text-transform:none;color:var(--text)}
+.reasons{list-style:none;margin:0;padding:0;display:grid;gap:.75rem}.reasons li{display:grid;gap:.4rem}.reasons p{margin:0;color:var(--dim);font-size:13.5px;line-height:1.5}
+.reasons .steps{display:flex;flex-wrap:wrap;gap:.3rem}.reasons .steps a{padding:.15rem .55rem;border-radius:999px;background:var(--s2);font:600 11.5px var(--round)}.reasons .steps a:hover{background:var(--grad);color:var(--on);text-decoration:none}
+.concern{margin-top:1.1rem;padding:.9rem 1rem;border-radius:14px;background:color-mix(in srgb,var(--warn) 10%,var(--s1))}.concern h3{margin:0 0 .55rem;color:var(--warn)}
+.concern ul{list-style:none;margin:0;padding:0;display:grid;gap:.6rem}.concern li{display:grid;gap:.2rem}.concern .label{color:var(--warn)}.concern p{margin:0;color:var(--text);font-size:13.5px;line-height:1.5}
+.vblock{padding:.95rem 1.1rem;border-radius:14px;background:var(--s1);box-shadow:var(--shadow)}.vblock+.vblock{margin-top:.6rem}
+.vblock h4{display:flex;align-items:center;gap:.7rem;margin:0 0 .5rem;font:700 14px var(--round)}.vwhy{margin:0 0 .6rem;font-size:12.5px;color:var(--faint)}.vblock>.quiet{font-size:13.5px}
+.face{position:relative}.flag{position:absolute;top:.35rem;right:.35rem;display:grid;place-items:center;width:1.1rem;height:1.1rem;border-radius:50%;background:var(--warn);color:#fff;font:800 11px/1 var(--round);box-shadow:0 2px 6px rgba(0,0,0,.2)}
 .focus{justify-self:end;margin:.55rem 1.4rem 0 0;display:flex;align-items:center;gap:.45rem;padding:.3rem .6rem;border-radius:999px;font-size:12px;font-weight:600;color:var(--dim);cursor:pointer;user-select:none}
 .focus:hover{background:var(--s2)}.focus input{appearance:none;margin:0;width:1.05rem;height:1.05rem;border-radius:6px;background:var(--s1);box-shadow:inset 0 0 0 1.5px var(--faint);display:grid;place-items:center;cursor:pointer}
 .focus input:checked{background:var(--bad);box-shadow:none}.focus input:checked::after{content:"";width:.28rem;height:.55rem;border:solid #fff;border-width:0 2px 2px 0;rotate:45deg;translate:0 -1px}
@@ -20760,7 +20781,7 @@ async function analyze(root, options2, files) {
   for (const event of events.filter((e) => e.kind === "execution-completion")) retainReceipt(event.response, event);
   for (const path of files.filter((p) => /^(?:host\/(?:receipts|receiver-receipts)|state\/receiver\/receipts)\/[^/]+\.json$/.test(p) || /^host\/diagnostics\/[^/]+\.receipt\.json$/.test(p))) retainReceipt(await readJson(root, path));
   const routingRecords = hostRecords.filter((h) => h.because !== void 0 || h.request?.because !== void 0 || h.step !== void 0 || h.request?.step !== void 0);
-  const steps = [], used = /* @__PURE__ */ new Set(), details = /* @__PURE__ */ new Map();
+  const steps = [], used = /* @__PURE__ */ new Set(), details = /* @__PURE__ */ new Map(), stepsByExecution = /* @__PURE__ */ new Map();
   const commandOutput = (value, exitStatus) => {
     if (!value) return void 0;
     const exit = exitStatus ?? value.outcome?.exitStatus ?? value.exitStatus;
@@ -20810,6 +20831,7 @@ async function analyze(root, options2, files) {
     const originalObserved = refusal?.diagnostic ?? completion?.diagnostic ?? (completion?.toolOutcome ? JSON.stringify(completion.toolOutcome) : void 0);
     const observed2 = actionReceipts.length ? `Authoritative receipt outcomes: ${JSON.stringify(actionReceipts.map((r) => ({ executionId: r.executionId, actionId: r.actionId, execution: receiptOutcome(r), outcome: r.outcome })))}
 Original subprocess/action evidence (not an authoritative input-success verdict): ${JSON.stringify({ refusal: refusal?.diagnostic, state: completion?.state, diagnostic: completion?.diagnostic, toolOutcome: completion?.toolOutcome })}` : originalObserved;
+    if (executionId) stepsByExecution.set(executionId, [...stepsByExecution.get(executionId) ?? [], stepId]);
     steps.push({
       id: stepId,
       actionId: id2,
@@ -20837,6 +20859,7 @@ Original subprocess/action evidence (not an authoritative input-success verdict)
       ...Array.isArray(request?.argv) && request.argv.every((w) => typeof w === "string") ? { argv: request.argv } : {},
       output: commandOutput(receipt)
     });
+    stepsByExecution.set(executionId, [...stepsByExecution.get(executionId) ?? [], stepId]);
     steps.push({
       id: stepId,
       actionId: executionId,
@@ -20858,27 +20881,73 @@ Original subprocess/action evidence (not an authoritative input-success verdict)
     }
   }
   const completeness = findings.length ? "incomplete" : "complete";
+  const snapshotReasons = findings.map((finding) => explainFinding(finding, steps, stepsByExecution));
   const receiptFailed = receipts2.some((r) => ["refused", "failed"].includes(receiptOutcome(r)));
   const receiptUncertain = receipts2.some((r) => receiptOutcome(r) === "uncertain");
   const execution = receiptFailed || steps.some((s) => s.execution === "failed" || s.execution === "refused") ? "failed" : receiptUncertain || !steps.length || completeness === "incomplete" || steps.some((s) => s.execution !== "completed") ? "uncertain" : "passed";
   if (receiptFailed) findings.push("retained execution receipt reports refusal or failure");
   if (receiptUncertain) findings.push("retained execution receipt reports uncertainty");
+  const failedSteps = steps.filter((s) => s.execution === "failed" || s.execution === "refused").map((s) => s.id);
+  const unsettled = steps.filter((s) => !["completed", "failed", "refused"].includes(s.execution)).map((s) => s.id);
+  const receiptSteps = (outcomes) => [...new Set(receipts2.filter((r) => outcomes.includes(receiptOutcome(r))).flatMap((r) => [...stepsByExecution.get(r.executionId) ?? [], ...steps.filter((s) => s.actionId === r.actionId).map((s) => s.id)]))];
+  const executionReasons = execution === "passed" ? [] : [
+    ...failedSteps.length ? [{ text: "The guest refused or failed these steps.", stepIds: failedSteps }] : [],
+    ...receiptFailed ? [{ text: "A retained receipt reports that the guest refused or failed an execution.", stepIds: receiptSteps(["refused", "failed"]) }] : [],
+    ...execution === "uncertain" && receiptUncertain ? [{ text: "A retained receipt cannot confirm whether the guest ran an execution, for example because the connection was lost.", stepIds: receiptSteps(["uncertain"]) }] : [],
+    ...execution === "uncertain" && !steps.length ? [{ text: "The package holds no steps, so there is nothing whose execution could be confirmed.", stepIds: [] }] : [],
+    ...execution === "uncertain" && completeness === "incomplete" ? [{ text: "Snapshot evidence is incomplete, so the relay does not confirm the run as a whole, even when every step reports completed. See why snapshots are incomplete.", stepIds: [] }] : [],
+    ...execution === "uncertain" && unsettled.length ? [{ text: "These steps did not report a final execution outcome.", stepIds: unsettled }] : []
+  ];
   const outputs = [];
   for (const path of files.filter((p) => p.startsWith("extractions/")).sort()) outputs.push({ path, bytes: (await lstat4(join10(root, path))).size });
-  return { snapshots: snapshots2, steps, incompleteGroups, findings, completeness, execution, details, outputs };
+  return { snapshots: snapshots2, steps, incompleteGroups, findings, completeness, execution, details, outputs, reasons: { snapshots: snapshotReasons, execution: executionReasons } };
+}
+function explainFinding(finding, steps, byExecution) {
+  const ofAction = (id2) => steps.filter((s) => s.actionId === id2).map((s) => s.id);
+  const ofExecution = (id2) => byExecution.get(id2) ?? [];
+  const execution = (ids) => steps.find((s) => s.id === ids[0])?.execution ?? "unknown";
+  const rules = [
+    [/^diagnostic (\S+) has command evidence only; screenshots were not requested$/, (m) => ({
+      stepIds: ofExecution(m[1]),
+      text: "This diagnostic command ran without screenshots, as diagnostics do. The relay still counts every step without screenshots as missing snapshot evidence."
+    })],
+    [/^request (\S+) has no retained guest execution$/, (m) => ({
+      stepIds: ofExecution(m[1]),
+      text: `The relay asked the guest to run this step, but the guest's event journal holds no record that it started or finished. Only its receipt, which reads "${execution(ofExecution(m[1]))}", shows that it ran.`
+    })],
+    [/^action (\S+) has no retained start or refusal$/, (m) => ({ stepIds: ofAction(m[1]), text: "The package holds this action's record, but no record that the guest started or refused it." })],
+    [/^action (\S+) is missing reverse snapshot reference (.+)$/, (m) => ({ stepIds: ofAction(m[1]), text: `The snapshot ${m[2]} was taken for this action, but the action's record does not refer back to it.` })],
+    [/^action (\S+) lacks its declared causal pair$/, (m) => ({ stepIds: ofAction(m[1]), text: "This action's before or after snapshot is missing." })],
+    [/^action (\S+) has no materialized action record$/, (m) => ({ stepIds: ofAction(m[1]), text: "This action started, but its action record was never written." })],
+    [/^action (\S+) lacks durable reverse snapshot references$/, (m) => ({ stepIds: ofAction(m[1]), text: "This action's snapshots exist, but the guest's event journal does not tie them to it." })],
+    [/^coalescing group (\S+) lacks a complete consecutive first\/member\/last causal pair$/, (m) => ({
+      stepIds: steps.filter((s) => s.snapshots?.groupId === m[1]).map((s) => s.id),
+      text: "These steps share one before and after pair of snapshots, and that pair is incomplete."
+    })],
+    [/^journal records incomplete evidence or a resource stop$/, () => ({ stepIds: [], text: "The guest's event journal records that evidence capture was incomplete, or that a resource limit stopped it." })],
+    [/^unfinished snapshot originals retained$/, () => ({ stepIds: [], text: "Some snapshots were still being written when the package was assembled." })]
+  ];
+  for (const [pattern, explain] of rules) {
+    const m = pattern.exec(finding);
+    if (m) return explain(m);
+  }
+  return { stepIds: [], text: finding.replace(/^./, (c) => c.toUpperCase()) };
 }
 function summary(options2, a) {
+  return { formatVersion: 1, ...options2, snapshots: a.completeness, execution: a.execution, findings: a.findings };
+}
+function legacySummary(options2, a) {
   return { formatVersion: 1, ...options2, snapshots: a.completeness, execution: a.execution, humanReview: "pending", findings: a.findings };
 }
 function result(root, a) {
-  return { manifestPath: join10(root, "manifest.json"), deliveryVerified: true, snapshots: a.completeness, execution: a.execution, humanReview: "pending", findings: a.findings };
+  return { manifestPath: join10(root, "manifest.json"), deliveryVerified: true, snapshots: a.completeness, execution: a.execution, findings: a.findings };
 }
 async function buildReview(root, a) {
   const trajectory = await buildTrajectory(root, { steps: [...a.steps], execution: a.execution });
   return { ...trajectory, steps: a.steps, outcomes: { ...trajectory.outcomes, recording: a.completeness } };
 }
 function viewer(options2, a) {
-  return renderReviewPage({ ...options2, completeness: a.completeness, execution: a.execution, findings: a.findings, steps: a.steps, details: a.details, outputs: a.outputs });
+  return renderReviewPage({ ...options2, completeness: a.completeness, execution: a.execution, findings: a.findings, reasons: a.reasons, steps: a.steps, details: a.details, outputs: a.outputs });
 }
 function legacyViewer(options2, a) {
   const link3 = (step2) => `#step-${encodeURIComponent(step2.id)}`;
@@ -20905,7 +20974,7 @@ async function deliverPackage(rootDir, options2) {
     await save("journal/session-events.jsonl", await readFile7(join10(root, "state/journal/events.jsonl")));
     await save("summary.json", json(summary(options2, a)));
     await save("index.html", viewer(options2, a));
-    await save("OPENING.txt", "Open index.html directly in a browser (file://); no server, network, or test machine is required. Select a step or use Previous/Next. Snapshot completeness, execution, and human review are separate. Originals are under state/, host metadata under host/, and declared extractions under extractions/. manifest.json checksums every artifact except itself.\n");
+    await save("OPENING.txt", "Open index.html directly in a browser (file://); no server, network, or test machine is required. Select a step, or use the arrows or the left and right arrow keys. Snapshot completeness and execution are separate verdicts, and the page explains each one that is not complete or passed. Originals are under state/, host metadata under host/, and declared extractions under extractions/. manifest.json checksums every artifact except itself.\n");
     const build = async () => {
       const all = await filesUnder(root), snapshotPaths = new Set(a.snapshots.map((s) => s.path));
       return buildManifest({
@@ -20960,7 +21029,8 @@ async function verifyDeliveredPackage(rootDir) {
     if (!actual || actual.actionId !== sn.actionId || actual.groupId !== sn.groupId || actual.provenance !== "dispatch-captured" || !sameRef(actual, sn)) throw new Error(`snapshot provenance mismatch: ${sn.path}`);
   }
   if (!(await readFile7(join10(root, "state/journal/events.jsonl"))).equals(await readFile7(join10(root, "journal/session-events.jsonl")))) throw new Error("trajectory journal differs from original");
-  if (await readFile7(join10(root, "summary.json"), "utf8") !== json(summary(options2, a))) throw new Error("summary disagrees with original evidence");
+  const summaryText = await readFile7(join10(root, "summary.json"), "utf8");
+  if (summaryText !== json(summary(options2, a)) && summaryText !== json(legacySummary(options2, a))) throw new Error("summary disagrees with original evidence");
   const page = await readFile7(join10(root, "index.html"), "utf8");
   if (page !== viewer(options2, a) && page !== legacyViewer(options2, a)) throw new Error("viewer disagrees with original evidence");
   const trajectoryFile = !files.includes("trajectory.json") && files.includes(legacyTrajectoryFile) ? legacyTrajectoryFile : "trajectory.json";

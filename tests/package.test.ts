@@ -71,7 +71,7 @@ test("delivers capture-classified package; all originals, viewer, summary, and e
   assert.equal(delivered.deliveryVerified, true);
   assert.equal(delivered.snapshots, "complete");
   assert.equal(delivered.execution, "passed");
-  assert.equal(delivered.humanReview, "pending");
+  assert.equal('humanReview' in delivered, false, 'the relay performs no human review');
   const manifest = JSON.parse(await readFile(delivered.manifestPath, "utf8"));
   assert.equal(manifest.snapshots.length, 2);
   assert.ok(manifest.snapshots.every((s: any) => s.provenance === "dispatch-captured" && s.actionId === "action-0"));
@@ -99,12 +99,34 @@ test("verification accepts a legacy package that carries walkthrough.json instea
   assert.deepEqual(await verifyDeliveredPackage(root), delivered);
 });
 
+test("verification accepts a package delivered with the former fixed human review field", async t => {
+  const { root } = await fixture(t);
+  const delivered = await deliverPackage(root, options);
+  const summary = JSON.parse(await readFile(join(root, "summary.json"), "utf8"));
+  assert.equal("humanReview" in summary, false);
+  const legacy = Buffer.from(JSON.stringify({ formatVersion: summary.formatVersion, packageId: summary.packageId, sessionId: summary.sessionId, taskId: summary.taskId,
+    snapshots: summary.snapshots, execution: summary.execution, humanReview: "pending", findings: summary.findings }, null, 2) + "\n");
+  await writeFile(join(root, "summary.json"), legacy);
+  const manifest = JSON.parse(await readFile(join(root, "manifest.json"), "utf8"));
+  Object.assign(manifest.records.find((r: any) => r.path === "summary.json"), { sha256: createHash("sha256").update(legacy).digest("hex"), bytes: legacy.length });
+  await save(root, "manifest.json", manifest);
+  assert.deepEqual(await verifyDeliveredPackage(root), delivered);
+});
+
 test('pre-stage diagnostic repair is visible as command-only evidence without fabricated screenshots', async t => {
   const { root } = await fixture(t);
   await save(root, 'host/diagnostics/repair.request.json', { executionId: 'repair', evidenceMode: 'diagnostic', because: 'Repair capture service', argv: ['repair'], step: { title: 'Repair capture', expected: 'Capture works' } });
   await save(root, 'host/diagnostics/repair.receipt.json', { executionId: 'repair', evidenceMode: 'diagnostic', outcome: { kind: 'completed', exitStatus: { code: 0, signal: null } }, stdout: 'repaired', timeoutMs: 120000 });
   const result = await deliverPackage(root, options);
   assert.equal(result.deliveryVerified, true); assert.equal(result.snapshots, 'incomplete');
+  const html = await readFile(join(root, 'index.html'), 'utf8');
+  // Each verdict that is not complete or passed explains itself, and names the step that caused it.
+  assert.match(html, /<button type="button" popovertarget="why-snapshots" title="Why snapshots are incomplete">/);
+  assert.match(html, /<div class="why" id="why-snapshots" popover><h3>Why snapshots are incomplete<\/h3><ul class="reasons"><li><p>This diagnostic command ran without screenshots, as diagnostics do\./);
+  assert.match(html, /<div class="why" id="why-execution" popover><h3>Why execution is uncertain<\/h3><ul class="reasons"><li><p>Snapshot evidence is incomplete, so the relay does not confirm the run as a whole/);
+  const repair = html.split('<article id="step-diagnostic-repair"')[1]!.split('</article>')[0]!;
+  assert.match(repair, /<section class="concern"><h3>Why this step affects the verdicts<\/h3><ul><li><span class="label">Snapshots incomplete<\/span><p>This diagnostic command ran without screenshots/);
+  assert.doesNotMatch(html, /Human review|>Review</);
   const walk = JSON.parse(await readFile(join(root, 'trajectory.json'), 'utf8'));
   const step = walk.steps.find((s: any) => s.inputMode === 'diagnostic');
   assert.equal(step.title, 'Repair capture'); assert.match(step.observed, /No screenshot evidence/); assert.equal(step.snapshots, undefined);
@@ -174,7 +196,7 @@ test("missing after capture is delivered explicitly incomplete and never passed"
   assert.equal(result.deliveryVerified, true);
   assert.equal(result.snapshots, "incomplete");
   assert.equal(result.execution, "uncertain");
-  assert.equal(result.humanReview, "pending");
+  assert.equal('humanReview' in result, false, 'the relay performs no human review');
 });
 
 test("refusal-only and nonzero-exit evidence is never reported as passed", async t => {

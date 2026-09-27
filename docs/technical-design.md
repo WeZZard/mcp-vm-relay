@@ -489,7 +489,7 @@ Operational configuration is documented in [README](../README.md).
 - Responses must retain bounded stdout and stderr when available, execution status, diagnostic details, evidence location, and actual lease state. If the lease state cannot be confirmed, report it as unknown rather than claiming release or availability.
 - A `finish` failure during extraction or package verification preserves the VM and evidence so delivery can be retried or investigated. A declared output that was never produced (its source does not exist in the guest) is not such a failure: `finish` records it as incomplete and continues ([lifecycle fixes](lifecycle-fixes.md), R5). If destruction was already requested and cleanup fails or becomes uncertain, report the actual lifecycle state rather than promising that the VM is still running.
 - An explicit `release` remains an abandonment request and may destroy the VM after attempting evidence retention, while reporting any evidence loss.
-- A later successful repair does not change a failed historical step into a success. Package delivery, snapshot completeness, execution outcomes, and human review remain separate.
+- A later successful repair does not change a failed historical step into a success. Package delivery, snapshot completeness and execution outcomes remain separate.
 
 ### 5.2 Cleanup events and ownership recovery
 
@@ -558,10 +558,12 @@ these APIs, classifies artifacts,
 validates original hashes/references and reconciles authoritative per-step receipts.
 No substrate rewrite is needed.
 
-Preserve distinct delivery, snapshot, execution and human-review outcomes.
+Preserve distinct delivery, snapshot and execution outcomes.
 Success cannot upgrade absent or failed evidence. Preserve historical sealed
 packages and original recordings; corrected derived viewers must not overwrite
-originals. Human review is pending until explicitly provided by the reviewer.
+originals. The relay performs no human review and writes no human-review
+outcome; packages delivered with the former fixed `humanReview: "pending"`
+field still verify.
 
 ### 6.3 Execution annotations
 
@@ -583,7 +585,7 @@ snapshot references. Preserve original annotations in sealed historical evidence
 - Before the state is pulled, its inventory's total bytes are compared with the free space of the evidence volume. A shortfall fails the operation before any byte is pulled and names the bytes needed, free and short; `finish` keeps the VM. This is a precondition, not an evidence limit.
 - References survive recording resets only through the current owner's retained recording lineages. Local metadata and original recovery precede guest checks. After enclosure closure or sealing, retrieval reports a stale reference; delivered host-local files remain readable without a new VM.
 - Normal successful finalization exports the declared consumer directory once. Named extractions and full-workspace exports use UUID destinations, preserving earlier failed-finalization attempts. Single-image retrieval never performs those exports.
-- Package integrity, snapshot completeness, execution grading, and verified destruction remain independent requirements. Typed image delivery does not satisfy final package delivery or human review.
+- Package integrity, snapshot completeness, execution grading, and verified destruction remain independent requirements. Typed image delivery does not satisfy final package delivery.
 - Relay evidence has no size limit (owner decision PS-D12, [lifecycle fixes](lifecycle-fixes.md#owner-decision-ps-d12-relay-evidence-has-no-size-limit)). Screenshots are not scaled, compressed, deduplicated or budgeted, and delivering the relay state has no total-size or file-count bound. The staging bound on client pushes and the 64 MiB validity check on one image original are not evidence budgets and remain.
 
 ## 7. Installation and operational constraints

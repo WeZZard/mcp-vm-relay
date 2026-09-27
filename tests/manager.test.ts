@@ -244,7 +244,7 @@ test('real HTTP service, receiver and Registry: acquire → stage → exec/scrip
   const versions = await readdir(join(hostRoot, 'extractions/artifact'));
   assert.equal(versions.length, 2);
   assert.deepEqual((await Promise.all(versions.map(v => readFile(join(hostRoot, 'extractions/artifact', v), 'utf8')))).sort(), ['artifact version two', 'script artifact']);
-  assert.equal(delivered.deliveryVerified, true); assert.equal(delivered.snapshots, 'complete'); assert.equal(delivered.execution, 'passed'); assert.equal(delivered.humanReview, 'pending');
+  assert.equal(delivered.deliveryVerified, true); assert.equal(delivered.snapshots, 'complete'); assert.equal(delivered.execution, 'passed'); assert.equal('humanReview' in delivered, false, 'the relay performs no human review');
   assert.deepEqual(await verifyDeliveredPackage(hostRoot), delivered);
   const workspaceVersions = await readdir(join(hostRoot, 'extractions/full-workspace'));
   assert.equal(workspaceVersions.length, 1);
@@ -320,7 +320,7 @@ test('single relay tool: real HTTP/receiver acquire → stage → exec/script/co
   assert.equal(await readFile(extracted[0].destination, 'utf8'), 'exec artifact|script|code');
   const delivered = await execute({ action: 'finish' });
   assert.equal(delivered.deliveryVerified, true); assert.equal(delivered.snapshots, 'complete');
-  assert.equal(delivered.execution, 'passed'); assert.equal(delivered.humanReview, 'pending');
+  assert.equal(delivered.execution, 'passed'); assert.equal('humanReview' in delivered, false, 'the relay performs no human review');
   assert.deepEqual(await verifyDeliveredPackage(hostRoot), delivered);
   const events = await Promise.all((await readdir(join(hostRoot, 'host/events'))).map(path => json(join(hostRoot, 'host/events', path))));
   for (const kind of ['acquire-intent', 'stage', 'extract', 'finish']) {
@@ -526,7 +526,7 @@ for (const [label, run, expected] of [
   assert.equal(repaired.outcome.kind, 'completed'); assert.notEqual(repaired.executionId, result.executionId);
   assert.equal(f.service.receiverCalls, 2);
   await f.manager.release(); await f.assertClean();
-  const verified = await verifyDeliveredPackage(hostRoot); assert.equal(verified.execution, 'failed'); assert.equal(verified.humanReview, 'pending');
+  const verified = await verifyDeliveredPackage(hostRoot); assert.equal(verified.execution, 'failed'); assert.equal('humanReview' in verified, false, 'the relay performs no human review');
 });
 
 test('heartbeat remains live during a blocked receiver operation', { timeout: 20000 }, async t => {

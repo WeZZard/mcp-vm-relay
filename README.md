@@ -146,7 +146,7 @@ Evidence is automatic for all four: see "relay_run" below.
 | `relay_console_open` | Open console viewing | `console-open` | Open explicitly user-requested viewing on the service host, with `console_id`, `attempt_id`, `userRequested: true`, `reason` and `expected`. |
 | `relay_console_cancel` | Cancel console viewing | `console-cancel` | Cancel the identified viewing attempt without releasing the VM. |
 | `relay_status` | Show relay status | (unchanged) | This session's owned lease: backend binding, guest state, renewal state, console observation, last error, staging state and evidence path, plus the project directory, the VM service origin and the selected environment; `{"active": false}` when nothing is owned. |
-| `relay_trajectory` | Open the trajectory viewer | (unchanged) | Verify a delivered evidence package (every artifact, hash and reference) and open its trajectory viewer in the local human-facing browser; human review remains pending. |
+| `relay_trajectory` | Open the trajectory viewer | (unchanged) | Verify a delivered evidence package (every artifact, hash and reference) and open its trajectory viewer in the local human-facing browser. The viewer explains every verdict that is not green. |
 
 `readOnlyHint`/`idempotentHint` are true for `relay_search`, `relay_probe`,
 `relay_acquisition_capabilities`, `relay_console_resolve`, `relay_image` and
@@ -169,7 +169,7 @@ It changes nothing itself.
 | Command in pi | Command in Claude Code | Arguments | Purpose |
 |---|---|---|---|
 | `/mcp-vm-relay-status` | `/mcp-vm-relay:status` | none | Calls `relay_status` and reports this session's owned lease as is. Read-only. |
-| `/mcp-vm-relay-trajectory` | `/mcp-vm-relay:trajectory` | the package directory | Calls `relay_trajectory`, which verifies the package and opens its viewer. Human review remains pending. |
+| `/mcp-vm-relay-trajectory` | `/mcp-vm-relay:trajectory` | the package directory | Calls `relay_trajectory`, which verifies the package and opens its viewer. |
 
 They are not MCP prompts. pi's MCP adapter can only name a prompt
 `/mcp__<package>__<server>__<prompt>`, so each host gets its own command file

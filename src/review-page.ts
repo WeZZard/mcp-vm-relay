@@ -41,6 +41,9 @@ export interface ReviewPageStep {
   snapshots?: { before?: string; after?: string; groupId?: string; declaredAfterIntervalMs?: number };
 }
 
+/** A plain-words reason for a verdict that is not complete or passed, with the steps it concerns. */
+export interface Reason { text: string; stepIds: string[] }
+
 export interface ReviewPageModel {
   packageId: string;
   sessionId: string;
@@ -48,6 +51,7 @@ export interface ReviewPageModel {
   completeness: string;
   execution: string;
   findings: string[];
+  reasons: { snapshots: Reason[]; execution: Reason[] };
   steps: ReviewPageStep[];
   details: ReadonlyMap<string, StepDetail>;
   /** Declared extractions, by package path. */
@@ -67,7 +71,7 @@ const plural = (count: number, word: string) => `${count} ${noun(count, word)}`;
 const erred = (step: ReviewPageStep) => tone(step.execution) !== "ok";
 /** Status is carried by one of four tones, and always shown with its word. */
 const tone = (value: string) => ["passed", "complete", "completed"].includes(value) ? "ok"
-  : ["failed", "refused"].includes(value) ? "bad" : value === "pending" ? "pend" : "warn";
+  : ["failed", "refused"].includes(value) ? "bad" : "warn";
 const verdict = (value: string) => `<span class="verdict ${tone(value)}"><i aria-hidden="true"></i>${escapeHtml(value)}</span>`;
 /** Shell-quote only where needed, so the command reads as it would be typed. */
 const shellWord = (word: string) => /^[\w@%+=:,./-]+$/.test(word) ? word : `'${word.replace(/'/g, `'\\''`)}'`;
@@ -185,8 +189,11 @@ function stage(step: ReviewPageStep, detail: StepDetail | undefined, number: str
 ${arrows}<div class="views"><div class="view v-compare">${shot(step, detail, "before")}${shot(step, detail, "after")}</div><div class="view v-before" id="${escapeHtml(`${id}--before`)}">${shot(step, detail, "before")}</div><div class="view v-after" id="${escapeHtml(`${id}--after`)}">${shot(step, detail, "after")}</div></div></section>`;
 }
 
+/** A reason as it concerns one step: the verdict it affects, and why. */
+type Concern = { verdict: string; text: string };
+
 /** The right panel of a step: what it was, why it was sent, and what came back. */
-function panel(step: ReviewPageStep, detail: StepDetail | undefined, number: string, total: number) {
+function panel(step: ReviewPageStep, detail: StepDetail | undefined, number: string, total: number, concerns: Concern[]) {
   const { headline, command, reasonShown, kind } = describe(step, detail);
   const interval = step.snapshots?.declaredAfterIntervalMs;
   const at = time(detail?.at);
@@ -194,6 +201,7 @@ function panel(step: ReviewPageStep, detail: StepDetail | undefined, number: str
   return `<aside class="panel" aria-label="Step ${number} details"><div class="panel-scroll">
 <p class="eyebrow"><span>Step ${number} <span class="of">of ${String(total).padStart(2, "0")}</span></span><span>${kind}</span>${at ? `<time>${at} UTC</time>` : ""}<a class="permalink" href="${escapeHtml(link(step))}" title="Stable link to this step" aria-label="Stable link to step ${number}">${linkIcon}</a></p>
 <h2>${escapeHtml(headline)}</h2><p class="state"><span class="sr">Execution: </span>${verdict(step.execution)}</p>
+${concerns.length ? `<section class="concern"><h3>Why this step affects the verdicts</h3><ul>${concerns.map(c => `<li><span class="label">${escapeHtml(c.verdict)}</span><p>${escapeHtml(c.text)}</p></li>`).join("")}</ul></section>` : ""}
 ${reasonShown ? `<section class="block"><h3>Reason</h3><p>${escapeHtml(step.because ?? "Not present in retained host metadata")}</p></section>` : ""}
 ${command && step.snapshots ? `<section class="block"><h3>Command</h3><pre class="command">${escapeHtml(command)}</pre></section>` : ""}
 <section class="block"><h3>Expected</h3><p>${escapeHtml(step.expected || "Not supplied")}</p></section>
@@ -205,11 +213,11 @@ ${command && step.snapshots ? `<section class="block"><h3>Command</h3><pre class
 const linkIcon = `<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M6.6 9.4l2.8-2.8M7.2 4.6l.9-.9a2.8 2.8 0 0 1 4 4l-.9.9M8.8 11.4l-.9.9a2.8 2.8 0 0 1-4-4l.9-.9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
 
 /** One thumbnail of the bottom track: the step's after snapshot, or its command. */
-function thumb(step: ReviewPageStep, detail: StepDetail | undefined, number: string) {
+function thumb(step: ReviewPageStep, detail: StepDetail | undefined, number: string, flagged: boolean) {
   const { headline, command } = describe(step, detail);
   const image = step.snapshots?.after ?? step.snapshots?.before;
   const face = image ? `<img loading="lazy" alt="" src="${src(image)}">` : `<pre aria-hidden="true"><span class="prompt">$</span>${escapeHtml(command ?? headline)}</pre>`;
-  return `<li class="${tone(step.execution)}${step.inputMode === "diagnostic" ? " diagnostic" : ""}${erred(step) ? " err" : ""}"><a href="${escapeHtml(link(step))}" title="${escapeHtml(headline)}"><span class="face${image ? "" : " text"}">${face}</span><span class="cap"><span class="n">${number}</span><i class="dot" aria-hidden="true"></i><span class="t">${escapeHtml(headline)}</span></span><span class="sr">${escapeHtml(step.execution)}</span></a></li>`;
+  return `<li class="${tone(step.execution)}${step.inputMode === "diagnostic" ? " diagnostic" : ""}${erred(step) ? " err" : ""}"><a href="${escapeHtml(link(step))}" title="${escapeHtml(headline)}"><span class="face${image ? "" : " text"}">${face}${flagged ? `<span class="flag" title="This step affects the verdicts">!</span>` : ""}</span><span class="cap"><span class="n">${number}</span><i class="dot" aria-hidden="true"></i><span class="t">${escapeHtml(headline)}</span></span><span class="sr">${escapeHtml(step.execution)}</span></a></li>`;
 }
 
 // Without script, the selected step is the :target. Each rule below ties a
@@ -229,7 +237,7 @@ const keys = `(()=>{const steps=()=>[...document.querySelectorAll(".center>.step
   + `do j+=d;while(j>=0&&j<all.length&&focused()&&!all[j].classList.contains("err"));`
   + `if(j<0||j>=all.length)return;e.preventDefault();location.hash=encodeURIComponent(all[j].id)});`
   + `const tab=document.querySelector(".tabs .t-traj");if(tab)tab.addEventListener("click",e=>{if(last){e.preventDefault();location.hash=last}});`
-  + `addEventListener("hashchange",reveal);reveal()})();`;
+  + `addEventListener("hashchange",()=>{try{document.querySelectorAll(":popover-open").forEach(p=>p.hidePopover())}catch{}reveal()});reveal()})();`;
 const keysPolicy = `'sha256-${createHash("sha256").update(keys).digest("base64")}'`;
 
 // :has() cannot nest, so a step's own target and a target inside it (its
@@ -246,6 +254,9 @@ export function renderReviewPage(model: ReviewPageModel): string {
   const times = steps.map(s => Date.parse(model.details.get(s.id)?.at ?? "")).filter(Number.isFinite);
   const diagnostics = steps.filter(s => s.inputMode === "diagnostic").length, actions = steps.length - diagnostics;
   const errors = steps.filter(erred).length;
+  const concerns = new Map<string, Concern[]>();
+  for (const [key, label] of [["snapshots", `Snapshots ${model.completeness}`], ["execution", `Execution ${model.execution}`]] as const)
+    for (const reason of model.reasons[key]) for (const id of reason.stepIds) concerns.set(id, [...(concerns.get(id) ?? []), { verdict: label, text: reason.text }]);
   const title = /^relay-(.+)-[0-9a-f]{8}$/.exec(model.taskId)?.[1] ?? model.taskId;
   // extractions/<name>/<transfer id>/…: outputs are grouped by their declared
   // name. The transfer id is the relay's own bookkeeping, so a file reads as
@@ -263,26 +274,35 @@ export function renderReviewPage(model: ReviewPageModel): string {
     return `<details class="group"${model.outputs.length <= 12 ? " open" : ""}><summary><span class="where">${escapeHtml(declared)}</span><span class="count">${plural(files.length, "file")} · ${size(total)}</span></summary>${others.length ? `<ul class="flist">${others.map(f => `<li><a href="${src(f.path)}">${escapeHtml(f.label)}</a><span>${size(f.bytes)}</span></li>`).join("")}</ul>` : ""}${images.length ? `<div class="gallery">${images.map(f => `<a class="gthumb" href="${src(f.path)}"><img loading="lazy" alt="${escapeHtml(f.label)}" src="${src(f.path)}"><span>${escapeHtml(f.label.split("/").at(-1))}<small>${size(f.bytes)}</small></span></a>`).join("")}</div>` : ""}</details>`;
   }).join("");
   const stat = (label: string, value: string) => `<li><b>${value}</b>${label ? ` <span>${label}</span>` : ""}</li>`;
-  const pill = (label: string, value: string) => `<li class="pill ${tone(value)}"><span>${label}</span>${verdict(value)}</li>`;
+  // Reasons with the same words are one reason for all their steps.
+  const merged = (reasons: Reason[]) => [...reasons.reduce((all, r) => all.set(r.text, [...new Set([...(all.get(r.text) ?? []), ...r.stepIds])]), new Map<string, string[]>())]
+    .map(([text, stepIds]) => ({ text, stepIds }));
+  const stepLinks = (ids: string[]) => ids.map(id => `<a href="${escapeHtml(`#step-${encodeURIComponent(id)}`)}">Step ${numbers.get(id) ?? "?"}</a>`).join("");
+  const reasonList = (reasons: Reason[]) => `<ul class="reasons">${merged(reasons).map(r => `<li><p>${escapeHtml(r.text)}</p>${r.stepIds.length ? `<p class="steps">${stepLinks(r.stepIds)}</p>` : ""}</li>`).join("")}</ul>`;
+  const why = (key: "snapshots" | "execution", value: string) => key === "snapshots" ? `Why snapshots are ${value}` : value === "failed" ? "Why execution failed" : `Why execution is ${value}`;
+  const pill = (key: "snapshots" | "execution", label: string, value: string) => model.reasons[key].length
+    ? `<li class="pill ${tone(value)}"><button type="button" popovertarget="why-${key}" title="${why(key, value)}"><span>${label}</span>${verdict(value)}<span class="q" aria-hidden="true">?</span></button><div class="why" id="why-${key}" popover><h3>${why(key, value)}</h3>${reasonList(model.reasons[key])}</div></li>`
+    : `<li class="pill ${tone(value)}"><span>${label}</span>${verdict(value)}</li>`;
+  const verdictBlock = (key: "snapshots" | "execution", label: string, value: string, fine: string) => `<div class="vblock"><h4>${label} ${verdict(value)}</h4>${model.reasons[key].length ? `<p class="vwhy">${why(key, value)}:</p>${reasonList(model.reasons[key])}` : `<p class="quiet">${fine}</p>`}</div>`;
   const overview = `<article class="step overview" id="overview"><section class="stage doc" aria-label="Package overview"><div class="doc-in">
 <h2>Overview</h2><p class="lede">Delivery integrity is separate from execution success. Snapshots are dispatch-time evidence, not continuous video: each shows the screen just before a step was sent and shortly after it returned.</p>
-<section class="block"><h3>Findings · ${model.findings.length}</h3>${model.findings.length ? `<ul class="findings">${groupFindings(model.findings).map(g => `<li>${g.ids.length ? `<details><summary>${escapeHtml(g.text)}</summary><code>${g.ids.map(escapeHtml).join("<br>")}</code></details>` : escapeHtml(g.text)}</li>`).join("")}</ul>` : `<p class="quiet">No findings.</p>`}</section>
+<section class="block"><h3>Verdicts</h3>${verdictBlock("snapshots", "Snapshots", model.completeness, "Every snapshot the steps declared is present and tied to its step.")}${verdictBlock("execution", "Execution", model.execution, "Every step completed, and every retained receipt confirms it.")}</section>
+<section class="block"><h3>Findings as recorded · ${model.findings.length}</h3>${model.findings.length ? `<ul class="findings">${groupFindings(model.findings).map(g => `<li>${g.ids.length ? `<details><summary>${escapeHtml(g.text)}</summary><code>${g.ids.map(escapeHtml).join("<br>")}</code></details>` : escapeHtml(g.text)}</li>`).join("")}</ul>` : `<p class="quiet">No findings.</p>`}</section>
 <section class="block"><h3>Declared outputs · ${model.outputs.length}</h3>${outputs ? `<div class="outputs">${outputs}</div>` : `<p class="quiet">No declared outputs were delivered.</p>`}</section></div></section>
 <aside class="panel" aria-label="Package"><div class="panel-scroll"><p class="eyebrow"><span>Package</span></p><h2>${escapeHtml(title)}</h2>
 <dl class="facts stack"><div><dt>Package</dt><dd>${escapeHtml(model.packageId)}</dd></div><div><dt>Task</dt><dd>${escapeHtml(model.taskId)}</dd></div><div><dt>Session</dt><dd>${escapeHtml(model.sessionId)}</dd></div></dl>
-<section class="block"><h3>Files</h3><ul class="files"><li><a href="manifest.json">manifest.json</a><span>Checksums of every artifact</span></li><li><a href="summary.json">summary.json</a><span>Verdicts and findings</span></li><li><a href="trajectory.json">trajectory.json</a><span>Steps as recorded</span></li></ul></section>
-<section class="block"><h3>Human review</h3><p>Pending. The relay does not review its own evidence; these verdicts come from retained records only.</p></section></div>
+<section class="block"><h3>Files</h3><ul class="files"><li><a href="manifest.json">manifest.json</a><span>Checksums of every artifact</span></li><li><a href="summary.json">summary.json</a><span>Verdicts and findings</span></li><li><a href="trajectory.json">trajectory.json</a><span>Steps as recorded</span></li></ul></section></div>
 <nav class="pager">${steps[0] ? `<a href="${escapeHtml(link(steps[0]))}">Start at step 01 ›</a>` : "<span></span>"}</nav></aside></article>`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' file:; style-src 'unsafe-inline'; script-src ${keysPolicy}; base-uri 'none'; form-action 'none'"><title>Relay review: ${escapeHtml(model.packageId)}</title><style>${css}${selection(steps.length)}</style></head><body>
 <div class="app">
 <header class="top"><div class="brand"><span class="mark" aria-hidden="true"></span><div><h1 title="${escapeHtml(model.packageId)}">${escapeHtml(title)}</h1>
 <ul class="stats">${stat(noun(steps.length, "step"), String(steps.length))}${stat(noun(actions, "action"), String(actions))}${stat(noun(diagnostics, "diagnostic"), String(diagnostics))}${times.length ? `${stat("UTC", time(new Date(Math.min(...times)).toISOString())!)}${stat("", duration(Math.max(...times) - Math.min(...times)))}` : ""}</ul></div></div>
 <nav class="tabs" aria-label="View"><a class="t-traj" href="${steps[0] ? escapeHtml(link(steps[0])) : "#"}">Trajectory</a><a class="t-over" href="#overview">Overview<span class="${model.findings.length ? "has" : ""}">${model.findings.length}</span></a></nav>
-<ul class="pills">${pill("Snapshots", model.completeness)}${pill("Execution", model.execution)}${pill("Review", "pending")}</ul></header>
+<ul class="pills">${pill("snapshots", "Snapshots", model.completeness)}${pill("execution", "Execution", model.execution)}</ul></header>
 <main class="center">${steps.map((step, i) => `<article id="step-${escapeHtml(step.id)}" class="step ${tone(step.execution)}${erred(step) ? " err" : ""}">${stage(step, model.details.get(step.id), numbers.get(step.id)!, {
-    previous: steps[i - 1], next: steps[i + 1], previousError: steps.slice(0, i).findLast(erred), nextError: steps.slice(i + 1).find(erred) })}${panel(step, model.details.get(step.id), numbers.get(step.id)!, steps.length)}</article>`).join("\n")}
+    previous: steps[i - 1], next: steps[i + 1], previousError: steps.slice(0, i).findLast(erred), nextError: steps.slice(i + 1).find(erred) })}${panel(step, model.details.get(step.id), numbers.get(step.id)!, steps.length, concerns.get(step.id) ?? [])}</article>`).join("\n")}
 ${overview}</main>
-<footer class="track" aria-label="Steps"><label class="focus" title="Highlight the steps with errors, and move between them with the arrows"><input type="checkbox" id="focus-errors"${errors ? "" : " disabled"}>Focus on errors<span>${errors}</span></label><ol>${steps.map(step => thumb(step, model.details.get(step.id), numbers.get(step.id)!)).join("")}</ol></footer>
+<footer class="track" aria-label="Steps"><label class="focus" title="Highlight the steps with errors, and move between them with the arrows"><input type="checkbox" id="focus-errors"${errors ? "" : " disabled"}>Focus on errors<span>${errors}</span></label><ol>${steps.map(step => thumb(step, model.details.get(step.id), numbers.get(step.id)!, concerns.has(step.id))).join("")}</ol></footer>
 </div><script>${keys}</script></body></html>
 `;
 }
@@ -293,7 +313,7 @@ ${overview}</main>
 // borders. Status uses four vivid tones, each with its word.
 const css = `:root{color-scheme:light;--bg:#fbf6ef;--s1:#ffffff;--s2:#f7efe5;--s3:#efe3d5;--hair:rgba(90,50,20,.08);--text:#2a1d15;--dim:#5e4b3e;--faint:#7d6a5c;
 --accent:#f0502a;--accent2:#ff9f1a;--grad:linear-gradient(135deg,var(--accent),var(--accent2));--on:#fff;--ring:rgba(240,80,42,.28);--stage:#f3eadf;
---ok:#0e9f62;--bad:#e23744;--warn:#b87700;--pend:#7a4dff;--shadow:0 1px 2px rgba(90,50,20,.06),0 12px 32px rgba(90,50,20,.10);
+--ok:#0e9f62;--bad:#e23744;--warn:#b87700;--shadow:0 1px 2px rgba(90,50,20,.06),0 12px 32px rgba(90,50,20,.10);
 --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;--round:ui-rounded,"SF Pro Rounded",var(--sans);--mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
 *{box-sizing:border-box}html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--text);font:14.5px/1.55 var(--sans);-webkit-font-smoothing:antialiased}
@@ -304,7 +324,7 @@ b,time,.n,.exit,dd,.gap{font-variant-numeric:tabular-nums}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .label,h3,dt{font:600 11px/1.3 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
 .quiet{color:var(--faint);margin:0}
-.ok{--tone:var(--ok)}.bad{--tone:var(--bad)}.warn{--tone:var(--warn)}.pend{--tone:var(--pend)}
+.ok{--tone:var(--ok)}.bad{--tone:var(--bad)}.warn{--tone:var(--warn)}
 .verdict{display:inline-flex;align-items:center;gap:.45rem;font:600 12.5px/1 var(--sans);color:var(--tone,var(--dim));text-transform:capitalize}
 .verdict i{flex:none;width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 0 3px color-mix(in srgb,currentColor 18%,transparent)}
 .app{height:100vh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;grid-template-columns:minmax(0,1fr);overflow:clip}.track{min-width:0;position:relative;z-index:0;display:grid}
@@ -313,12 +333,24 @@ b,time,.n,.exit,dd,.gap{font-variant-numeric:tabular-nums}
 .mark{flex:none;width:1.9rem;height:1.9rem;border-radius:50%;background:var(--grad);box-shadow:0 6px 18px var(--ring)}
 h1{font:700 1.3rem/1.15 var(--round);letter-spacing:-.015em;margin:0}
 .stats{display:flex;flex-wrap:wrap;gap:.15rem 1rem;list-style:none;margin:.3rem 0 0;padding:0;font-size:12.5px;color:var(--faint)}.stats b{font:700 12.5px var(--round);color:var(--text)}
-.pills{justify-self:end;display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:.4rem;list-style:none;margin:0;padding:0}.pills li,.stats li{white-space:nowrap}
+.pills{justify-self:end;display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:.4rem;list-style:none;margin:0;padding:0}.pills>li,.stats>li{white-space:nowrap}
 .pill{display:flex;align-items:center;gap:.5rem;padding:.42rem .8rem;border-radius:999px;background:color-mix(in srgb,var(--tone) 12%,transparent);font-size:12px;color:var(--dim)}
 .tabs{justify-self:center;display:flex;gap:.2rem;padding:.25rem;border-radius:999px;background:var(--s2)}
 .tabs a{display:inline-flex;align-items:center;gap:.5rem;padding:.4rem 1rem;border-radius:999px;color:var(--dim);font-size:13px;font-weight:600}.tabs a:hover{text-decoration:none;color:var(--text)}
 .tabs a span{display:grid;place-items:center;min-width:1.35rem;height:1.35rem;padding:0 .35rem;font:700 11px/1 var(--round);border-radius:999px;background:var(--s3);color:var(--dim)}.tabs a span.has{background:var(--grad);color:var(--on)}
 .app:not(:has(#overview:target)) .t-traj,.app:has(#overview:target) .t-over{background:var(--s1);color:var(--text);box-shadow:var(--shadow)}
+.pill button{all:unset;display:flex;align-items:center;gap:.5rem;cursor:pointer}.pill:has(button){padding-right:.45rem}.pill:has(button):hover{background:color-mix(in srgb,var(--tone) 20%,transparent)}
+.pill button:focus-visible{outline:2px solid var(--accent);outline-offset:6px;border-radius:999px}
+.q{display:grid;place-items:center;width:1.1rem;height:1.1rem;border-radius:50%;background:var(--tone);color:var(--on);font:700 10.5px/1 var(--round)}
+.why{white-space:normal;text-align:left;position:fixed;inset:auto;top:4.6rem;right:1.75rem;margin:0;width:min(26rem,calc(100vw - 2rem));max-height:calc(100vh - 6rem);overflow:auto;padding:1.1rem 1.25rem 1.2rem;border:0;border-radius:18px;background:var(--s1);color:var(--text);box-shadow:0 2px 6px rgba(90,50,20,.08),0 24px 60px rgba(90,50,20,.22)}
+.why h3{margin:0 0 .8rem;font:700 15px/1.3 var(--round);letter-spacing:0;text-transform:none;color:var(--text)}
+.reasons{list-style:none;margin:0;padding:0;display:grid;gap:.75rem}.reasons li{display:grid;gap:.4rem}.reasons p{margin:0;color:var(--dim);font-size:13.5px;line-height:1.5}
+.reasons .steps{display:flex;flex-wrap:wrap;gap:.3rem}.reasons .steps a{padding:.15rem .55rem;border-radius:999px;background:var(--s2);font:600 11.5px var(--round)}.reasons .steps a:hover{background:var(--grad);color:var(--on);text-decoration:none}
+.concern{margin-top:1.1rem;padding:.9rem 1rem;border-radius:14px;background:color-mix(in srgb,var(--warn) 10%,var(--s1))}.concern h3{margin:0 0 .55rem;color:var(--warn)}
+.concern ul{list-style:none;margin:0;padding:0;display:grid;gap:.6rem}.concern li{display:grid;gap:.2rem}.concern .label{color:var(--warn)}.concern p{margin:0;color:var(--text);font-size:13.5px;line-height:1.5}
+.vblock{padding:.95rem 1.1rem;border-radius:14px;background:var(--s1);box-shadow:var(--shadow)}.vblock+.vblock{margin-top:.6rem}
+.vblock h4{display:flex;align-items:center;gap:.7rem;margin:0 0 .5rem;font:700 14px var(--round)}.vwhy{margin:0 0 .6rem;font-size:12.5px;color:var(--faint)}.vblock>.quiet{font-size:13.5px}
+.face{position:relative}.flag{position:absolute;top:.35rem;right:.35rem;display:grid;place-items:center;width:1.1rem;height:1.1rem;border-radius:50%;background:var(--warn);color:#fff;font:800 11px/1 var(--round);box-shadow:0 2px 6px rgba(0,0,0,.2)}
 .focus{justify-self:end;margin:.55rem 1.4rem 0 0;display:flex;align-items:center;gap:.45rem;padding:.3rem .6rem;border-radius:999px;font-size:12px;font-weight:600;color:var(--dim);cursor:pointer;user-select:none}
 .focus:hover{background:var(--s2)}.focus input{appearance:none;margin:0;width:1.05rem;height:1.05rem;border-radius:6px;background:var(--s1);box-shadow:inset 0 0 0 1.5px var(--faint);display:grid;place-items:center;cursor:pointer}
 .focus input:checked{background:var(--bad);box-shadow:none}.focus input:checked::after{content:"";width:.28rem;height:.55rem;border:solid #fff;border-width:0 2px 2px 0;rotate:45deg;translate:0 -1px}

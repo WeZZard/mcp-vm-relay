@@ -30,7 +30,7 @@ and authorization.
 | Operating agent | Find an application/image, judge interruption, acquire an isolated environment, execute and deliver evidence |
 | Parent agent or application | Compose a VM-use subagent through a prompt and receive bounded, verifiable results |
 | Human or agent image maintainer | Provision applications, extract the installed inventory, and maintain naming aliases and operating guidance |
-| Human reviewer | Understand what happened, what was expected, what evidence supports it and what remains unverified |
+| Evidence reader | Understand what happened, what was expected, what evidence supports it and what remains unverified |
 
 The agent chooses whether work is interruptive; the extension provides facts and
 enforces ownership/execution guarantees. The extension does not spawn subagents
@@ -97,7 +97,7 @@ flowchart TD
     Stage -->|Setup fails| Repair[Agent diagnoses and repairs setup]
     Repair --> Stage
     Finish -->|Delivery fails| Diagnose
-    Finish -->|Delivery and release succeed| Review[Human reviews delivered evidence]
+    Finish -->|Delivery and release succeed| Review[A person reads the delivered evidence]
     Release --> Review
 ```
 
@@ -297,10 +297,10 @@ The tool does not invent a default wait or silently substitute stability detecti
 
 ### 6.10 Evidence review page
 
-`/relay-trajectory` opens the delivered package's `index.html`. The page serves a human reviewer who must understand what happened without the agent's conversation.
+`/relay-trajectory` opens the delivered package's `index.html`. The page serves a person who must understand what happened without the agent's conversation.
 
 - The page opens from `file://` with no server or network. Its Content-Security-Policy admits exactly one inline script, the arrow-key navigation, by its hash, and forbids every other script and every network request. All other navigation uses links, anchors and disclosure elements, so the page still works when the script does not run.
-- The top row shows the task name and package identifier. Snapshot completeness, execution and human review appear as three separate verdicts, because none of them implies another.
+- The top row shows the task name and package identifier. Snapshot completeness and execution appear as two separate verdicts, because neither implies the other. The relay is a computer-use server that records a trajectory; it performs no human review, so the page claims none.
 - Findings that repeat one sentence for many identifiers are stated once with a count. The identifiers remain available inside the finding.
 - Declared outputs are grouped by their declared name, and each file shows its guest path and size. Image outputs show a thumbnail that links to the original. When a package has more than 12 outputs, each group starts folded.
 - The track and the step numbers follow the order in which steps ran. Diagnostics appear where they ran, not after the actions. A step without a retained time keeps its evidence order after the timed steps.
@@ -308,19 +308,25 @@ The tool does not invent a default wait or silently substitute stability detecti
 - A command result shows the exit status, standard output and standard error separately. An action's receipts are summarized by execution outcome and exit status. The receipt as recorded stays available in a disclosure element.
 - Each snapshot shows its capture time, and the view switch shows the time elapsed between before and after. A diagnostic states that it carries command evidence only.
 - Every step keeps a stable link, and the viewport links to the previous and next steps in time order.
+- **Rendering.** `src/review-page.ts` is the template. It takes a model and returns the page. At delivery the relay analyzes the package's retained evidence into that model and writes the page into the package, so every package carries its own page rendered by the relay version that delivered it. The page stays a static file because it must open offline from `file://` and because verification compares it byte for byte. `npm run dev:review-page -- <package-dir>...` serves delivered packages and renders each page again from the current template on every request, so a template change can be checked against real packages without writing to them.
 - The page is a pure function of the retained evidence. Verification renders it again and requires identical bytes. A package delivered before this page existed still verifies against the page it was delivered with.
 
 **Visual design.** The owner decided on 2026-09-28 that every generated page must be well designed: light, warm, minimal, modern and vivid, with a three-row layout, the compare view by default, and arrow-key navigation between steps. The design belongs to the generator, not to one package.
 
-- The page fills the window in three rows. The top row names the task, with the statistics below it: steps, actions, diagnostics, start time and span. Tabs at the exact center of the row switch between the Trajectory view and the Overview view, and the Overview tab carries the number of findings. The row also shows the three verdicts as separate pills.
+- The page fills the window in three rows. The top row names the task, with the statistics below it: steps, actions, diagnostics, start time and span. Tabs at the exact center of the row switch between the Trajectory view and the Overview view, and the Overview tab carries the number of findings. The row also shows the two verdicts as separate pills.
 - The center row splits into a main viewport and a right panel. The viewport shows the selected step's before and after snapshots side by side by default, at the largest size that fits. A switch shows Before or After alone, and it states the time between them. A step without snapshots shows its command and output in the viewport instead. Arrows on both sides move to the previous and next steps.
 - The right panel shows the selected step's details: its number, kind and time, headline, execution verdict, reason, command, expected and observed results, and facts. A link icon at the right end of the step's number, kind and time line is the step's stable link. The panel has no paging of its own.
 - The bottom row is a track of every step in time order, with a Focus on errors checkbox at the right end of a slim row above it. Each thumbnail shows the step's after snapshot, or its command when it has no snapshots, with its number, a status dot and its headline. The selected step's thumbnail is outlined.
-- The Overview view shows the caveat, the findings and the declared outputs in the viewport, and the package identity, the generated files and the human review status in the panel. The bottom row is hidden there. The Trajectory tab returns to the step last shown.
+- The Overview view shows the caveat, the verdicts with their reasons, the findings as recorded and the declared outputs in the viewport, and the package identity and the generated files in the panel. The bottom row is hidden there. The Trajectory tab returns to the step last shown.
+- **Verdict explanations.** Owner decision, 2026-09-28: an incomplete snapshot verdict or an uncertain or failed execution verdict must be explained on the page. The relay derives each reason from the same rule that produced the verdict, states it in plain language, and names the steps it concerns.
+  - A verdict pill that is not green carries a question mark. Pressing it opens a popover that lists the reasons, each with links to its steps. Changing the step closes it.
+  - The Overview view repeats the verdicts with their reasons, followed by the findings exactly as recorded.
+  - A step that a reason names shows a "Why this step affects the verdicts" note in its panel, below its state, and its thumbnail carries a mark.
+  - A finding the relay has no wording for is shown as recorded rather than dropped.
 - A step has errors when its execution did not complete: it failed, was refused or is uncertain. Focus on errors shows how many steps have errors. When it is checked, the track highlights those steps and greys out the rest, and the arrow keys and the viewport's arrows move only between steps with errors. Selecting a thumbnail still shows any step. With no such step, the checkbox is disabled.
 - The selected step is the URL's fragment, and a page opened without one shows the first step. The before and after views are fragments inside their step. The left and right arrow keys move to the previous and next step, and the track keeps the selected thumbnail in view.
 - The palette is light, warm and minimal: a warm ivory canvas with white surfaces on soft warm shadows, and one vivid vermilion-to-marigold accent for the selection, the active view and the step number. The page stays light whatever the system appearance. Regions are separated by space and tone rather than borders, and shapes are round. Snapshots sit on a sand-coloured stage with a soft shadow. Headings and numbers use a rounded system face, and commands use a monospace face.
-- Four tones carry status and each always appears with its word: green for passed and complete, red for failed and refused, amber for uncertain and incomplete, and violet for human review pending, which is not a warning.
+- Four tones carry status and each always appears with its word: green for passed and complete, red for failed and refused, and amber for uncertain and incomplete.
 - Text meets WCAG AA contrast, focus is always visible, motion respects the reduced-motion preference, and a narrow window stacks the viewport above the panel. A printed page lists every step with both snapshots.
 
 ## 7. Empty, partial and failure states
@@ -337,7 +343,7 @@ The tool does not invent a default wait or silently substitute stability detecti
 | Command timeout | State the effective limit, termination status, available output, and actual VM state. |
 | Finish delivery failure | Retain the VM and evidence so the agent can investigate or retry delivery. |
 | Cleanup unresolved | Retain ownership and report the problem rather than claiming release |
-| Evidence delivered | Report delivery, snapshots, execution and human review separately |
+| Evidence delivered | Report delivery, snapshots and execution separately, and explain every verdict that is not green |
 
 - Search has no continuation mechanism, and this revision does not introduce pagination.
 - Retain `truncated` in diagnostics so maintainers can check it against actual omitted records. Unexpected behavior is a correctness issue in the existing implementation.
@@ -353,7 +359,7 @@ The tool does not invent a default wait or silently substitute stability detecti
 - Keep results bounded and structured; a generic output spill file is not a
   substitute for a correctly capped search response with `truncated`.
 - Existing viewer commands remain available. Lifecycle hooks must be reviewed against the new recovery requirements rather than preserved unchanged.
-- Human review remains pending until the human supplies it.
+- The relay records no human review. Whether a person accepts the work is outside the package.
 
 ## 9. UX acceptance criteria
 
