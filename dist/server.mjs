@@ -30540,6 +30540,29 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
       return this.extractInternal(names);
     }));
   }
+  /**
+   * finish's extraction: a declared output whose source does not exist in the
+   * guest (it was never produced) is recorded as incomplete and skipped, so a
+   * retry cannot fail the same way forever. Any other extraction failure, such
+   * as a transfer or checksum failure, still fails finish and keeps the VM,
+   * because the guest may hold the only good copy (docs/lifecycle-fixes.md).
+   */
+  async extractForFinish() {
+    const e = this.current(), incomplete = [];
+    for (const extraction of e.extractions) {
+      try {
+        await this.extractInternal([extraction.name]);
+      } catch (error2) {
+        const source = within(join15(e.guestRoot, "workspace"), extraction.path);
+        const missing = /ENOENT: no such file or directory, lstat '([^']+)'/.exec(String(error2))?.[1];
+        if (!missing || !(source === missing || source.startsWith(`${missing}/`))) throw error2;
+        incomplete.push({ name: extraction.name, path: extraction.path, error: String(error2) });
+        await this.log("extraction-incomplete", void 0, { name: extraction.name, path: extraction.path, missing: true, error: String(error2) });
+      }
+    }
+    if (e.fullWorkspace) await this.transfer().pullVerified(join15(e.guestRoot, "workspace"), join15(e.hostRoot, "extractions", "full-workspace", randomUUID7()), e.guestRoot, e.hostRoot);
+    return incomplete;
+  }
   async extractAvailable() {
     const e = this.current();
     for (const extraction of e.extractions) {
@@ -30576,14 +30599,14 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
     return this.serialized(() => this.guarded(signal, async () => {
       const e = this.current();
       await this.log("finish");
+      let incomplete = [];
       if (!e.delivered) {
         await this.stopMcpHost("finish");
-        await this.extractInternal(e.extractions.map((item) => item.name));
-        if (e.fullWorkspace) await this.transfer().pullVerified(join15(e.guestRoot, "workspace"), join15(e.hostRoot, "extractions", "full-workspace", randomUUID7()), e.guestRoot, e.hostRoot);
+        incomplete = await this.extractForFinish();
       }
       const result2 = e.delivered ?? await this.packageInternal();
       await this.releaseInternal("finished");
-      return result2;
+      return incomplete.length ? { ...result2, incompleteExtractions: incomplete } : result2;
     }));
   }
   async fail(error2) {
@@ -30946,7 +30969,7 @@ var relayTools = [
     action: "finish",
     title: "Finish and deliver evidence",
     annotations: acts(false, true),
-    description: "Complete the task: extract every declared output, deliver and verify a portable evidence package, then destroy the VM and unregister it. The result reports delivery, snapshot completeness, execution outcome and human review as separate facts; a verified package is not a passing test, and a delivered package is not itself human approval. Call this, or relay_release, explicitly before you return, since ending the session does not do it for you. A failed delivery keeps the VM for a corrected attempt."
+    description: "Complete the task: extract every declared output, deliver and verify a portable evidence package, then destroy the VM and unregister it. The result reports delivery, snapshot completeness, execution outcome and human review as separate facts; a verified package is not a passing test, and a delivered package is not itself human approval. Call this, or relay_release, explicitly before you return, since ending the session does not do it for you. A declared output that was never produced is listed in `incompleteExtractions` and does not stop the delivery; any other failed extraction or delivery keeps the VM for a corrected attempt."
   },
   {
     name: "relay_release",

@@ -1117,11 +1117,12 @@ test('staged executable path correction reattaches without replay or workspace r
   await f.assertRetained(acquired.vm); await f.manager.release(); await f.assertClean();
 });
 
-for (const failure of ['missing', 'verification'] as const) test(`finish ${failure} failure retains the VM until output is repaired`, async t => {
+// A declared output that was never produced no longer fails finish (R5, docs/lifecycle-fixes.md); a transfer or checksum failure still does.
+for (const failure of ['verification'] as const) test(`finish ${failure} failure retains the VM until output is repaired`, async t => {
   const f = await fixture(t); const acquired = await f.manager.acquire(acquireInput({ extractions: [{ name: 'artifact', path: 'artifact.txt' }] }));
   await f.stage(); await f.manager.run(operation('before-finish'));
-  if (failure === 'verification') { await writeFile(join(acquired.workspace, 'artifact.txt'), 'original'); f.service.corruptPull = true; }
-  await assert.rejects(f.manager.finish(), failure === 'missing' ? /ENOENT/ : /checksum mismatch/);
+  await writeFile(join(acquired.workspace, 'artifact.txt'), 'original'); f.service.corruptPull = true;
+  await assert.rejects(f.manager.finish(), /checksum mismatch/);
   await f.assertRetained(acquired.vm); assert.ok(f.manager.status().lastError);
   assert.equal((await json(join(f.manager.root, 'lease.json'))).delivered, undefined);
   f.service.corruptPull = false; await writeFile(join(acquired.workspace, 'artifact.txt'), 'fixed');

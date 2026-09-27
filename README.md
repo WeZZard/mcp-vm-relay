@@ -186,7 +186,7 @@ tarball it checked.
 
 - One server session owns at most one VM. Another task needs a separate acquisition.
 - An operation failure retains the VM so the agent can inspect, repair and submit a new operation. Failed and uncertain operations are never automatically replayed.
-- Use `finish` to deliver evidence and release, or `release` to abandon explicitly. A failed delivery retains the VM; a release failure retains ownership until destruction is verified.
+- Use `finish` to deliver evidence and release, or `release` to abandon explicitly. A declared output that was never produced is recorded as incomplete (`incompleteExtractions`) rather than failing `finish`. A failed delivery retains the VM; a release failure retains ownership until destruction is verified.
 - When the session ends (the client closes the server's standard input, a write to its standard output fails, or it is signalled), lease renewal pauses and the recording detaches; the VM is not destroyed. A `finish` or `release` already in flight completes first, for up to the shutdown grace period; after that the operation is cancelled and renewal pauses without it. The backend TTL and grace period handle abandoned leases. Status reports the last confirmed expiration time.
 - A restarted server with the same `MCP_VM_RELAY_SESSION` reconciles its durable ownership and reattaches the recording session without replaying prior work. Context compaction does not reset VM state; `probe` reports the owned state without relying on earlier messages.
 - A run tool's `timeoutMs` defaults to 120,000 ms and accepts integers up to 3,600,000 ms. It bounds command execution, not the snapshot delay or the lease lifetime. A timeout reports confirmed termination or uncertainty and keeps the VM available.

@@ -74,7 +74,7 @@ export const relayTools: readonly RelayTool[] = [
   },
   {
     name: 'relay_finish', action: 'finish', title: 'Finish and deliver evidence', annotations: acts(false, true),
-    description: 'Complete the task: extract every declared output, deliver and verify a portable evidence package, then destroy the VM and unregister it. The result reports delivery, snapshot completeness, execution outcome and human review as separate facts; a verified package is not a passing test, and a delivered package is not itself human approval. Call this, or relay_release, explicitly before you return, since ending the session does not do it for you. A failed delivery keeps the VM for a corrected attempt.',
+    description: 'Complete the task: extract every declared output, deliver and verify a portable evidence package, then destroy the VM and unregister it. The result reports delivery, snapshot completeness, execution outcome and human review as separate facts; a verified package is not a passing test, and a delivered package is not itself human approval. Call this, or relay_release, explicitly before you return, since ending the session does not do it for you. A declared output that was never produced is listed in `incompleteExtractions` and does not stop the delivery; any other failed extraction or delivery keeps the VM for a corrected attempt.',
   },
   {
     name: 'relay_release', action: 'release', title: 'Release the VM', annotations: acts(false, true),

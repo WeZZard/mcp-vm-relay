@@ -768,6 +768,28 @@ export class RelayManager {
     if (this.current().delivered) throw new Error('Evidence already sealed; no further extractions may modify it');
     await this.log('extract', undefined, { names }); return this.extractInternal(names);
   })); }
+  /**
+   * finish's extraction: a declared output whose source does not exist in the
+   * guest (it was never produced) is recorded as incomplete and skipped, so a
+   * retry cannot fail the same way forever. Any other extraction failure, such
+   * as a transfer or checksum failure, still fails finish and keeps the VM,
+   * because the guest may hold the only good copy (docs/lifecycle-fixes.md).
+   */
+  private async extractForFinish() {
+    const e = this.current(), incomplete: Array<{ name: string; path: string; error: string }> = [];
+    for (const extraction of e.extractions) {
+      try { await this.extractInternal([extraction.name]); }
+      catch (error) {
+        const source = within(join(e.guestRoot, 'workspace'), extraction.path);
+        const missing = /ENOENT: no such file or directory, lstat '([^']+)'/.exec(String(error))?.[1];
+        if (!missing || !(source === missing || source.startsWith(`${missing}/`))) throw error;
+        incomplete.push({ name: extraction.name, path: extraction.path, error: String(error) });
+        await this.log('extraction-incomplete', undefined, { name: extraction.name, path: extraction.path, missing: true, error: String(error) });
+      }
+    }
+    if (e.fullWorkspace) await this.transfer().pullVerified(join(e.guestRoot, 'workspace'), join(e.hostRoot, 'extractions', 'full-workspace', randomUUID()), e.guestRoot, e.hostRoot);
+    return incomplete;
+  }
   private async extractAvailable() {
     const e = this.current();
     for (const extraction of e.extractions) {
@@ -792,14 +814,15 @@ export class RelayManager {
   }
   finish(signal?: AbortSignal) { return this.serialized(() => this.guarded(signal, async () => {
     const e = this.current(); await this.log('finish');
+    let incomplete: Array<{ name: string; path: string; error: string }> = [];
     if (!e.delivered) {
       // Stop the MCP servers first, so their output files are complete before extraction.
       await this.stopMcpHost('finish');
-      await this.extractInternal(e.extractions.map(item => item.name));
-      if (e.fullWorkspace) await this.transfer().pullVerified(join(e.guestRoot, 'workspace'), join(e.hostRoot, 'extractions', 'full-workspace', randomUUID()), e.guestRoot, e.hostRoot);
+      incomplete = await this.extractForFinish();
     }
     const result = e.delivered ?? await this.packageInternal();
-    await this.releaseInternal('finished'); return result;
+    await this.releaseInternal('finished');
+    return incomplete.length ? { ...result, incompleteExtractions: incomplete } : result;
   })); }
   private async fail(error: unknown) {
     const e = this.enclosure; if (!e || !this.bindingMatches(e)) return;

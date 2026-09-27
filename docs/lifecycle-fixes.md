@@ -28,7 +28,7 @@
 | R3 | `relay_release` on a session that owns no lease looks like a successful release. | The result says explicitly that this session owns no lease and nothing was released, and it is an MCP error result. The relay never guesses at another session's lease. |
 | R3 (identity) | A restarted server gets a new random session identity, so it cannot see its earlier lease. | No change. Changing the default session identity is the owner's decision; a skipped reproducer documents the current behavior. |
 | R4 | A cancelled `relay_acquire` whose lease arrives after cancellation keeps the VM with no heartbeat and no owner action. | Keep the lease, start its heartbeat, and report in the error that the VM is retained and renewed under this session until `relay_finish` or `relay_release`. |
-| R5 | `relay_finish` stops at the first declared extraction that fails, so every retry fails the same way. | `finish` extracts declared outputs the tolerant way `release` already does. A missing or failed output is recorded as an `extraction-incomplete` event, reported in the result as `incompleteExtractions`, and packaging continues. |
+| R5 | `relay_finish` stops at the first declared extraction that fails, so every retry fails the same way. | A declared output whose source does not exist in the guest is recorded as an `extraction-incomplete` event, reported in the result as `incompleteExtractions`, and packaging continues. A transfer or checksum failure still fails `finish` and keeps the VM. |
 | R6 | `release` and shutdown wait behind a guest command that cannot be cancelled. | Pass the tool call's abort signal through to the vm-service `exec` request for diagnostic commands and for the receiver dispatch, so a cancelled command stops waiting and the next queued operation can run. |
 | R7 | A failed `finish` keeps the VM. | No change; this is documented behavior. The owner decides whether a failed delivery should release. A skipped reproducer documents the current behavior. |
 | R8 | The relay state grows about 14 MiB per recorded step, and `finish` fails once the state passes 512 MiB or 10,000 files. | No change; the owner decides the bound or the snapshot policy. A skipped reproducer documents the current behavior at the transfer level. |
@@ -70,12 +70,16 @@ flowchart TD
 - That error says that the VM is retained and renewed, names the VM, and tells the agent to call `relay_finish` or `relay_release`.
 - The technical design states that user cancellation of a command is not a request to release the VM, and an existing test asserts that the returned identity is retained until an explicit release. The fix therefore keeps the lease and starts renewal rather than releasing it.
 
-### Tolerant finish extraction
+### Finish with a declared output that was never produced
 
-- `finish` now uses the same `extractAvailable` path as `release`: each declared output is pulled separately, and a failure is logged as `extraction-incomplete` with the error.
-- An opt-in full workspace that fails to transfer is logged as `workspace-incomplete`, as `release` already does.
-- Packaging, verification and release then proceed as before; a packaging or verification failure still keeps the VM.
-- This changes one sentence of the technical design: a failed extraction during `finish` no longer keeps the VM, because a declared output that was never produced would otherwise make every retry fail the same way. The package records the missing output instead.
+- `finish` pulls each declared output separately.
+- When the guest reports that the output's source path, or one of its parent directories, does not exist (`ENOENT`), the output was never produced, and a retry would fail the same way.
+- In that case `finish` logs an `extraction-incomplete` event with the name, the path and the error, adds the output to `incompleteExtractions` in the result, and continues with packaging, verification and release.
+- Any other extraction failure, such as a transfer failure or a checksum mismatch, still fails `finish` and keeps the VM, because the guest may hold the only good copy and the agent can repair and retry.
+- The opt-in full workspace is still extracted strictly, because the workspace always exists after staging.
+- `release` keeps its existing behavior of tolerating every extraction failure.
+- The request for this item asked for every failed extraction to be tolerated, as `release` does. The existing test "finish verification failure retains the VM until output is repaired" and technical design Section 5.1 require a verification failure to keep the VM, so only the never-produced case changed. The owner can widen it later.
+- This changes one sentence of technical design Section 5.1, and it replaces the "missing" case of the existing test "finish missing failure retains the VM until output is repaired" with the R5 reproducer.
 
 ### Cancellable guest commands
 
