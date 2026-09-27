@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { deflateSync } from 'node:zlib';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { chmod, copyFile, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, truncate, writeFile } from 'node:fs/promises';
+import { chmod, copyFile, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -1237,12 +1237,12 @@ test('R6: release does not wait behind a cancelled recorded run whose receiver a
 test('R7 (owner decision): a finish whose packaging fails keeps the VM and does not release it', { timeout: 30000, todo: 'waiting for the owner\'s decision: README "Ownership, failure and recovery" documents that a failed delivery retains the VM; this documents the current behavior' }, async t => {
   const f = await fixture(t);
   const acquired = await f.manager.acquire(acquireInput()); await f.stage();
-  await f.manager.run(operation('before-oversize'));
-  // A sparse file over the 512 MiB transfer bound makes the state inventory, and so packaging, fail.
-  await writeFile(join(acquired.guestRoot, 'state', 'oversize.bin'), ''); await truncate(join(acquired.guestRoot, 'state', 'oversize.bin'), 513 * 1024 * 1024);
-  await assert.rejects(f.manager.finish(), /512MiB/);
+  await f.manager.run(operation('before-corrupt-state'));
+  // A state file whose pulled copy is corrupted makes the verified state pull, and so packaging, fail.
+  await writeFile(join(acquired.guestRoot, 'state', 'artifact.txt'), 'state bytes'); f.service.corruptPull = true;
+  await assert.rejects(f.manager.finish(), /Extraction inventory mismatch/);
   await f.assertRetained(acquired.vm);
   assert.equal((await json(join(f.manager.root, 'lease.json'))).delivered, undefined, 'nothing was delivered');
   assert.equal(f.service.releaseCalls, 0, 'finish did not release the VM');
-  await rm(join(acquired.guestRoot, 'state', 'oversize.bin'));
+  f.service.corruptPull = false; await rm(join(acquired.guestRoot, 'state', 'artifact.txt'));
 });

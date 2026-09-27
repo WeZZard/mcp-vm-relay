@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, writeFile, copyFile, rm, symlink, readdir, rename, realpath, truncate } from 'node:fs/promises';
+import { mkdtemp, mkdir, open, readFile, writeFile, copyFile, rm, symlink, readdir, rename, realpath, truncate } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Transfer, type VmChannel } from '../src/transfer.js';
@@ -45,18 +45,17 @@ test('inventory frames survive the vm-service 64000-character stdout tail and ar
  assert.deepEqual(await readdir(guest), ['workspace']); assert.deepEqual(await readdir(temp), []);
 });
 
-test('file framing accepts the full 10000-file limit and rejects the next file', async t => {
- const root = await realpath(await mkdtemp(join(tmpdir(), 'relay-frame-limit-'))); t.after(() => rm(root, { recursive: true, force: true }));
+test('file framing scans more than 10000 files: delivering relay evidence has no file-count bound (PS-D12)', async t => {
+ const root = await realpath(await mkdtemp(join(tmpdir(), 'relay-frame-count-'))); t.after(() => rm(root, { recursive: true, force: true }));
  const source = join(root, 'workspace'); await mkdir(source);
  for (let start = 0; start < 10000; start += 100) await Promise.all(Array.from({ length: 100 }, (_, n) => writeFile(join(source, String(start + n).padStart(5, '0')), '')));
+ await writeFile(join(source, '10000'), '');
  const channel: VmChannel = {
   exec: async (_name, argv) => { const result = await command(argv, { maxBytes: 16 * 1024 * 1024 }); return { ...result, stdout: result.stdout.slice(-64000) }; },
   push: async (_name, l, r) => copyFile(l, r), pull: async (_name, r, l) => copyFile(r, l),
  };
  const transfer = new Transfer(channel, 'fake', process.execPath, { guestRoot: root, hostTempRoot: join(root, 'temp') });
- const facts = await transfer.scan(source, root); assert.equal(facts.length, 10000); assert.ok(facts.every(f => f.bytes === 0));
- await writeFile(join(source, '10000'), '');
- await assert.rejects(transfer.scan(source, root), /10000 files/);
+ const facts = await transfer.scan(source, root); assert.equal(facts.length, 10001); assert.ok(facts.every(f => f.bytes === 0));
  assert.deepEqual(await readdir(root), ['temp', 'workspace']); assert.deepEqual(await readdir(join(root, 'temp')), []);
 });
 
@@ -104,12 +103,16 @@ test('OS symlink ancestors above approved roots remain usable', async t => {
  assert.equal(await readFile(join(root, 'result'), 'utf8'), 'safe');
 });
 
-test('remote inventory rejects over-bound files and special files without carrying their bytes', async t => {
- const root = await realpath(await mkdtemp(join(tmpdir(), 'relay-bound-'))); t.after(() => rm(root, { recursive: true, force: true }));
- await writeFile(join(root, 'oversize'), ''); await truncate(join(root, 'oversize'), 512 * 1024 * 1024 + 1);
- const channel: VmChannel = { exec: async (_name, argv) => command(argv), push: async (_name, l, r) => copyFile(l, r), pull: async () => assert.fail('oversize inventory must fail before pull') };
- const transfer = new Transfer(channel, 'fake', process.execPath, { guestRoot: root });
- await assert.rejects(transfer.scan(join(root, 'oversize'), root), /512MiB/);
+test('remote inventory scans a file over 512 MiB, and over one Node.js read, without carrying its bytes; it rejects special files', { timeout: 60000 }, async t => {
+ const root = await realpath(await mkdtemp(join(tmpdir(), 'relay-large-'))); t.after(() => rm(root, { recursive: true, force: true }));
+ // Sparse, so the test uses no disk space. 2 GiB + 1 byte passes both the removed
+ // 512 MiB bound and the 2 GiB limit of a single fs.readFileSync.
+ const size = 2 * 1024 * 1024 * 1024 + 1;
+ await writeFile(join(root, 'large'), ''); await truncate(join(root, 'large'), size);
+ const channel: VmChannel = { exec: async (_name, argv) => command(argv, { timeoutMs: 60000 }), push: async (_name, l, r) => copyFile(l, r), pull: async (_name, r, l) => { assert.match(r, /\/\.inventory-[^/]+\.json$/, 'only the inventory frame is pulled'); return copyFile(r, l); } };
+ const transfer = new Transfer(channel, 'fake', process.execPath, { guestRoot: root, hostTempRoot: join(root, 'temp') });
+ // SHA-256 of 2 GiB + 1 zero bytes.
+ assert.deepEqual(await transfer.scan(join(root, 'large'), root), [{ path: '', sha256: 'b8030a8ab89280935633d8d991da3d9907c0f12e8b6fc3bfc515f4d440872b6e', bytes: size }]);
  await command(['/usr/bin/mkfifo', join(root, 'fifo')]);
  await assert.rejects(transfer.scan(join(root, 'fifo'), root), /special file/);
 });
@@ -138,18 +141,35 @@ test('local helper bounds output and timeouts', async () => {
  await assert.rejects(command([process.execPath, '-e', 'setInterval(()=>{},100)'], { timeoutMs: 10 }), /timed out/);
 });
 
-test('R8 (owner decision): relay state of about 14 MiB per recorded step passes the 512 MiB transfer bound at step 37, so packaging fails', { todo: 'waiting for the owner\'s decision: a full-display PNG before and after each step makes the state grow about 14 MiB per step, and the state inventory is bounded at 512 MiB / 10000 files (src/transfer.ts); this documents the current behavior' }, async t => {
- const root = await realpath(await mkdtemp(join(tmpdir(), 'relay-state-bound-'))); t.after(() => rm(root, { recursive: true, force: true }));
+/** The fake vm-service pull keeps holes, so a sparse stand-in for evidence uses no disk space when it is pulled. */
+async function sparseCopy(source: string, destination: string) {
+ const input = await open(source, 'r'), output = await open(destination, 'wx');
+ try {
+  const chunk = Buffer.alloc(1024 * 1024); let position = 0;
+  for (;;) {
+   const { bytesRead } = await input.read(chunk, 0, chunk.length, position);
+   if (!bytesRead) break;
+   if (chunk.subarray(0, bytesRead).some(byte => byte !== 0)) await output.write(chunk, 0, bytesRead, position);
+   position += bytesRead;
+  }
+  await output.truncate(position);
+ } finally { await input.close(); await output.close(); }
+}
+
+test('R8 (PS-D12): relay state of about 14 MiB per recorded step scans and pulls past 512 MiB at step 37', { timeout: 60000 }, async t => {
+ const root = await realpath(await mkdtemp(join(tmpdir(), 'relay-state-size-'))); t.after(() => rm(root, { recursive: true, force: true }));
  const state = join(root, 'state', 'snapshots'); await mkdir(state, { recursive: true });
  const channel: VmChannel = {
-  exec: async (_name, argv) => { const result = await command(argv, { maxBytes: 16 * 1024 * 1024 }); return { ...result, stdout: result.stdout.slice(-64000) }; },
-  push: async (_name, l, r) => copyFile(l, r), pull: async (_name, r, l) => copyFile(r, l),
+  exec: async (_name, argv) => { const result = await command(argv, { maxBytes: 16 * 1024 * 1024, timeoutMs: 60000 }); return { ...result, stdout: result.stdout.slice(-64000) }; },
+  push: async (_name, l, r) => copyFile(l, r), pull: async (_name, r, l) => sparseCopy(r, l),
  };
  const transfer = new Transfer(channel, 'fake', process.execPath, { guestRoot: root, hostTempRoot: join(root, 'temp') });
  // Sparse stand-ins for one step's before and after display PNGs, 7 MiB each.
  const step = async (n: number) => { for (const phase of ['before', 'after']) { const path = join(state, `step-${String(n).padStart(3, '0')}-${phase}.png`); await writeFile(path, ''); await truncate(path, 7 * 1024 * 1024); } };
- for (let n = 1; n <= 36; n++) await step(n);
- await assert.doesNotReject(transfer.scan(join(root, 'state'), root), '36 steps (504 MiB) are within the bound');
- await step(37);
- await assert.rejects(transfer.scan(join(root, 'state'), root), /512MiB \/ 10000 files/, 'the 37th step (518 MiB) passes the bound, so finish cannot package the state');
+ for (let n = 1; n <= 37; n++) await step(n);
+ const facts = await transfer.scan(join(root, 'state'), root);
+ assert.equal(facts.length, 74); assert.equal(facts.reduce((sum, fact) => sum + fact.bytes, 0), 37 * 14 * 1024 * 1024, 'the 37th step brings the state to 518 MiB');
+ const pulled = await transfer.pullVerified(join(root, 'state'), join(root, 'host', 'state'), root, join(root, 'host'));
+ assert.deepEqual(pulled, facts, 'the whole 518 MiB state is delivered, so finish can package it');
+ assert.deepEqual(await inventory(join(root, 'host', 'state')), facts);
 });
