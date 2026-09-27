@@ -121,6 +121,7 @@ flowchart TD
 - The delivered `state/` directories keep the private mode (0700) that the pull gives them.
 - Before any byte of the relay state is pulled, for `finish`, for a `release` that packages, and for a recording reset, the relay compares the total bytes of the guest's state inventory with the free space of the evidence volume (`statfs` on the package directory).
 - When the state does not fit, the operation fails before the pull with a diagnostic that names the bytes needed, the bytes free and the shortfall. This is a precondition, not a limit: `finish` keeps the VM, so the agent can free space and call `relay_finish` again. A `release` still releases, as it does for any delivery failure, and records the diagnostic in `<package>.delivery-error.json`.
+- The guest scan hashes every byte of what it inventories, so its timeout is no longer a fixed 120 seconds. It is 120 seconds plus 125 ms per MiB (8 MiB/s of hashing). A stat-only walk sizes the tree first; a staged file's known size and the inventory taken before a pull size the scans that follow them without that walk.
 
 ## Verification
 
@@ -148,6 +149,11 @@ flowchart TD
 | R8 | `tests/transfer.test.ts` | "R8 (PS-D12): relay state of about 14 MiB per recorded step scans and pulls past 512 MiB at step 37" |
 | R8 | `tests/transfer.test.ts` | "file framing scans more than 10000 files: delivering relay evidence has no file-count bound (PS-D12)" |
 | R8 | `tests/transfer.test.ts` | "remote inventory scans a file over 512 MiB, and over one Node.js read, without carrying its bytes; it rejects special files" |
+| PS-D12 host disk | `tests/manager.test.ts` | "finish keeps one host copy of the relay state: the pulled state is moved into the package, not copied" |
+| PS-D12 host disk | `tests/evidence-merge.test.ts` | "refresh moves incoming into state on the same volume instead of copying it, so the state is not stored twice" |
+| PS-D12 host disk | `tests/evidence-merge.test.ts` | "refresh falls back to copying when incoming is on another volume, and keeps incoming" |
+| PS-D12 free space | `tests/manager.test.ts` | "finish fails before pulling the relay state when the evidence volume has too little free space, names the shortfall and keeps the VM" |
+| PS-D12 scan timeout | `tests/transfer.test.ts` | "the guest scan timeout grows with the bytes it hashes instead of a fixed 120 s" |
 
 - Run the suite with `npm run check`, which builds `dist/`, type-checks and runs `npm test`.
 - The end-to-end suite with headless Claude Code (`npm run test:e2e`) was not run for these fixes.

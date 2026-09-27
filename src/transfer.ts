@@ -87,6 +87,8 @@ const GUEST_DIGEST = `function digest(f,size){const fd=fs.openSync(f,'r');try{co
 const PREPARE = `const fs=require('fs'),p=require('path');${GUEST_PATH}const [root,target]=process.argv.slice(1);check(root,target,true);fs.mkdirSync(p.dirname(target),{recursive:true,mode:448});check(root,target,true);`;
 const SCAN = `const fs=require('fs'),p=require('path'),c=require('crypto');${GUEST_PATH}${GUEST_DIGEST}const [root,approved,frame,frameRoot]=process.argv.slice(1),out=[];check(approved,root);function walk(f){let s=fs.lstatSync(f);if(s.isSymbolicLink())throw Error('symlink '+f);if(s.isDirectory()){for(const n of fs.readdirSync(f).sort())walk(p.join(f,n));}else if(s.isFile()){out.push({path:p.relative(root,f),sha256:digest(f,s.size),bytes:s.size});}else throw Error('special file '+f);}walk(root);check(approved,root);check(frameRoot,frame,true);fs.mkdirSync(p.dirname(frame),{recursive:true,mode:448});check(frameRoot,frame,true);const b=Buffer.from(JSON.stringify(out));fs.writeFileSync(frame,b,{flag:'wx',mode:384});console.log(JSON.stringify({path:frame,sha256:c.createHash('sha256').update(b).digest('hex'),bytes:b.length}));`;
 const FILE_FACT = `const fs=require('fs'),p=require('path'),c=require('crypto');${GUEST_PATH}${GUEST_DIGEST}const [root,file]=process.argv.slice(1);check(root,file);const s=fs.lstatSync(file);if(!s.isFile())throw Error('Invalid frame file');const sha256=digest(file,s.size);check(root,file);console.log(JSON.stringify({path:file,sha256,bytes:s.size}));`;
+// Sizes a tree without hashing it (stat only), so the hashing scan's timeout can follow the bytes it must hash.
+const SIZE = `const fs=require('fs'),p=require('path');${GUEST_PATH}const [root,approved]=process.argv.slice(1);check(approved,root);let bytes=0,files=0;function walk(f){const s=fs.lstatSync(f);if(s.isSymbolicLink())throw Error('symlink '+f);if(s.isDirectory()){for(const n of fs.readdirSync(f))walk(p.join(f,n));}else if(s.isFile()){bytes+=s.size;files++;}else throw Error('special file '+f);}walk(root);console.log(JSON.stringify({bytes,files}));`;
 const REMOVE_FRAME = `const fs=require('fs'),p=require('path');${GUEST_PATH}const [root,file]=process.argv.slice(1);check(root,file,true);fs.rmSync(file,{force:true});`;
 
 // Image metadata is one bounded command per check, never an inventory transfer.
@@ -111,6 +113,11 @@ try {
   if(identity(fs.lstatSync(file))!==identity(s))fail('integrity-failed','Source changed after image hash');
   console.log(JSON.stringify({path:file,sha256:c.createHash('sha256').update(b).digest('hex'),bytes:b.length,identity:identity(s)}));
 }catch(e){console.log(JSON.stringify({error:e.imageCode||(e.code==='ENOENT'?'image-missing':/symlink|Path must be inside|ELOOP|ENOTDIR/.test(e.message)?'unsafe-path':'transfer-failed'),message:e.message}));}`;
+
+/** The guest scan hashes every byte, so its timeout grows with them: a 120 s base plus 8 MiB/s of hashing. */
+const SCAN_BASE_MS = 120_000;
+const SCAN_MS_PER_MIB = 125;
+export function scanTimeoutMs(bytes: number): number { return SCAN_BASE_MS + Math.ceil(bytes / 1048576) * SCAN_MS_PER_MIB; }
 
 function validFact(value: unknown): value is FileFact {
   const f = value as FileFact | null;
@@ -160,7 +167,7 @@ export class Transfer {
     await assertHostPath(approvedLocalRoot, local);
     const after = await readFile(local);
     if (hash(after) !== before || after.length !== bytes.length) throw new Error(`Staging source changed: ${local}`);
-    const facts = await this.scan(remote, guestRoot);
+    const facts = await this.scan(remote, guestRoot, bytes.length);
     if (facts.length !== 1 || facts[0].sha256 !== before || facts[0].bytes !== bytes.length) throw new Error(`Staging checksum mismatch: ${local}`);
     return { local, remote, sha256: before, bytes: facts[0].bytes };
   }
@@ -406,10 +413,20 @@ export class Transfer {
       clearTimeout(timer); options.signal?.removeEventListener('abort', abort);
     }
   }
-  async scan(remote: string, approvedRoot = remote): Promise<FileFact[]> {
+  /** The total bytes of a guest tree, from a stat-only walk. */
+  private async size(remote: string, approvedRoot: string): Promise<number> {
+    const size: unknown = JSON.parse(await this.checked([this.node, '-e', SIZE, remote, approvedRoot], SCAN_BASE_MS));
+    const bytes = (size as { bytes?: unknown } | null)?.bytes;
+    if (typeof bytes !== 'number' || !Number.isSafeInteger(bytes) || bytes < 0) throw new Error('Invalid remote inventory size');
+    return bytes;
+  }
+  /** `expectedBytes`, when the caller knows the size (a staged file, or the inventory
+   * before a pull), sets the timeout without the stat-only size walk. */
+  async scan(remote: string, approvedRoot = remote, expectedBytes?: number): Promise<FileFact[]> {
     // Frames are siblings of state/workspace, never evidence attachments. An
     // inventory of the lease root also works: the frame is created after walk.
     const guestRoot = this.options.guestRoot ?? dirname(remote);
+    const timeoutMs = scanTimeoutMs(expectedBytes ?? await this.size(remote, approvedRoot));
     const frame = join(guestRoot, `.inventory-${randomUUID()}.json`);
     const tempRoot = this.options.hostTempRoot ?? tmpdir();
     await assertHostPath(tempRoot, tempRoot, true);
@@ -417,7 +434,7 @@ export class Transfer {
     await assertHostPath(tempRoot, tempRoot);
     const hostDirectory = await mkdtemp(join(tempRoot, 'relay-inventory-'));
     try {
-      const fact: unknown = JSON.parse(await this.checked([this.node, '-e', SCAN, remote, approvedRoot, frame, guestRoot], 120000));
+      const fact: unknown = JSON.parse(await this.checked([this.node, '-e', SCAN, remote, approvedRoot, frame, guestRoot], timeoutMs));
       if (!validFact(fact) || fact.path !== frame) throw new Error('Invalid remote inventory frame');
       const result: unknown = JSON.parse((await this.pullFrame(frame, join(hostDirectory, 'inventory.json'), guestRoot, tempRoot, fact)).toString('utf8'));
       if (!Array.isArray(result)) throw new Error('Invalid remote inventory');
@@ -466,7 +483,8 @@ export class Transfer {
       await assertHostPath(localRoot, local);
       if (JSON.stringify(await inventory(local)) !== JSON.stringify(before)) throw new Error(`Extraction inventory mismatch: ${remote}`);
     }
-    if (JSON.stringify(await this.scan(remote, approvedRoot)) !== JSON.stringify(before)) throw new Error(`Source changed during extraction: ${remote}`);
+    // The inventory before the pull sizes the second scan.
+    if (JSON.stringify(await this.scan(remote, approvedRoot, before.reduce((sum, file) => sum + file.bytes, 0))) !== JSON.stringify(before)) throw new Error(`Source changed during extraction: ${remote}`);
     await assertHostPath(localRoot, local);
     return before;
   }
