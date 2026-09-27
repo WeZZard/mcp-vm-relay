@@ -1269,3 +1269,27 @@ test('finish keeps one host copy of the relay state: the pulled state is moved i
   assert.ok(await bytesUnder(join(acquired.output!, 'state')) >= guestState, 'the package holds the whole state');
   await f.assertClean();
 });
+
+test('finish fails before pulling the relay state when the evidence volume has too little free space, names the shortfall and keeps the VM', { timeout: 30000 }, async t => {
+  let free = 4096n; const volumes: string[] = [];
+  // An injected statfs: 4096 bytes free until the test frees space.
+  const statfs = async (path: string) => { volumes.push(path); return { bavail: free / 4096n, bsize: 4096n }; };
+  const f = await fixture(t, { statfs } as Partial<ManagerOptions>);
+  const acquired = await f.manager.acquire(acquireInput()); await f.stage();
+  await f.manager.run(operation('state-needs-space'));
+  const guestState = await bytesUnder(join(acquired.guestRoot, 'state'));
+  assert.ok(guestState > 4096, 'the fixture state is larger than the free space');
+  const pulls = () => f.service.requests.filter(r => r.path.endsWith('/pull') && r.body.remote_path.startsWith(join(acquired.guestRoot, 'state'))).length;
+  const before = pulls();
+  const failure = await f.manager.finish().then(() => assert.fail('finish must fail on too little space'), (error: Error) => error);
+  assert.match(failure.message, /free space/i);
+  assert.match(failure.message, new RegExp(`needs ${guestState} bytes`), 'the diagnostic names what the state needs');
+  assert.match(failure.message, /4096 bytes are free/, 'the diagnostic names what is free');
+  assert.match(failure.message, new RegExp(`short by ${guestState - 4096} bytes`), 'the diagnostic names the shortfall');
+  assert.equal(pulls(), before, 'nothing of the state was pulled');
+  await f.assertRetained(acquired.vm);
+  assert.ok(volumes.length && volumes.every(path => path.startsWith(join(f.root, 'packages'))), 'free space is measured on the evidence volume');
+  free = 1n << 40n;
+  const delivered = await f.manager.finish(); assert.equal(delivered.deliveryVerified, true);
+  await f.assertClean();
+});
