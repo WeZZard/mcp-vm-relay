@@ -162,16 +162,50 @@ function took(detail: StepDetail | undefined) {
   return Number.isFinite(ms) && ms >= 0 ? duration(ms) : undefined;
 }
 
-/** One snapshot, fitted to the viewport. Pressing it opens the snapshot alone in a lightbox. */
-function shot(step: ReviewPageStep, detail: StepDetail | undefined, number: string, role: "before" | "after") {
+/** One snapshot, fitted to the viewport. Pressing it opens the snapshot in the lightbox. */
+function shot(step: ReviewPageStep, detail: StepDetail | undefined, role: "before" | "after") {
   const path = step.snapshots?.[role];
   const name = role === "before" ? "Before" : "After";
   const at = preciseTime(role === "before" ? detail?.beforeAt : detail?.afterAt);
   const caption = `<figcaption><span class="label">${name}</span>${at ? `<time>${at}</time>` : ""}</figcaption>`;
   if (!path) return `<figure class="shot missing"><div class="void">${name}: unavailable — incomplete evidence</div>${caption}</figure>`;
-  const box = escapeHtml(`lightbox-${step.id}--${role}`);
-  return `<figure class="shot"><button type="button" class="zoom" popovertarget="${box}" title="Enlarge the ${role} snapshot"><img alt="${name} dispatch snapshot" src="${src(path)}"></button>${caption}
-<div class="lightbox" id="${box}" popover><figure><img loading="lazy" alt="${name} dispatch snapshot, enlarged" src="${src(path)}"><figcaption><span class="label">Step ${number} · ${name}</span>${at ? `<time>${at}</time>` : ""}<a href="${src(path)}">Open the original</a><button type="button" class="close" popovertarget="${box}" popovertargetaction="hide" aria-label="Close">×</button></figcaption></figure></div></figure>`;
+  return `<figure class="shot"><button type="button" class="zoom" popovertarget="${escapeHtml(boxId(step, role))}" title="Enlarge the ${role} snapshot"><img alt="${name} dispatch snapshot" src="${src(path)}"></button>${caption}</figure>`;
+}
+
+const boxId = (step: ReviewPageStep, role: "before" | "after" | "command") => `lightbox-${step.id}--${role}`;
+const expandIcon = `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M9.5 2.5h4v4M6.5 13.5h-4v-4M13.5 2.5 9 7M2.5 13.5 7 9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+/** One item of a lightbox sequence. `step` is the id of the view it belongs to. */
+type Box = { id: string; step: string; label: string; title: string; body: string; caption: string };
+
+// A lightbox shows one item of a sequence at a time: the trajectory's
+// snapshots and commands in step order, or the overview's images. Its arrows
+// name the previous and next items. Without script each arrow opens the next
+// lightbox over the current one; the script replaces the current one instead
+// and moves the page to the item's step.
+function lightboxes(boxes: Box[]) {
+  const nav = (target: Box | undefined, side: "prev" | "next") => target
+    ? `<button type="button" class="lb-nav ${side}" popovertarget="${escapeHtml(target.id)}" aria-label="${side === "prev" ? "Previous" : "Next"}: ${escapeHtml(target.label)}, ${escapeHtml(target.title)}"><span class="dir" aria-hidden="true">${side === "prev" ? "‹" : "›"}</span><span class="lbl"><span class="role">${escapeHtml(target.label)}</span><span class="t">${escapeHtml(target.title)}</span></span></button>` : "";
+  return boxes.map((box, i) => `<div class="lightbox" id="${escapeHtml(box.id)}" data-step="${escapeHtml(box.step)}" popover><div class="lb-body">${box.body}</div>${nav(boxes[i - 1], "prev")}<p class="lb-cap"><span class="label">${escapeHtml(box.label)}</span>${box.caption}<button type="button" class="close" popovertarget="${escapeHtml(box.id)}" popovertargetaction="hide" aria-label="Close">×</button></p>${nav(boxes[i + 1], "next")}</div>`).join("\n");
+}
+
+/** The trajectory's lightbox sequence: each step's snapshots, or its command. */
+function trajectoryBoxes(steps: ReviewPageStep[], model: ReviewPageModel, numbers: Map<string, string>): Box[] {
+  return steps.flatMap(step => {
+    const detail = model.details.get(step.id), number = numbers.get(step.id)!, { headline, command } = describe(step, detail), view = `step-${step.id}`;
+    if (!step.snapshots) {
+      const at = time(detail?.at);
+      return [{ id: boxId(step, "command"), step: view, label: `Step ${number} · ${step.inputMode === "diagnostic" ? "Diagnostic" : "Command"}`, title: headline,
+        body: `<div class="lb-term"><pre class="lb-cmd"><span class="prompt" aria-hidden="true">$</span>${escapeHtml(command ?? headline)}</pre>${detail?.output ? streamsOf(detail.output) || `<p class="quiet">No output.</p>` : ""}</div>`,
+        caption: at ? `<time>${at} UTC</time>` : "" }];
+    }
+    return (["before", "after"] as const).filter(role => step.snapshots?.[role]).map(role => {
+      const path = step.snapshots![role]!, name = role === "before" ? "Before" : "After", at = preciseTime(role === "before" ? detail?.beforeAt : detail?.afterAt);
+      return { id: boxId(step, role), step: view, label: `Step ${number} · ${name}`, title: headline,
+        body: `<img loading="lazy" alt="${name} dispatch snapshot, enlarged" src="${src(path)}">`,
+        caption: `${at ? `<time>${at}</time>` : ""}<a href="${src(path)}">Open the original</a>` };
+    });
+  });
 }
 
 /** The steps around a step: adjacent ones, and the nearest ones with errors. */
@@ -186,11 +220,11 @@ function stage(step: ReviewPageStep, detail: StepDetail | undefined, number: str
     ? `<a class="arrow ${side} ${set}" href="${escapeHtml(link(target))}" aria-label="${side === "prev" ? "Previous" : "Next"} step${set === "errs" ? " with errors" : ""}">${side === "prev" ? "‹" : "›"}</a>` : "";
   const arrows = arrow(around.previous, "prev", "all") + arrow(around.next, "next", "all") + arrow(around.previousError, "prev", "errs") + arrow(around.nextError, "next", "errs");
   if (!step.snapshots) {
-    return `<section class="stage terminal" aria-label="Step ${number} command">${arrows}<div class="term"><div class="term-bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span>${step.inputMode === "diagnostic" ? "Diagnostic command" : "Command"} · no snapshots</span></div>
+    return `<section class="stage terminal" aria-label="Step ${number} command">${arrows}<div class="term"><div class="term-bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span>${step.inputMode === "diagnostic" ? "Diagnostic command" : "Command"} · no snapshots</span><button type="button" class="enlarge" popovertarget="${escapeHtml(boxId(step, "command"))}" title="Enlarge the command">${expandIcon}Enlarge</button></div>
 <pre class="term-cmd"><span class="prompt" aria-hidden="true">$</span>${escapeHtml(command ?? headline)}</pre>${detail?.output ? streamsOf(detail.output) || `<p class="quiet">No output.</p>` : ""}
 <p class="term-note">${step.inputMode === "diagnostic" ? "Screenshots were not requested for this diagnostic." : "No snapshots were captured for this step."}</p></div></section>`;
   }
-  return `<section class="stage" aria-label="Step ${number} snapshots">${arrows}<div class="pair">${shot(step, detail, number, "before")}${shot(step, detail, number, "after")}</div></section>`;
+  return `<section class="stage" aria-label="Step ${number} snapshots">${arrows}<div class="pair">${shot(step, detail, "before")}${shot(step, detail, "after")}</div></section>`;
 }
 
 /** A reason as it concerns one step: the verdict it affects, and why. */
@@ -231,9 +265,16 @@ function thumb(step: ReviewPageStep, detail: StepDetail | undefined, number: str
 // the previous and next step with errors while "Focus on errors" is checked.
 // The track keeps the selected thumbnail in view, and the Trajectory tab
 // returns to the step last shown. While a lightbox is open, the arrow keys
-// show the step's before (left) or after (right) snapshot instead. Links
-// alone cannot bind keys.
+// and its arrows move through its sequence, and the page follows to the
+// item's step. The run's time is shown in the reader's own time zone. Links
+// alone cannot bind keys or read the reader's time zone.
 const keys = `(()=>{const steps=()=>[...document.querySelectorAll(".center>.step:not(.overview)")];`
+  + `const go=b=>{const box=b.closest(".lightbox"),next=document.getElementById(b.getAttribute("popovertarget"));if(!next)return;`
+  + `if(box)box.hidePopover();const s=next.dataset.step;if(s&&decodeURIComponent(location.hash.slice(1))!==s)location.hash=encodeURIComponent(s);next.showPopover()};`
+  + `document.addEventListener("click",e=>{const t=e.target instanceof Element?e.target:null;const b=t&&t.closest(".lb-nav");if(b){e.preventDefault();go(b);return}`
+  + `if(t&&t.classList.contains("lightbox"))t.hidePopover()});`
+  + `try{const f=new Intl.DateTimeFormat(undefined,{year:"numeric",month:"short",day:"numeric",hour:"numeric",minute:"2-digit",timeZoneName:"short"});`
+  + `document.querySelectorAll("time[data-local]").forEach(t=>{const d=new Date(t.dateTime);if(!isNaN(d.getTime()))t.textContent=f.format(d)})}catch{}`
   + `const current=()=>{let el=null;try{el=document.getElementById(decodeURIComponent(location.hash.slice(1)))}catch{}`
   + `const step=el&&el.closest(".step");return step?steps().indexOf(step):0};`
   + `const focused=()=>{const f=document.getElementById("focus-errors");return!!(f&&f.checked)};let last="";`
@@ -242,12 +283,13 @@ const keys = `(()=>{const steps=()=>[...document.querySelectorAll(".center>.step
   + `const t=e.target;if(t instanceof HTMLElement&&(t.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)))return;`
   + `const d=e.key==="ArrowRight"?1:e.key==="ArrowLeft"?-1:0;if(!d)return;`
   + `let box=null;try{box=document.querySelector(".lightbox:popover-open")}catch{}`
-  + `if(box){e.preventDefault();const other=document.getElementById(box.id.replace(/--(before|after)$/,d<0?"--before":"--after"));if(other&&other!==box){box.hidePopover();other.showPopover()}return}`
+  + `if(box){e.preventDefault();const b=box.querySelector(d<0?".lb-nav.prev":".lb-nav.next");if(b)go(b);return}`
   + `const all=steps();let j=current();if(j<0){if(d<0)return;j=-1}`
   + `do j+=d;while(j>=0&&j<all.length&&focused()&&!all[j].classList.contains("err"));`
   + `if(j<0||j>=all.length)return;e.preventDefault();location.hash=encodeURIComponent(all[j].id)});`
   + `const tab=document.querySelector(".tabs .t-traj");if(tab)tab.addEventListener("click",e=>{if(last){e.preventDefault();location.hash=last}});`
-  + `addEventListener("hashchange",()=>{try{document.querySelectorAll(":popover-open").forEach(p=>p.hidePopover())}catch{}reveal()});reveal()})();`;
+  + `addEventListener("hashchange",()=>{let id="";try{id=decodeURIComponent(location.hash.slice(1))}catch{}`
+  + `try{document.querySelectorAll(":popover-open").forEach(p=>{if(p.dataset.step!==id)p.hidePopover()})}catch{}reveal()});reveal()})();`;
 const keysPolicy = `'sha256-${createHash("sha256").update(keys).digest("base64")}'`;
 
 // Each step's position ties it to its thumbnail.
@@ -263,6 +305,7 @@ export function renderReviewPage(model: ReviewPageModel): string {
   const times = steps.map(s => Date.parse(model.details.get(s.id)?.at ?? "")).filter(Number.isFinite);
   const diagnostics = steps.filter(s => s.inputMode === "diagnostic").length, actions = steps.length - diagnostics;
   const errors = steps.filter(erred).length;
+  const started = times.length ? new Date(Math.min(...times)).toISOString() : undefined;
   const concerns = new Map<string, Concern[]>();
   for (const [key, label] of [["snapshots", `Snapshots ${model.completeness}`], ["execution", `Execution ${model.execution}`]] as const)
     for (const reason of model.reasons[key]) for (const id of reason.stepIds) concerns.set(id, [...(concerns.get(id) ?? []), { verdict: label, text: reason.text }]);
@@ -276,11 +319,16 @@ export function renderReviewPage(model: ReviewPageModel): string {
     const [, declared = "", ...rest] = output.path.split("/");
     byName.set(declared, [...(byName.get(declared) ?? []), { ...output, label: rest.filter(part => !uuid.test(part)).join("/") }]);
   }
+  const outputBoxes: Box[] = [];
   const outputs = [...byName].map(([declared, files]) => {
     const images = files.filter(f => /\.(png|jpe?g|webp|gif)$/i.test(f.path)), others = files.filter(f => !images.includes(f));
     const total = files.reduce((sum, f) => sum + f.bytes, 0);
     // A long list of outputs folds each declared name; a short one shows everything.
-    return `<details class="group"${model.outputs.length <= 12 ? " open" : ""}><summary><span class="where">${escapeHtml(declared)}</span><span class="count">${plural(files.length, "file")} · ${size(total)}</span></summary>${others.length ? `<ul class="flist">${others.map(f => `<li><a href="${src(f.path)}">${escapeHtml(f.label)}</a><span>${size(f.bytes)}</span></li>`).join("")}</ul>` : ""}${images.length ? `<div class="gallery">${images.map(f => `<a class="gthumb" href="${src(f.path)}"><img loading="lazy" alt="${escapeHtml(f.label)}" src="${src(f.path)}"><span>${escapeHtml(f.label.split("/").at(-1))}<small>${size(f.bytes)}</small></span></a>`).join("")}</div>` : ""}</details>`;
+    return `<details class="group"${model.outputs.length <= 12 ? " open" : ""}><summary><span class="where">${escapeHtml(declared)}</span><span class="count">${plural(files.length, "file")} · ${size(total)}</span></summary>${others.length ? `<ul class="flist">${others.map(f => `<li><a href="${src(f.path)}">${escapeHtml(f.label)}</a><span>${size(f.bytes)}</span></li>`).join("")}</ul>` : ""}${images.length ? `<div class="gallery">${images.map(f => {
+      const id = `lightbox-output-${outputBoxes.length + 1}`, name = f.label.split("/").at(-1)!;
+      outputBoxes.push({ id, step: "overview", label: declared, title: f.label, body: `<img loading="lazy" alt="${escapeHtml(f.label)}, enlarged" src="${src(f.path)}">`, caption: `<span class="file">${escapeHtml(f.label)}</span><span class="size">${size(f.bytes)}</span><a href="${src(f.path)}">Open the original</a>` });
+      return `<button type="button" class="gthumb" popovertarget="${id}" title="Enlarge ${escapeHtml(name)}"><img loading="lazy" alt="${escapeHtml(f.label)}" src="${src(f.path)}"><span>${escapeHtml(name)}<small>${size(f.bytes)}</small></span></button>`;
+    }).join("")}</div>` : ""}</details>`;
   }).join("");
   const stat = (label: string, value: string) => `<li><b>${value}</b>${label ? ` <span>${label}</span>` : ""}</li>`;
   // Reasons with the same words are one reason for all their steps.
@@ -300,19 +348,22 @@ export function renderReviewPage(model: ReviewPageModel): string {
 <section class="block"><h3>Declared outputs · ${model.outputs.length}</h3>${outputs ? `<div class="outputs">${outputs}</div>` : `<p class="quiet">No declared outputs were delivered.</p>`}</section></div></section>
 <aside class="panel" aria-label="Package"><div class="panel-scroll"><p class="eyebrow"><span>Package</span></p><h2>${escapeHtml(title)}</h2>
 <dl class="facts stack"><div><dt>Package</dt><dd>${escapeHtml(model.packageId)}</dd></div><div><dt>Task</dt><dd>${escapeHtml(model.taskId)}</dd></div><div><dt>Session</dt><dd>${escapeHtml(model.sessionId)}</dd></div></dl>
-<section class="block"><h3>Files</h3><ul class="files"><li><a href="manifest.json">manifest.json</a><span>Checksums of every artifact</span></li><li><a href="summary.json">summary.json</a><span>Verdicts and findings</span></li><li><a href="trajectory.json">trajectory.json</a><span>Steps as recorded</span></li></ul></section></div>
-<nav class="pager">${steps[0] ? `<a href="${escapeHtml(link(steps[0]))}">Start at step 01 ›</a>` : "<span></span>"}</nav></aside></article>`;
+<section class="block"><h3>Files</h3><ul class="files"><li><a href="manifest.json">manifest.json</a><span>Checksums of every artifact</span></li><li><a href="summary.json">summary.json</a><span>Verdicts and findings</span></li><li><a href="trajectory.json">trajectory.json</a><span>Steps as recorded</span></li></ul></section></div></aside></article>`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' file:; style-src 'unsafe-inline'; script-src ${keysPolicy}; base-uri 'none'; form-action 'none'"><title>Relay review: ${escapeHtml(model.packageId)}</title><style>${css}${selection(steps.length)}</style></head><body>
 <div class="app">
 <header class="top"><div class="brand"><span class="mark" aria-hidden="true"></span><div><h1 title="${escapeHtml(model.packageId)}">${escapeHtml(title)}</h1>
-<ul class="stats">${stat(noun(steps.length, "step"), String(steps.length))}${stat(noun(actions, "action"), String(actions))}${stat(noun(diagnostics, "diagnostic"), String(diagnostics))}${times.length ? `${stat("UTC", time(new Date(Math.min(...times)).toISOString())!)}${stat("", duration(Math.max(...times) - Math.min(...times)))}` : ""}</ul></div></div>
-<nav class="tabs" aria-label="View"><a class="t-traj" href="${steps[0] ? escapeHtml(link(steps[0])) : "#"}">Trajectory</a><a class="t-over" href="#overview">Overview<span class="${model.findings.length ? "has" : ""}">${model.findings.length}</span></a></nav>
-<ul class="pills">${pill("snapshots", "Snapshots", model.completeness)}${pill("execution", "Execution", model.execution)}</ul></header>
+<ul class="stats">${stat(noun(steps.length, "step"), String(steps.length))}${stat(noun(actions, "action"), String(actions))}${stat(noun(diagnostics, "diagnostic"), String(diagnostics))}${times.length ? stat("", duration(Math.max(...times) - Math.min(...times))) : ""}</ul></div></div>
+<div class="mid"><nav class="tabs" aria-label="View"><a class="t-traj" href="${steps[0] ? escapeHtml(link(steps[0])) : "#"}">Trajectory</a><a class="t-over" href="#overview">Overview<span class="${model.findings.length ? "has" : ""}">${model.findings.length}</span></a></nav>
+<label class="focus" title="Highlight the steps with errors, and move between them with the arrows"><input type="checkbox" id="focus-errors"${errors ? "" : " disabled"}>Focus on errors<span>${errors}</span></label></div>
+<div class="side"><ul class="pills">${pill("snapshots", "Snapshots", model.completeness)}${pill("execution", "Execution", model.execution)}</ul>${started ? `<p class="when"><span>Ran</span><time datetime="${started}" data-local title="${started}">${started.slice(0, 16).replace("T", " ")} UTC</time></p>` : ""}</div></header>
 <main class="center">${steps.map((step, i) => `<article id="step-${escapeHtml(step.id)}" class="step ${tone(step.execution)}${erred(step) ? " err" : ""}">${stage(step, model.details.get(step.id), numbers.get(step.id)!, {
     previous: steps[i - 1], next: steps[i + 1], previousError: steps.slice(0, i).findLast(erred), nextError: steps.slice(i + 1).find(erred) })}${panel(step, model.details.get(step.id), numbers.get(step.id)!, steps.length, concerns.get(step.id) ?? [])}</article>`).join("\n")}
 ${overview}</main>
-<footer class="track" aria-label="Steps"><label class="focus" title="Highlight the steps with errors, and move between them with the arrows"><input type="checkbox" id="focus-errors"${errors ? "" : " disabled"}>Focus on errors<span>${errors}</span></label><ol>${steps.map(step => thumb(step, model.details.get(step.id), numbers.get(step.id)!, concerns.has(step.id))).join("")}</ol></footer>
-</div><script>${keys}</script></body></html>
+<footer class="track" aria-label="Steps"><ol>${steps.map(step => thumb(step, model.details.get(step.id), numbers.get(step.id)!, concerns.has(step.id))).join("")}</ol></footer>
+</div>
+${lightboxes(trajectoryBoxes(steps, model, numbers))}
+${lightboxes(outputBoxes)}
+<script>${keys}</script></body></html>
 `;
 }
 
@@ -337,14 +388,16 @@ b,time,.n,.exit,dd,.took{font-variant-numeric:tabular-nums}
 .verdict{display:inline-flex;align-items:center;gap:.45rem;font:600 12.5px/1 var(--sans);color:var(--tone,var(--dim));text-transform:capitalize}
 .verdict i{flex:none;width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 0 3px color-mix(in srgb,currentColor 18%,transparent)}
 .app{height:100vh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;grid-template-columns:minmax(0,1fr);overflow:clip}.track{min-width:0;position:relative;z-index:0;display:grid}
-.top{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:1rem 1.25rem;padding:1.1rem 1.75rem}
+.top{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:start;gap:1rem 1.25rem;padding:1.1rem 1.75rem}
 .brand{display:flex;align-items:center;gap:.9rem;min-width:0}
 .mark{flex:none;width:1.9rem;height:1.9rem;border-radius:50%;background:var(--grad);box-shadow:0 6px 18px var(--ring)}
 h1{font:700 1.3rem/1.15 var(--round);letter-spacing:-.015em;margin:0}
 .stats{display:flex;flex-wrap:wrap;gap:.15rem 1rem;list-style:none;margin:.3rem 0 0;padding:0;font-size:12.5px;color:var(--faint)}.stats b{font:700 12.5px var(--round);color:var(--text)}
-.pills{justify-self:end;display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:.4rem;list-style:none;margin:0;padding:0}.pills>li,.stats>li{white-space:nowrap}
+.pills{display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:.4rem;list-style:none;margin:0;padding:0}.pills>li,.stats>li{white-space:nowrap}
 .pill{display:flex;align-items:center;gap:.5rem;padding:.42rem .8rem;border-radius:999px;background:color-mix(in srgb,var(--tone) 12%,transparent);font-size:12px;color:var(--dim)}
-.tabs{justify-self:center;display:flex;gap:.2rem;padding:.25rem;border-radius:999px;background:var(--s2)}
+.brand,.side{margin-top:.2rem}.side{justify-self:end;display:grid;justify-items:end;gap:.4rem;min-width:0}.mid{justify-self:center;display:grid;justify-items:center;gap:.35rem}
+.when{display:flex;align-items:baseline;gap:.45rem;margin:0 .8rem 0 0;font-size:12px;color:var(--faint)}.when time{font:600 12.5px var(--round);color:var(--text)}
+.tabs{display:flex;gap:.2rem;padding:.25rem;border-radius:999px;background:var(--s2)}
 .tabs a{display:inline-flex;align-items:center;gap:.5rem;padding:.4rem 1rem;border-radius:999px;color:var(--dim);font-size:13px;font-weight:600}.tabs a:hover{text-decoration:none;color:var(--text)}
 .tabs a span{display:grid;place-items:center;min-width:1.35rem;height:1.35rem;padding:0 .35rem;font:700 11px/1 var(--round);border-radius:999px;background:var(--s3);color:var(--dim)}.tabs a span.has{background:var(--grad);color:var(--on)}
 .app:not(:has(#overview:target)) .t-traj,.app:has(#overview:target) .t-over{background:var(--s1);color:var(--text);box-shadow:var(--shadow)}
@@ -360,14 +413,14 @@ h1{font:700 1.3rem/1.15 var(--round);letter-spacing:-.015em;margin:0}
 .vblock{padding:.95rem 1.1rem;border-radius:14px;background:var(--s1);box-shadow:var(--shadow)}.vblock+.vblock{margin-top:.6rem}
 .vblock h4{display:flex;align-items:center;gap:.7rem;margin:0 0 .5rem;font:700 14px var(--round)}.vwhy{margin:0 0 .6rem;font-size:12.5px;color:var(--faint)}.vblock>.quiet{font-size:13.5px}
 .face{position:relative}.took{position:absolute;top:.35rem;left:.35rem;padding:.18rem .45rem;border-radius:999px;background:rgba(42,29,21,.72);color:#fff;font:700 10.5px/1 var(--round);backdrop-filter:blur(4px)}.flag{position:absolute;top:.35rem;right:.35rem;display:grid;place-items:center;width:1.1rem;height:1.1rem;border-radius:50%;background:var(--warn);color:#fff;font:800 11px/1 var(--round);box-shadow:0 2px 6px rgba(0,0,0,.2)}
-.focus{justify-self:end;margin:.55rem 1.4rem 0 0;display:flex;align-items:center;gap:.45rem;padding:.3rem .6rem;border-radius:999px;font-size:12px;font-weight:600;color:var(--dim);cursor:pointer;user-select:none}
+.focus{display:flex;align-items:center;gap:.45rem;padding:.3rem .6rem;border-radius:999px;font-size:12px;font-weight:600;color:var(--dim);cursor:pointer;user-select:none}
 .focus:hover{background:var(--s2)}.focus input{appearance:none;margin:0;width:1.05rem;height:1.05rem;border-radius:6px;background:var(--s1);box-shadow:inset 0 0 0 1.5px var(--faint);display:grid;place-items:center;cursor:pointer}
 .focus input:checked{background:var(--bad);box-shadow:none}.focus input:checked::after{content:"";width:.28rem;height:.55rem;border:solid #fff;border-width:0 2px 2px 0;rotate:45deg;translate:0 -1px}
 .focus input:disabled,.focus:has(input:disabled){cursor:default;opacity:.55}.focus span{font:700 11px/1 var(--round);color:var(--bad)}.focus:has(input:disabled) span{color:var(--faint)}
 .app:has(#focus-errors:checked) .track li:not(.err){opacity:.35;filter:grayscale(1)}
 .app:has(#focus-errors:checked) .track li.err .face{box-shadow:0 0 0 2px var(--bad),0 6px 16px color-mix(in srgb,var(--bad) 25%,transparent)}
 .app:has(#focus-errors:checked) .track li.err .t{color:var(--bad)}
-.app:has(#overview:target) .track{display:none}
+.app:has(#overview:target) .track{display:none}.app:has(#overview:target) .focus{visibility:hidden}.app:has(#overview:target) .center{padding-bottom:.75rem}
 .center{display:grid;grid-template-columns:minmax(0,1fr) minmax(20rem,25rem);grid-template-areas:"stage panel";gap:0 .75rem;padding:0 .75rem;min-height:0;position:relative;z-index:1}
 .step{display:none}.step:target{display:contents}.center:not(:has(:target))>.step:first-of-type{display:contents}
 .stage{grid-area:stage;position:relative;min-width:0;min-height:0;background:var(--bg);display:grid;grid-template-rows:minmax(0,1fr);overflow:clip}
@@ -378,12 +431,21 @@ h1{font:700 1.3rem/1.15 var(--round);letter-spacing:-.015em;margin:0}
 .zoom:hover img{box-shadow:0 0 0 2px var(--accent),0 18px 44px rgba(60,30,10,.18)}
 .shot figcaption{display:flex;justify-content:center;gap:.7rem;align-items:baseline}.shot figcaption time{font:12px var(--mono);color:var(--faint)}
 .pair .shot:last-child figcaption .label{color:var(--accent)}
-.lightbox{inset:0;margin:auto;width:max-content;height:max-content;max-width:96vw;max-height:96vh;padding:0;border:0;background:none;overflow:visible}
-.lightbox::backdrop{background:rgba(251,246,239,.9);backdrop-filter:blur(6px)}
-.lightbox figure{margin:0;display:grid;gap:.8rem;justify-items:center}
-.lightbox img{display:block;max-width:94vw;max-height:calc(96vh - 3.5rem);object-fit:contain;border-radius:14px;background:#fff;box-shadow:0 2px 6px rgba(60,30,10,.1),0 30px 80px rgba(60,30,10,.28)}
-.lightbox figcaption{display:flex;align-items:center;gap:.9rem;padding:.35rem .45rem .35rem 1rem;border-radius:999px;background:var(--s1);box-shadow:var(--shadow);font-size:12.5px}
-.lightbox time{font:12px var(--mono);color:var(--faint)}.lightbox figcaption a{font-weight:600}
+.lightbox{position:fixed;inset:0;width:auto;height:auto;max-width:none;max-height:none;margin:0;padding:1.5rem 1.5rem 1.25rem;border:0;background:none;color:var(--text);overflow:hidden}
+.lightbox:popover-open{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto;gap:1rem 1.25rem;align-items:center}
+.lightbox::backdrop{background:rgba(251,246,239,.92);backdrop-filter:blur(8px)}
+.lb-body{grid-column:1/-1;grid-row:1;display:grid;place-items:center;min-height:0;height:100%;pointer-events:none}.lb-body>*{pointer-events:auto}
+.lb-body img{display:block;max-width:100%;max-height:calc(100vh - 7.5rem);object-fit:contain;border-radius:14px;background:#fff;box-shadow:0 2px 6px rgba(60,30,10,.1),0 30px 80px rgba(60,30,10,.28)}
+.lb-term{width:min(100%,72rem);max-height:calc(100vh - 7.5rem);overflow:auto;padding:2rem 2.25rem;border-radius:22px;background:var(--s1);box-shadow:0 2px 6px rgba(60,30,10,.1),0 30px 80px rgba(60,30,10,.2)}
+.lb-cmd{font-size:18px;line-height:1.65;color:var(--text)}.lb-term .stream{margin:1.25rem 0 0}.lb-term .stream pre{font-size:15px;max-height:none}.lb-term .quiet{margin-top:1.25rem;font-size:15px}
+.lb-cap{grid-row:2;grid-column:2;display:flex;align-items:center;gap:.9rem;margin:0;padding:.35rem .45rem .35rem 1rem;border-radius:999px;background:var(--s1);box-shadow:var(--shadow);font-size:12.5px;white-space:nowrap}
+.lb-cap time,.lb-cap .size{font:12px var(--mono);color:var(--faint)}.lb-cap a{font-weight:600}.lb-cap .file{font:12px var(--mono);color:var(--text)}
+.lb-nav{all:unset;box-sizing:border-box;grid-row:2;display:flex;align-items:center;gap:.7rem;min-width:0;max-width:22rem;padding:.4rem 1rem .4rem .4rem;border-radius:999px;background:var(--s1);box-shadow:var(--shadow);cursor:pointer}
+.lb-nav.prev{grid-column:1;justify-self:start}.lb-nav.next{grid-column:3;justify-self:end;flex-direction:row-reverse;padding:.4rem .4rem .4rem 1rem;text-align:right}
+.lb-nav .dir{flex:none;display:grid;place-items:center;width:2.1rem;height:2.1rem;border-radius:50%;background:var(--s2);font-size:1.3rem;line-height:1;color:var(--text)}
+.lb-nav:hover .dir{background:var(--grad);color:var(--on)}.lb-nav:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.lbl{display:grid;min-width:0}.lbl .role{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 10.5px/1.4 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}.lbl .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;color:var(--dim)}
+.enlarge{all:unset;margin-left:auto;display:flex;align-items:center;gap:.4rem;padding:.3rem .7rem;border-radius:999px;font-weight:600;color:var(--dim);cursor:zoom-in}.enlarge:hover{background:var(--s2);color:var(--accent)}.enlarge:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .close{all:unset;display:grid;place-items:center;width:1.8rem;height:1.8rem;border-radius:50%;background:var(--s2);color:var(--dim);font:600 1.1rem/1 var(--sans);cursor:pointer}.close:hover{background:var(--grad);color:var(--on)}.close:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .void{display:grid;place-items:center;border-radius:14px;background:var(--s1);color:var(--faint);padding:2rem;text-align:center;aspect-ratio:16/9}
 .arrow{position:absolute;top:50%;translate:0 -50%;z-index:3;display:grid;place-items:center;width:2.75rem;height:2.75rem;border-radius:50%;background:rgba(255,255,255,.85);backdrop-filter:blur(8px);color:var(--text);font-size:1.5rem;line-height:1;box-shadow:var(--shadow)}
@@ -412,11 +474,8 @@ h1{font:700 1.3rem/1.15 var(--round);letter-spacing:-.015em;margin:0}
 .raw summary{cursor:pointer;font-size:12px;color:var(--faint);width:max-content}.raw summary:hover{color:var(--dim)}.raw pre{margin-top:.5rem;color:var(--faint);font-size:11.5px;max-height:12rem;overflow:auto}
 .facts{display:grid;grid-template-columns:1fr 1fr;gap:.9rem 1rem;margin:1.5rem 0 0;padding:1rem 1.1rem;border-radius:14px;background:var(--s2)}.facts dd{margin:.2rem 0 0;font:12.5px var(--mono);color:var(--dim);overflow-wrap:anywhere}
 .facts.stack{grid-template-columns:1fr}
-.pager{display:flex;justify-content:space-between;align-items:center;gap:.5rem;padding:.8rem 1rem 1rem;font-size:13px;font-weight:600}
-.pager a{padding:.45rem .9rem;border-radius:999px;background:var(--s2);color:var(--text)}.pager a:hover{background:var(--grad);color:var(--on);text-decoration:none}
-.pager .stable{background:none;font-weight:500;color:var(--faint)}.pager .stable:hover{background:none;color:var(--text)}.pager .off{padding:.45rem .9rem;color:var(--s3)}
 .files{list-style:none;margin:0;padding:0;display:grid;gap:.6rem}.files li{display:grid}.files a{font:12.5px var(--mono)}.files span{font-size:12px;color:var(--faint)}
-.doc{grid-template-rows:minmax(0,1fr);overflow:auto}.doc-in{max-width:52rem;padding:2.25rem 2.75rem 3rem}
+.doc{display:flex;overflow:auto}.doc-in{width:100%;max-width:52rem;margin:auto;padding:2.25rem 2.75rem 3rem}
 .doc h2{font:700 1.75rem/1.15 var(--round);letter-spacing:-.015em;margin:0}.lede{color:var(--dim);margin:.7rem 0 0}
 .findings{list-style:none;margin:0;padding:0;display:grid;gap:.5rem}.findings li{padding:.8rem 1rem;border-radius:14px;background:var(--s1);box-shadow:var(--shadow)}
 .findings summary{cursor:pointer}.findings code{display:block;font:11.5px/1.6 var(--mono);color:var(--faint);margin-top:.4rem;overflow-wrap:anywhere}
@@ -427,9 +486,9 @@ h1{font:700 1.3rem/1.15 var(--round);letter-spacing:-.015em;margin:0}
 .group[open] summary{margin-bottom:.75rem}
 .flist{list-style:none;margin:0;padding:0;display:grid;gap:.3rem;font:12px var(--mono);max-height:16rem;overflow:auto}.flist li{display:flex;justify-content:space-between;gap:1rem}.flist a{overflow-wrap:anywhere;min-width:0}.flist span{color:var(--faint);flex:none}
 .gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(8.5rem,1fr));gap:.75rem}.flist+.gallery{margin-top:.75rem}
-.gthumb{display:grid;gap:.4rem;font:11.5px var(--mono);min-width:0;color:var(--dim)}.gthumb span{display:flex;justify-content:space-between;gap:.5rem;overflow:hidden;white-space:nowrap}.gthumb small{color:var(--faint);font-size:inherit;flex:none}
-.gthumb img{width:100%;aspect-ratio:16/9;object-fit:contain;border-radius:10px;display:block;background:var(--s2);box-shadow:inset 0 0 0 1px var(--hair);transition:box-shadow .15s}.gthumb:hover img{box-shadow:0 0 0 2px var(--accent)}
-.track ol{min-width:0;list-style:none;margin:0;padding:.3rem 1.75rem 1rem;display:flex;gap:.6rem;overflow-x:auto;scrollbar-width:thin;scrollbar-color:var(--s3) transparent}
+.gthumb{all:unset;box-sizing:border-box;cursor:zoom-in;display:grid;gap:.4rem;font:11.5px var(--mono);min-width:0;color:var(--dim)}.gthumb span{display:flex;justify-content:space-between;gap:.5rem;overflow:hidden;white-space:nowrap}.gthumb small{color:var(--faint);font-size:inherit;flex:none}
+.gthumb img{width:100%;aspect-ratio:16/9;object-fit:contain;border-radius:10px;display:block;background:var(--s2);box-shadow:inset 0 0 0 1px var(--hair);transition:box-shadow .15s}.gthumb:hover img,.gthumb:focus-visible img{box-shadow:0 0 0 2px var(--accent)}
+.track ol{min-width:0;list-style:none;margin:0;padding:.75rem 1.75rem 1rem;display:flex;gap:.6rem;overflow-x:auto;scrollbar-width:thin;scrollbar-color:var(--s3) transparent}
 .track li{flex:none;width:9.25rem}
 .track a{display:grid;gap:.45rem;padding:.35rem;border-radius:16px;color:var(--text);transition:background .15s}
 .track a:hover{text-decoration:none;background:var(--s1)}
@@ -440,7 +499,8 @@ h1{font:700 1.3rem/1.15 var(--round);letter-spacing:-.015em;margin:0}
 .cap .n{font:700 11px var(--round);color:var(--faint)}.dot{flex:none;width:7px;height:7px;border-radius:50%;background:var(--tone)}
 .cap .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dim)}
 .track li.bad .face{box-shadow:0 0 0 2px var(--bad)}
-@media(max-width:960px){.top{grid-template-columns:minmax(0,1fr)}.pills{justify-self:center;justify-content:center}.app{height:auto;min-height:100vh;overflow:visible}.center{grid-template-columns:minmax(0,1fr);grid-template-areas:"stage" "panel";gap:.75rem}
+@media(max-width:960px){.top{grid-template-columns:minmax(0,1fr)}.side{justify-self:center;justify-items:center}.pills{justify-content:center}.app{height:auto;min-height:100vh;overflow:visible}.center{grid-template-columns:minmax(0,1fr);grid-template-areas:"stage" "panel";gap:.75rem}
 .stage{min-height:60vh}.pair{padding:.5rem 3.75rem 1rem;grid-template-columns:1fr}.track{position:sticky;bottom:0;background:var(--bg)}}
+@supports (corner-shape:squircle){*,*::before,*::after,::backdrop{corner-shape:squircle}.mark,.dot,.verdict i,.arrow,.q,.flag,.close,.dots i,.lb-nav .dir{corner-shape:round}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
-@media print{.app{height:auto;display:block}.track,.arrow,.pager,.tabs,.focus,.lightbox{display:none}.center{display:block}.step{display:block!important;break-inside:avoid;margin-bottom:1rem}.stage{background:none}}`;
+@media print{.app{height:auto;display:block}.track,.arrow,.mid,.lightbox,.enlarge{display:none}.center{display:block}.step{display:block!important;break-inside:avoid;margin-bottom:1rem}.stage{background:none}}`;
