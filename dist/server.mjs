@@ -31216,6 +31216,9 @@ async function main(args) {
   process.stdin.once("close", () => {
     void shutdown("Enclosure session ended: the client closed standard input", 0);
   });
+  process.stdout.on("error", (error2) => {
+    void shutdown(`Enclosure session ended: standard output failed (${error2.code ?? message(error2)})`, 0);
+  });
   process.once("SIGTERM", () => {
     void shutdown("Enclosure session terminated", 0);
   });

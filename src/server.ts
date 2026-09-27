@@ -174,6 +174,11 @@ async function main(args: string[]): Promise<void> {
   // renewing the lease for as long as the owner lock helper keeps it alive.
   process.stdin.once('end', () => { void shutdown('Enclosure session ended: the client closed standard input', 0); });
   process.stdin.once('close', () => { void shutdown('Enclosure session ended: the client closed standard input', 0); });
+  // The SDK writes responses without an error handler. A write to a client
+  // that has gone (EPIPE) would otherwise be an unhandled error that ends the
+  // process before cleanup, leaving the lease recorded as active. Every later
+  // error on the same stream lands here too.
+  process.stdout.on('error', error => { void shutdown(`Enclosure session ended: standard output failed (${(error as NodeJS.ErrnoException).code ?? message(error)})`, 0); });
   process.once('SIGTERM', () => { void shutdown('Enclosure session terminated', 0); });
   process.once('SIGINT', () => { void shutdown('Enclosure session interrupted', 0); });
   await relay.server.connect(new StdioServerTransport());
