@@ -5,7 +5,7 @@
 | Document type | Decision record and design note |
 | Scope | How the MCP server ends a session, and how `acquire`, `finish` and `release` behave at the edges of the lease lifecycle |
 | Base | Published 0.6.1 source (`bec0ba4`) |
-| Status | Decisions R1–R6 are implemented with reproducer tests. R7 and R8 have reproducer tests only and wait for the owner's decision. |
+| Status | Decisions R1–R6 are implemented with reproducer tests. R8 is decided by owner decision PS-D12, and its implementation follows the reproducer. R7 has a reproducer test only and waits for the owner's decision. |
 | Authority | [Technical design, Section 5](technical-design.md#5-lease-lifecycle-persistence-and-recovery) remains the lifecycle contract. This note records the corrections made to meet it and the two points where it changes it. |
 
 ## Context
@@ -31,7 +31,22 @@
 | R5 | `relay_finish` stops at the first declared extraction that fails, so every retry fails the same way. | A declared output whose source does not exist in the guest is recorded as an `extraction-incomplete` event, reported in the result as `incompleteExtractions`, and packaging continues. A transfer or checksum failure still fails `finish` and keeps the VM. |
 | R6 | `release` and shutdown wait behind a guest command that cannot be cancelled. | Pass the tool call's abort signal through to the vm-service `exec` request for diagnostic commands and for the receiver dispatch, so a cancelled command stops waiting and the next queued operation can run. |
 | R7 | A failed `finish` keeps the VM. | No change; this is documented behavior. The owner decides whether a failed delivery should release. A skipped reproducer documents the current behavior. |
-| R8 | The relay state grows about 14 MiB per recorded step, and `finish` fails once the state passes 512 MiB or 10,000 files. | No change; the owner decides the bound or the snapshot policy. A skipped reproducer documents the current behavior at the transfer level. |
+| R8 | The relay state grows about 14 MiB per recorded step, and `finish` fails once the state passes 512 MiB or 10,000 files. | Resolved by owner decision PS-D12 (below): relay evidence has no size limit, so the 512 MiB / 10,000-file bound on delivering the relay state is removed. |
+
+### Owner decision PS-D12: relay evidence has no size limit
+
+| Item | Value |
+|---|---|
+| Decision | PS-D12, recorded in pi-secretary's decision records on 2026-09-27 |
+| Decided by | The owner; this decision is fixed and is not reopened here |
+| Resolves | R8 |
+
+- Relay evidence has no size limit.
+- Screenshots are not scaled, compressed, deduplicated or budgeted; every captured original is delivered as captured.
+- The 512 MiB / 10,000-file bound on delivering the relay state (`src/transfer.ts`) is removed. The owner never designed that bound.
+- The bound on what a client stages into the guest (512 MiB and 10,000 files per staging request) is not evidence and stays.
+- The 64 MiB limit on a single image original stays, because it is a validity check on one image, not a budget for the evidence.
+- The protections the bound gave the host are replaced by measures that do not limit evidence; they are described in the design below.
 
 ## Design
 

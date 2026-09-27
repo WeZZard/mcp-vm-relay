@@ -581,6 +581,7 @@ snapshot references. Preserve original annotations in sealed historical evidence
 - References survive recording resets only through the current owner's retained recording lineages. Local metadata and original recovery precede guest checks. After enclosure closure or sealing, retrieval reports a stale reference; delivered host-local files remain readable without a new VM.
 - Normal successful finalization exports the declared consumer directory once. Named extractions and full-workspace exports use UUID destinations, preserving earlier failed-finalization attempts. Single-image retrieval never performs those exports.
 - Package integrity, snapshot completeness, execution grading, and verified destruction remain independent requirements. Typed image delivery does not satisfy final package delivery or human review.
+- Relay evidence has no size limit (owner decision PS-D12, [lifecycle fixes](lifecycle-fixes.md#owner-decision-ps-d12-relay-evidence-has-no-size-limit)). Screenshots are not scaled, compressed, deduplicated or budgeted, and delivering the relay state has no total-size or file-count bound. The staging bound on client pushes and the 64 MiB validity check on one image original are not evidence budgets and remain.
 
 ## 7. Installation and operational constraints
 

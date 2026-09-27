@@ -320,6 +320,12 @@ Tart inventory (the selected one, when an environment is selected) before
 claiming destruction. Leases default to 4 hours with a heartbeat; the
 vm-service reaper is the final backstop for process death.
 
+Relay evidence has no size limit (owner decision PS-D12): screenshots are
+delivered as captured, never scaled, compressed, deduplicated or budgeted, and
+the relay state is delivered whatever its total size or file count. Only what a
+client stages into the guest is bounded (512 MiB and 10,000 files per staging
+request), and a single image original must be at most 64 MiB to be valid.
+
 ## Configuration
 
 - `MCP_VM_RELAY_PROJECT`: the project directory (the plugin passes Claude Code's). Evidence lands under `relay-evidence/<task>/` there.
