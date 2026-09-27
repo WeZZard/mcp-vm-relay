@@ -174,8 +174,13 @@ test("review page orders steps by time and reads commands, exit status, output s
   assert.match(diagnostic, /<button type="button" class="enlarge" popovertarget="lightbox-diagnostic-early--command" title="Enlarge the command">/);
   assert.match(html, /id="lightbox-diagnostic-early--command" data-step="step-diagnostic-early" popover><div class="lb-body"><div class="lb-term"><pre class="lb-cmd">/);
   assert.match(html, /<button type="button" class="lb-nav next" popovertarget="lightbox-step-0--before" aria-label="Next: Step 02 · Before, /);
-  // The top row says when the run started; the page's script restates it in the reader's time zone.
-  assert.match(html, /<p class="when"><span>Ran<\/span><time datetime="[^"]+Z" data-local title="[^"]+">\d{4}-\d\d-\d\d \d\d:\d\d UTC<\/time><\/p>/);
+  // The title is the relay's, with the task beside it. The statistics say when the run started in UTC,
+  // and, filled in by the page's script, in the reader's time zone.
+  assert.match(html, /<h1 title="[^"]+">Relay<span class="task">[^<]+<\/span><\/h1>/);
+  assert.match(html, /<p class="when">Started <time datetime="2026-09-12T23:59:00\.000Z" title="[^"]+">Sep 12, 2026, 23:59 UTC<\/time><span class="local" hidden><span class="sep" aria-hidden="true">·<\/span><time datetime="2026-09-12T23:59:00\.000Z" data-local title="In your time zone"><\/time><\/span><\/p>/);
+  // The overview is one column; the package's identity and files close it.
+  assert.doesNotMatch(html.split('id="overview"')[1]!, /<aside/);
+  assert.match(html, /<section class="block"><h3>Package<\/h3><div class="package"><dl class="ids">/);
   // The viewport's arrows come in two pairs; "Focus on errors" swaps in the pair that skips to steps with errors.
   assert.match(action, /<a class="arrow prev all" href="#step-diagnostic-early" aria-label="Previous step">/);
   assert.match(action, /<a class="arrow prev errs" href="#step-diagnostic-early" aria-label="Previous step with errors">/);

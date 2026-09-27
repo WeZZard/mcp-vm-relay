@@ -64,6 +64,14 @@ const link = (step: ReviewPageStep) => `#step-${encodeURIComponent(step.id)}`;
 const time = (iso?: string) => iso && Number.isFinite(Date.parse(iso)) ? new Date(iso).toISOString().slice(11, 19) : undefined;
 const preciseTime = (iso?: string) => iso && Number.isFinite(Date.parse(iso)) ? new Date(iso).toISOString().slice(11, 23) : undefined;
 const duration = (ms: number) => ms < 60_000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.floor(ms / 60_000)} min ${Math.round((ms % 60_000) / 1000)} s`;
+const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** "Sep 27, 2026, 20:08 UTC". Formatted by hand so the page's bytes do not depend on the ICU build. */
+const utcStamp = (iso: string) => {
+  const d = new Date(iso), two = (n: number) => String(n).padStart(2, "0");
+  return `${months[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}, ${two(d.getUTCHours())}:${two(d.getUTCMinutes())} UTC`;
+};
+/** The relay's mark: a trajectory from a start, through a waypoint, to its target. */
+const relayMark = `<svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><path d="M5 18.5c4.8 0 4.4-6.5 7-6.5s2.2-6.5 7-6.5" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round"/><circle cx="5" cy="18.5" r="2.6" fill="#fff"/><circle cx="12" cy="12" r="2.1" fill="#f36a2b" stroke="#fff" stroke-width="1.9"/><circle cx="19" cy="5.5" r="3.3" fill="#f7862a" stroke="#fff" stroke-width="2.1"/><circle cx="19" cy="5.5" r="1.1" fill="#fff"/></svg>`;
 const size = (bytes: number) => bytes >= 1e6 ? `${(bytes / 1e6).toFixed(1)} MB` : bytes >= 1e3 ? `${(bytes / 1e3).toFixed(1)} kB` : `${bytes} B`;
 const noun = (count: number, word: string) => count === 1 ? word : `${word}s`;
 const plural = (count: number, word: string) => `${count} ${noun(count, word)}`;
@@ -274,7 +282,8 @@ const keys = `(()=>{const steps=()=>[...document.querySelectorAll(".center>.step
   + `document.addEventListener("click",e=>{const t=e.target instanceof Element?e.target:null;const b=t&&t.closest(".lb-nav");if(b){e.preventDefault();go(b);return}`
   + `if(t&&t.classList.contains("lightbox"))t.hidePopover()});`
   + `try{const f=new Intl.DateTimeFormat(undefined,{year:"numeric",month:"short",day:"numeric",hour:"numeric",minute:"2-digit",timeZoneName:"short"});`
-  + `document.querySelectorAll("time[data-local]").forEach(t=>{const d=new Date(t.dateTime);if(!isNaN(d.getTime()))t.textContent=f.format(d)})}catch{}`
+  + `document.querySelectorAll("time[data-local]").forEach(t=>{const d=new Date(t.dateTime);if(isNaN(d.getTime())||!d.getTimezoneOffset())return;`
+  + `t.textContent=f.format(d);const li=t.closest("[hidden]");if(li)li.hidden=false})}catch{}`
   + `const current=()=>{let el=null;try{el=document.getElementById(decodeURIComponent(location.hash.slice(1)))}catch{}`
   + `const step=el&&el.closest(".step");return step?steps().indexOf(step):0};`
   + `const focused=()=>{const f=document.getElementById("focus-errors");return!!(f&&f.checked)};let last="";`
@@ -344,18 +353,18 @@ export function renderReviewPage(model: ReviewPageModel): string {
   const overview = `<article class="step overview" id="overview"><section class="stage doc" aria-label="Package overview"><div class="doc-in">
 <h2>Overview</h2><p class="lede">Delivery integrity is separate from execution success. Snapshots are dispatch-time evidence, not continuous video: each shows the screen just before a step was sent and shortly after it returned.</p>
 <section class="block"><h3>Verdicts</h3>${verdictBlock("snapshots", "Snapshots", model.completeness, "Every snapshot the steps declared is present and tied to its step.")}${verdictBlock("execution", "Execution", model.execution, "Every step completed, and every retained receipt confirms it.")}</section>
-<section class="block"><h3>Findings as recorded · ${model.findings.length}</h3>${model.findings.length ? `<ul class="findings">${groupFindings(model.findings).map(g => `<li>${g.ids.length ? `<details><summary>${escapeHtml(g.text)}</summary><code>${g.ids.map(escapeHtml).join("<br>")}</code></details>` : escapeHtml(g.text)}</li>`).join("")}</ul>` : `<p class="quiet">No findings.</p>`}</section>
-<section class="block"><h3>Declared outputs · ${model.outputs.length}</h3>${outputs ? `<div class="outputs">${outputs}</div>` : `<p class="quiet">No declared outputs were delivered.</p>`}</section></div></section>
-<aside class="panel" aria-label="Package"><div class="panel-scroll"><p class="eyebrow"><span>Package</span></p><h2>${escapeHtml(title)}</h2>
-<dl class="facts stack"><div><dt>Package</dt><dd>${escapeHtml(model.packageId)}</dd></div><div><dt>Task</dt><dd>${escapeHtml(model.taskId)}</dd></div><div><dt>Session</dt><dd>${escapeHtml(model.sessionId)}</dd></div></dl>
-<section class="block"><h3>Files</h3><ul class="files"><li><a href="manifest.json">manifest.json</a><span>Checksums of every artifact</span></li><li><a href="summary.json">summary.json</a><span>Verdicts and findings</span></li><li><a href="trajectory.json">trajectory.json</a><span>Steps as recorded</span></li></ul></section></div></aside></article>`;
+<section class="block"><h3>Findings as recorded <span class="count">${model.findings.length}</span></h3>${model.findings.length ? `<ul class="findings">${groupFindings(model.findings).map(g => `<li>${g.ids.length ? `<details><summary>${escapeHtml(g.text)}</summary><code>${g.ids.map(escapeHtml).join("<br>")}</code></details>` : escapeHtml(g.text)}</li>`).join("")}</ul>` : `<p class="quiet">No findings.</p>`}</section>
+<section class="block"><h3>Declared outputs <span class="count">${model.outputs.length}</span></h3>${outputs ? `<div class="outputs">${outputs}</div>` : `<p class="quiet">No declared outputs were delivered.</p>`}</section>
+<section class="block"><h3>Package</h3><div class="package"><dl class="ids"><div><dt>Package</dt><dd>${escapeHtml(model.packageId)}</dd></div><div><dt>Task</dt><dd>${escapeHtml(model.taskId)}</dd></div><div><dt>Session</dt><dd>${escapeHtml(model.sessionId)}</dd></div></dl>
+<ul class="files"><li><a href="manifest.json">manifest.json</a><span>Checksums of every artifact</span></li><li><a href="summary.json">summary.json</a><span>Verdicts and findings</span></li><li><a href="trajectory.json">trajectory.json</a><span>Steps as recorded</span></li></ul></div></section></div></section></article>`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' file:; style-src 'unsafe-inline'; script-src ${keysPolicy}; base-uri 'none'; form-action 'none'"><title>Relay review: ${escapeHtml(model.packageId)}</title><style>${css}${selection(steps.length)}</style></head><body>
 <div class="app">
-<header class="top"><div class="brand"><span class="mark" aria-hidden="true"></span><div><h1 title="${escapeHtml(model.packageId)}">${escapeHtml(title)}</h1>
-<ul class="stats">${stat(noun(steps.length, "step"), String(steps.length))}${stat(noun(actions, "action"), String(actions))}${stat(noun(diagnostics, "diagnostic"), String(diagnostics))}${times.length ? stat("", duration(Math.max(...times) - Math.min(...times))) : ""}</ul></div></div>
+<header class="top"><div class="brand"><span class="mark" aria-hidden="true">${relayMark}</span><div><h1 title="${escapeHtml(model.packageId)}">Relay<span class="task">${escapeHtml(title)}</span></h1>
+<ul class="stats">${stat(noun(steps.length, "step"), String(steps.length))}${stat(noun(actions, "action"), String(actions))}${stat(noun(diagnostics, "diagnostic"), String(diagnostics))}${times.length ? stat("", duration(Math.max(...times) - Math.min(...times))) : ""}</ul>
+${started ? `<p class="when">Started <time datetime="${started}" title="${started}">${utcStamp(started)}</time><span class="local" hidden><span class="sep" aria-hidden="true">·</span><time datetime="${started}" data-local title="In your time zone"></time></span></p>` : ""}</div></div>
 <div class="mid"><nav class="tabs" aria-label="View"><a class="t-traj" href="${steps[0] ? escapeHtml(link(steps[0])) : "#"}">Trajectory</a><a class="t-over" href="#overview">Overview<span class="${model.findings.length ? "has" : ""}">${model.findings.length}</span></a></nav>
 <label class="focus" title="Highlight the steps with errors, and move between them with the arrows"><input type="checkbox" id="focus-errors"${errors ? "" : " disabled"}>Focus on errors<span>${errors}</span></label></div>
-<div class="side"><ul class="pills">${pill("snapshots", "Snapshots", model.completeness)}${pill("execution", "Execution", model.execution)}</ul>${started ? `<p class="when"><span>Ran</span><time datetime="${started}" data-local title="${started}">${started.slice(0, 16).replace("T", " ")} UTC</time></p>` : ""}</div></header>
+<ul class="pills">${pill("snapshots", "Snapshots", model.completeness)}${pill("execution", "Execution", model.execution)}</ul></header>
 <main class="center">${steps.map((step, i) => `<article id="step-${escapeHtml(step.id)}" class="step ${tone(step.execution)}${erred(step) ? " err" : ""}">${stage(step, model.details.get(step.id), numbers.get(step.id)!, {
     previous: steps[i - 1], next: steps[i + 1], previousError: steps.slice(0, i).findLast(erred), nextError: steps.slice(i + 1).find(erred) })}${panel(step, model.details.get(step.id), numbers.get(step.id)!, steps.length, concerns.get(step.id) ?? [])}</article>`).join("\n")}
 ${overview}</main>
@@ -390,13 +399,14 @@ b,time,.n,.exit,dd,.took{font-variant-numeric:tabular-nums}
 .app{height:100vh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;grid-template-columns:minmax(0,1fr);overflow:clip}.track{min-width:0;position:relative;z-index:0;display:grid}
 .top{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:start;gap:1rem 1.25rem;padding:1.1rem 1.75rem}
 .brand{display:flex;align-items:center;gap:.9rem;min-width:0}
-.mark{flex:none;width:1.9rem;height:1.9rem;border-radius:50%;background:var(--grad);box-shadow:0 6px 18px var(--ring)}
-h1{font:700 1.3rem/1.15 var(--round);letter-spacing:-.015em;margin:0}
+.mark{flex:none;display:grid;place-items:center;width:2.4rem;height:2.4rem;border-radius:12px;background:linear-gradient(145deg,#ffb23d,var(--accent) 70%);box-shadow:inset 0 1px 0 rgba(255,255,255,.4),inset 0 -2px 6px rgba(160,40,10,.18),0 6px 18px var(--ring)}
+h1{display:flex;align-items:baseline;gap:.6rem;font:700 1.3rem/1.15 var(--round);letter-spacing:-.015em;margin:0}
+h1 .task{font:600 12.5px/1 var(--round);letter-spacing:0;padding:.3rem .6rem;border-radius:999px;background:var(--s2);color:var(--dim);align-self:center}
+.when{margin:.2rem 0 0;font-size:12.5px;color:var(--faint);white-space:nowrap}.when time{font:600 12.5px var(--round);color:var(--text)}.when .sep{margin:0 .45rem}
 .stats{display:flex;flex-wrap:wrap;gap:.15rem 1rem;list-style:none;margin:.3rem 0 0;padding:0;font-size:12.5px;color:var(--faint)}.stats b{font:700 12.5px var(--round);color:var(--text)}
-.pills{display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:.4rem;list-style:none;margin:0;padding:0}.pills>li,.stats>li{white-space:nowrap}
+.pills{justify-self:end;display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:.4rem;list-style:none;margin:0;padding:0}.pills>li,.stats>li{white-space:nowrap}
 .pill{display:flex;align-items:center;gap:.5rem;padding:.42rem .8rem;border-radius:999px;background:color-mix(in srgb,var(--tone) 12%,transparent);font-size:12px;color:var(--dim)}
-.brand,.side{margin-top:.2rem}.side{justify-self:end;display:grid;justify-items:end;gap:.4rem;min-width:0}.mid{justify-self:center;display:grid;justify-items:center;gap:.35rem}
-.when{display:flex;align-items:baseline;gap:.45rem;margin:0 .8rem 0 0;font-size:12px;color:var(--faint)}.when time{font:600 12.5px var(--round);color:var(--text)}
+.brand,.pills{margin-top:.2rem}.mid{justify-self:center;display:grid;justify-items:center;gap:.35rem}
 .tabs{display:flex;gap:.2rem;padding:.25rem;border-radius:999px;background:var(--s2)}
 .tabs a{display:inline-flex;align-items:center;gap:.5rem;padding:.4rem 1rem;border-radius:999px;color:var(--dim);font-size:13px;font-weight:600}.tabs a:hover{text-decoration:none;color:var(--text)}
 .tabs a span{display:grid;place-items:center;min-width:1.35rem;height:1.35rem;padding:0 .35rem;font:700 11px/1 var(--round);border-radius:999px;background:var(--s3);color:var(--dim)}.tabs a span.has{background:var(--grad);color:var(--on)}
@@ -420,7 +430,7 @@ h1{font:700 1.3rem/1.15 var(--round);letter-spacing:-.015em;margin:0}
 .app:has(#focus-errors:checked) .track li:not(.err){opacity:.35;filter:grayscale(1)}
 .app:has(#focus-errors:checked) .track li.err .face{box-shadow:0 0 0 2px var(--bad),0 6px 16px color-mix(in srgb,var(--bad) 25%,transparent)}
 .app:has(#focus-errors:checked) .track li.err .t{color:var(--bad)}
-.app:has(#overview:target) .track{display:none}.app:has(#overview:target) .focus{visibility:hidden}.app:has(#overview:target) .center{padding-bottom:.75rem}
+.app:has(#overview:target) .track{display:none}.app:has(#overview:target) .focus{visibility:hidden}.overview>.doc{grid-area:auto;grid-column:1/-1;grid-row:1}
 .center{display:grid;grid-template-columns:minmax(0,1fr) minmax(20rem,25rem);grid-template-areas:"stage panel";gap:0 .75rem;padding:0 .75rem;min-height:0;position:relative;z-index:1}
 .step{display:none}.step:target{display:contents}.center:not(:has(:target))>.step:first-of-type{display:contents}
 .stage{grid-area:stage;position:relative;min-width:0;min-height:0;background:var(--bg);display:grid;grid-template-rows:minmax(0,1fr);overflow:clip}
@@ -475,8 +485,20 @@ h1{font:700 1.3rem/1.15 var(--round);letter-spacing:-.015em;margin:0}
 .facts{display:grid;grid-template-columns:1fr 1fr;gap:.9rem 1rem;margin:1.5rem 0 0;padding:1rem 1.1rem;border-radius:14px;background:var(--s2)}.facts dd{margin:.2rem 0 0;font:12.5px var(--mono);color:var(--dim);overflow-wrap:anywhere}
 .facts.stack{grid-template-columns:1fr}
 .files{list-style:none;margin:0;padding:0;display:grid;gap:.6rem}.files li{display:grid}.files a{font:12.5px var(--mono)}.files span{font-size:12px;color:var(--faint)}
-.doc{display:flex;overflow:auto}.doc-in{width:100%;max-width:52rem;margin:auto;padding:2.25rem 2.75rem 3rem}
-.doc h2{font:700 1.75rem/1.15 var(--round);letter-spacing:-.015em;margin:0}.lede{color:var(--dim);margin:.7rem 0 0}
+.doc{display:block;overflow:auto;font-size:1rem;line-height:1.6}.doc-in{width:100%;max-width:56rem;margin:0 auto;padding:2.75rem 2.75rem 4rem}
+.doc h2{font:700 2.25rem/1.15 var(--round);letter-spacing:-.02em;margin:0}.lede{color:var(--dim);margin:.85rem 0 0;font-size:1.125rem;line-height:1.6}
+.doc .block{margin-top:2.75rem}.doc .block>h3{display:flex;align-items:baseline;gap:.6rem;margin:0 0 1rem;font:700 1.25rem/1.3 var(--round);letter-spacing:-.005em;text-transform:none;color:var(--text)}
+.doc h3 .count{font:600 .875rem var(--round);color:var(--faint)}
+.doc .vblock{padding:1.2rem 1.4rem;border-radius:18px}.doc .vblock+.vblock{margin-top:.75rem}.doc .vblock h4{font-size:1.0625rem;margin-bottom:.6rem}.doc .verdict{font-size:.875rem}
+.doc .vwhy{font-size:.875rem;margin-bottom:.7rem}.doc .reasons{gap:1rem}.doc .reasons p{font-size:1rem;line-height:1.6}.doc .reasons .steps a{font-size:.8125rem;padding:.2rem .65rem}
+.doc .quiet,.doc .vblock>.quiet{font-size:1rem}
+.doc .findings{gap:.6rem}.doc .findings li{padding:1rem 1.25rem;border-radius:18px;font-size:1rem}.doc .findings code{font-size:.8125rem}
+.doc .group{padding:1rem 1.25rem;border-radius:18px}.doc .group summary{font-size:1.0625rem}.doc .group .count{font-size:.875rem}.doc .group[open] summary{margin-bottom:1rem}
+.doc .flist{font-size:.875rem;gap:.4rem}.doc .gallery{grid-template-columns:repeat(auto-fill,minmax(11rem,1fr));gap:1rem}.doc .gthumb{font-size:.8125rem}
+.package{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:1.5rem;padding:1.25rem 1.4rem;border-radius:18px;background:var(--s1);box-shadow:var(--shadow)}
+.package .ids{display:grid;gap:.9rem;margin:0}.package dt{font-size:.75rem}.package dd{margin:.2rem 0 0;font:.875rem var(--mono);color:var(--dim);overflow-wrap:anywhere}
+.doc .files{gap:.9rem}.doc .files a{font-size:.875rem}.doc .files span{font-size:.8125rem}
+@media(max-width:960px){.package{grid-template-columns:minmax(0,1fr)}}
 .findings{list-style:none;margin:0;padding:0;display:grid;gap:.5rem}.findings li{padding:.8rem 1rem;border-radius:14px;background:var(--s1);box-shadow:var(--shadow)}
 .findings summary{cursor:pointer}.findings code{display:block;font:11.5px/1.6 var(--mono);color:var(--faint);margin-top:.4rem;overflow-wrap:anywhere}
 .outputs{display:grid;gap:.5rem}.group{background:var(--s1);border-radius:14px;padding:.75rem 1rem;box-shadow:var(--shadow)}
@@ -499,7 +521,7 @@ h1{font:700 1.3rem/1.15 var(--round);letter-spacing:-.015em;margin:0}
 .cap .n{font:700 11px var(--round);color:var(--faint)}.dot{flex:none;width:7px;height:7px;border-radius:50%;background:var(--tone)}
 .cap .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dim)}
 .track li.bad .face{box-shadow:0 0 0 2px var(--bad)}
-@media(max-width:960px){.top{grid-template-columns:minmax(0,1fr)}.side{justify-self:center;justify-items:center}.pills{justify-content:center}.app{height:auto;min-height:100vh;overflow:visible}.center{grid-template-columns:minmax(0,1fr);grid-template-areas:"stage" "panel";gap:.75rem}
+@media(max-width:960px){.top{grid-template-columns:minmax(0,1fr)}.pills{justify-self:center;justify-content:center}.app{height:auto;min-height:100vh;overflow:visible}.center{grid-template-columns:minmax(0,1fr);grid-template-areas:"stage" "panel";gap:.75rem}
 .stage{min-height:60vh}.pair{padding:.5rem 3.75rem 1rem;grid-template-columns:1fr}.track{position:sticky;bottom:0;background:var(--bg)}}
 @supports (corner-shape:squircle){*,*::before,*::after,::backdrop{corner-shape:squircle}.mark,.dot,.verdict i,.arrow,.q,.flag,.close,.dots i,.lb-nav .dir{corner-shape:round}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
