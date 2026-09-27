@@ -78,7 +78,7 @@ export const relayTools: readonly RelayTool[] = [
   },
   {
     name: 'relay_release', action: 'release', title: 'Release the VM', annotations: acts(false, true),
-    description: 'Abandon the task: destroy the owned VM and unregister it, retaining whatever evidence already exists, without claiming the task succeeded. Use this instead of relay_finish when the task is not being completed. Safe to retry if a previous release attempt failed; a failed release keeps ownership until destruction is verified.',
+    description: 'Abandon the task: destroy the owned VM and unregister it, retaining whatever evidence already exists, without claiming the task succeeded. Use this instead of relay_finish when the task is not being completed. Safe to retry if a previous release attempt failed; a failed release keeps ownership until destruction is verified. When this session owns no lease, the result is an error saying that nothing was released; a lease acquired under another session identity is never guessed at.',
   },
   {
     name: 'relay_console_resolve', action: 'console-resolve', title: 'Resolve console status', annotations: readOnly,
@@ -201,7 +201,11 @@ export async function relayCall(host: RelayManager | (() => RelayManager), raw: 
     case 'image': return imageResult({}, await manager.image(raw.target, signal));
     case 'extract': value = await manager.extract(raw.names, signal); break;
     case 'finish': value = await manager.finish(signal); break;
-    case 'release': value = await manager.release(); break;
+    case 'release': {
+      // Releasing nothing is an error result, so it never reads as a completed release.
+      const released = await manager.release();
+      return { ...(await renderRelayResult(released)), isError: 'ownedLease' in released && released.ownedLease === false };
+    }
   }
   return { ...(await renderRelayResult(value)), isError: false };
 }

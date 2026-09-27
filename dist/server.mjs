@@ -29701,6 +29701,7 @@ var RELAY_RUN_OUTPUTS = "relay-run";
 var MCP_START_ALLOWANCE_MS = 6e4;
 var MAX_TOOL_IMAGES = 4;
 var instructions = "This server offers nineteen tools for one interruptive VM enclosure: relay_search, relay_probe, relay_acquisition_capabilities, relay_acquire, relay_stage, relay_run, relay_tools, the command tools relay_exec/relay_script/relay_code, relay_image, relay_extract, relay_finish, relay_release, relay_console_resolve, relay_console_open, relay_console_cancel, relay_status and relay_trajectory. relay_run sends the cua-driver, Playwright MCP or Chrome DevTools MCP tool calls you already know to that server inside the VM; evidence is automatic. Relay only interruptive computer-use or browser-use that would otherwise take over a real desktop or browser, judged for yourself from relay_probe facts; unknown is not idle, and non-disruptive or headless work stays with local tools. One task gets one enclosure: call relay_acquire once per task, never reused for a second task. Work an enclosure in order: relay_probe, then relay_acquire, then relay_stage, then relay_run or the command tools, then relay_image or relay_extract as needed, then relay_finish or relay_release. Always call relay_finish or relay_release explicitly before you return an answer; ending the session only pauses lease renewal, it does not destroy the VM, and the backend's own expiry is the last-resort safeguard. A refused, uncertain or nonzero operation keeps the VM so you can diagnose and submit a corrected operation; never replay input whose effect is uncertain. A tool result, an attached image or a verified evidence package, is evidence for a human reviewer, never the review itself. The relay never targets a physical or local display and offers no video or spawn API. Every tool's text result is capped at 50 KiB / 2000 lines; a larger result is retained whole in a local file the result names.";
+var NO_OWNED_LEASE = "This session owns no lease, so nothing was released. Each server process has its own session identity (a new random one unless MCP_VM_RELAY_SESSION sets it); a lease acquired under another identity is not visible here. Restart the server with that MCP_VM_RELAY_SESSION to reconcile and release it, or let the backend TTL expire it.";
 var RelayManager = class {
   constructor(options2) {
     this.options = options2;
@@ -30616,6 +30617,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
       await this.init();
       this.assertBinding();
       await this.assertBackend();
+      if (!this.enclosure) return { active: false, ownedLease: false, released: false, diagnostic: NO_OWNED_LEASE };
       try {
         await this.log("release");
         if (this.enclosure?.staged && !this.enclosure.delivered) {
@@ -30951,7 +30953,7 @@ var relayTools = [
     action: "release",
     title: "Release the VM",
     annotations: acts(false, true),
-    description: "Abandon the task: destroy the owned VM and unregister it, retaining whatever evidence already exists, without claiming the task succeeded. Use this instead of relay_finish when the task is not being completed. Safe to retry if a previous release attempt failed; a failed release keeps ownership until destruction is verified."
+    description: "Abandon the task: destroy the owned VM and unregister it, retaining whatever evidence already exists, without claiming the task succeeded. Use this instead of relay_finish when the task is not being completed. Safe to retry if a previous release attempt failed; a failed release keeps ownership until destruction is verified. When this session owns no lease, the result is an error saying that nothing was released; a lease acquired under another session identity is never guessed at."
   },
   {
     name: "relay_console_resolve",
@@ -31066,9 +31068,10 @@ async function relayCall(host, raw, options2 = {}) {
     case "finish":
       value = await manager.finish(signal);
       break;
-    case "release":
-      value = await manager.release();
-      break;
+    case "release": {
+      const released = await manager.release();
+      return { ...await renderRelayResult(released), isError: "ownedLease" in released && released.ownedLease === false };
+    }
   }
   return { ...await renderRelayResult(value), isError: false };
 }

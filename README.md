@@ -141,7 +141,7 @@ Evidence is automatic for all four: see "relay_run" below.
 | `relay_image` | Retrieve a saved image | `image` | Retrieve one saved display image, declared application image or immutable image reference without input, capture, directory export or acquisition. |
 | `relay_extract` | Extract declared outputs | `extract` | Pull only declared files or directories with source and host checksum verification. |
 | `relay_finish` | Finish and deliver evidence | `finish` | Extract declared outputs, deliver and verify the snapshot package, destroy the VM and unregister. |
-| `relay_release` | Release the VM | `release` | Retain available evidence and abandon or destroy the VM. |
+| `relay_release` | Release the VM | `release` | Retain available evidence and abandon or destroy the VM. When this session owns no lease, the result is an error that says nothing was released. |
 | `relay_console_resolve` | Resolve console status | `console-resolve` | Resolve non-secret console status for the owned lease and environment. |
 | `relay_console_open` | Open console viewing | `console-open` | Open explicitly user-requested viewing on the service host, with `console_id`, `attempt_id`, `userRequested: true`, `reason` and `expected`. |
 | `relay_console_cancel` | Cancel console viewing | `console-cancel` | Cancel the identified viewing attempt without releasing the VM. |
