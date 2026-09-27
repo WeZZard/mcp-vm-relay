@@ -30074,11 +30074,11 @@ var RelayManager = class {
         }
         await this.save();
         if (input.vnc && (!this.enclosure.lease?.lease_id || !this.enclosure.lease.console?.console_id || this.enclosure.lease.console.status !== "ready")) throw new Error("VNC acquisition did not return a ready console and lease identity; ownership retained for reconciliation");
-        signal?.throwIfAborted();
         this.enclosure.guestState = this.enclosure.lease.state;
         this.enclosure.expiresAt = this.enclosure.lease.ttl_expires_at;
         this.startHeartbeat();
         await this.save();
+        if (signal?.aborted) throw new Error(`${String(signal.reason)}; the acquisition completed after it was cancelled: VM ${this.enclosure.lease.vm} is owned by this session, retained and renewed. Continue with relay_stage, or call relay_finish or relay_release.`, { cause: signal.reason });
         return { ...this.status(), guestRoot: this.enclosure.guestRoot, workspace: join15(this.enclosure.guestRoot, "workspace"), declarations: input.extractions };
       } catch (error2) {
         await this.fail(error2);

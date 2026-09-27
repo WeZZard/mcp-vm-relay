@@ -1010,7 +1010,7 @@
     "src/image-presentation.ts": "53ab641fcc4cacd35ce03774c1a45c39200707bd060bec40c067ab86a1ef411e",
     "src/images.ts": "b37d9c9c918f370b48573df2ea8db0d2a84da4e6344afc21f055255e57956608",
     "src/json-schema.ts": "551068bb2fcbcf48a06bdb05b61c347eee66bd1193b628836fa94a21cccfd2c5",
-    "src/manager.ts": "cdf9d8ad06fce52e06ffd2f18452402fb044c069e9803831db944dd3f1e6b391",
+    "src/manager.ts": "142e902cf49799a2de300a00c9e285b69fea7cf63afd4c3b7f041aca4d92a11a",
     "src/owner-lock.ts": "a99cbaba67b4aff0e646dc5d5967db4497ba6dbda83fb1838c55f0bf0f6e0367",
     "src/package.ts": "1c0090834fa2de40349cb63c52c6bcf21e079323f7446731cc17a1ce74aa6e87",
     "src/probe.ts": "1d7002275f54508a62f719110542d9a4e3c77d2b53884c1849f6b2a929cfafd7",
