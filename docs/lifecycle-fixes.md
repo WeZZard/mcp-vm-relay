@@ -1,0 +1,91 @@
+# Lifecycle fixes: session end, cancellation and finish
+
+| Item | Value |
+|---|---|
+| Document type | Decision record and design note |
+| Scope | How the MCP server ends a session, and how `acquire`, `finish` and `release` behave at the edges of the lease lifecycle |
+| Base | Published 0.6.1 source (`bec0ba4`) |
+| Status | Decisions R1–R6 are implemented with reproducer tests. R7 and R8 have reproducer tests only and wait for the owner's decision. |
+| Authority | [Technical design, Section 5](technical-design.md#5-lease-lifecycle-persistence-and-recovery) remains the lifecycle contract. This note records the corrections made to meet it and the two points where it changes it. |
+
+## Context
+
+- The README promises that when the server's stdio closes, renewal pauses, the recording detaches and the VM is retained.
+- Version 0.6.1 did not keep that promise in two ways, and both left leases renewed or marked active after the client was gone.
+- The first failure is that the MCP SDK's `StdioServerTransport` listens only for `data` and `error` on standard input, so end of file (EOF) on standard input never reached the server's shutdown path.
+- After any tool call that took the owner lock, the Python lock helper kept the Node.js event loop alive, so the process stayed alive after its client exited and kept renewing an owned lease every 60 seconds.
+- The second failure is that the SDK writes responses to standard output without an error handler, so a response written after the client exited raised an unhandled `EPIPE` error and ended the process before cleanup.
+- In that case `lease.json` kept `active: true` and no `renewal-paused` event was written.
+- Several smaller lifecycle gaps were found at the same time; they are listed as R3 to R8 below.
+
+## Decisions
+
+| ID | Failure | Decision |
+|---|---|---|
+| R1 | The server never notices EOF on standard input. | Treat `end` or `close` on standard input as the end of the session, through the same shutdown path as SIGTERM and the transport's `onclose`. |
+| R2 | A write to a closed standard output ends the process without cleanup. | Handle `error` on standard output and route it to the same orderly shutdown. |
+| R1, R2 | Shutdown must not cut short an in-flight `finish` or `release`. | Shutdown waits for the in-flight operation for a bounded grace period (default 120 seconds, `MCP_VM_RELAY_SHUTDOWN_GRACE_MS`). After the grace period it cancels in-flight tool calls, and if they still do not settle it pauses renewal directly and exits. |
+| R3 | `relay_release` on a session that owns no lease looks like a successful release. | The result says explicitly that this session owns no lease and nothing was released, and it is an MCP error result. The relay never guesses at another session's lease. |
+| R3 (identity) | A restarted server gets a new random session identity, so it cannot see its earlier lease. | No change. Changing the default session identity is the owner's decision; a skipped reproducer documents the current behavior. |
+| R4 | A cancelled `relay_acquire` whose lease arrives after cancellation keeps the VM with no heartbeat and no owner action. | Keep the lease, start its heartbeat, and report in the error that the VM is retained and renewed under this session until `relay_finish` or `relay_release`. |
+| R5 | `relay_finish` stops at the first declared extraction that fails, so every retry fails the same way. | `finish` extracts declared outputs the tolerant way `release` already does. A missing or failed output is recorded as an `extraction-incomplete` event, reported in the result as `incompleteExtractions`, and packaging continues. |
+| R6 | `release` and shutdown wait behind a guest command that cannot be cancelled. | Pass the tool call's abort signal through to the vm-service `exec` request for diagnostic commands and for the receiver dispatch, so a cancelled command stops waiting and the next queued operation can run. |
+| R7 | A failed `finish` keeps the VM. | No change; this is documented behavior. The owner decides whether a failed delivery should release. A skipped reproducer documents the current behavior. |
+| R8 | The relay state grows about 14 MiB per recorded step, and `finish` fails once the state passes 512 MiB or 10,000 files. | No change; the owner decides the bound or the snapshot policy. A skipped reproducer documents the current behavior at the transfer level. |
+
+## Design
+
+### Session end
+
+The server has one shutdown function, and every session-end signal calls it once.
+
+```mermaid
+flowchart TD
+    EOF["stdin end or close (R1)"] --> S
+    EPIPE["stdout error, such as EPIPE (R2)"] --> S
+    ONCLOSE["transport onclose"] --> S
+    SIG["SIGTERM or SIGINT"] --> S
+    S["shutdown(reason), runs once"] --> Q["manager.cleanup(reason), queued after the in-flight operation"]
+    Q -->|settles within the grace period| X["exit"]
+    Q -->|grace period passes| A["abort in-flight tool calls"]
+    A -->|cleanup settles within 5 s| X
+    A -->|still blocked| P["pause renewal without the queue: clear the heartbeat, write active false and renewal-paused"]
+    P --> X
+```
+
+- Shutdown does not close the MCP transport first, because the SDK aborts every in-flight request handler when the transport closes, and that would cut short a `finish` or `release` that the client had already sent.
+- Each tool call's signal is combined with a server-wide shutdown signal, so the server can cancel in-flight calls after the grace period.
+- `cleanup` is serialized behind the in-flight operation, so a `finish` or `release` in flight completes before renewal is paused.
+- After a completed `release` or `finish` there is no lease left to pause, so `cleanup` only releases the owner lock.
+- The direct pause after the grace period does not wait for the operation queue; it clears the heartbeat timer, writes `active: false` to `lease.json` and logs `renewal-paused`, and the process then exits.
+- The owner lock helper exits when the parent's pipe closes, so the lock is released with the process.
+- Errors on standard output after the first one are absorbed by the same handler, so repeated failed writes cannot raise an unhandled error.
+
+### Explicit results for no-lease release and cancelled acquire
+
+- A `release` on a session that owns no lease returns `{"active": false, "ownedLease": false, "released": false, "diagnostic": "..."}` with `isError: true`.
+- The diagnostic names the session identity rule: a lease acquired by an earlier server process under another session identity is visible only when `MCP_VM_RELAY_SESSION` names that identity; otherwise the backend's TTL expires it.
+- A successful release still returns the owned status, which is `{"active": false}` once the VM is gone.
+- A cancelled `acquire` whose lease arrives after cancellation is still an error result, because the caller did not receive the acquisition it asked for.
+- That error says that the VM is retained and renewed, names the VM, and tells the agent to call `relay_finish` or `relay_release`.
+- The technical design states that user cancellation of a command is not a request to release the VM, and an existing test asserts that the returned identity is retained until an explicit release. The fix therefore keeps the lease and starts renewal rather than releasing it.
+
+### Tolerant finish extraction
+
+- `finish` now uses the same `extractAvailable` path as `release`: each declared output is pulled separately, and a failure is logged as `extraction-incomplete` with the error.
+- An opt-in full workspace that fails to transfer is logged as `workspace-incomplete`, as `release` already does.
+- Packaging, verification and release then proceed as before; a packaging or verification failure still keeps the VM.
+- This changes one sentence of the technical design: a failed extraction during `finish` no longer keeps the VM, because a declared output that was never produced would otherwise make every retry fail the same way. The package records the missing output instead.
+
+### Cancellable guest commands
+
+- The diagnostic `exec` path and `VmTransport.send` pass the caller's abort signal to vm-service's `exec` request.
+- A cancelled request stops waiting for the HTTP response; it does not stop the guest process, and the result is reported as `uncertain`, which keeps the VM and is never replayed.
+- The receiver's receipt for a cancelled dispatch records the outcome as uncertain, as for any other lost response.
+
+## Verification
+
+- Each item has a reproducer test that failed on the 0.6.1 source for the stated reason before its fix.
+- The server tests start the built `dist/server.mjs` against an in-process fake vm-service or a closed port, with a temporary state directory, registry, project and home directory.
+- The tests never use a real VM, the live vm-service, Tart or `vmctl`.
+- The reproducers for R3 (session identity), R7 and R8 are marked `todo` with the note "waiting for the owner's decision" and assert the current behavior.

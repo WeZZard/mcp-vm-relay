@@ -24,6 +24,7 @@ separately, using UX-specification and engineering-RFC sections.
 | [Console contract](console.md) | Implemented guest-sharing actions, nested observations, ownership and recovery. |
 | [Selected environments](selected-environments.md) | The agreed isolated-store configuration, dependency injection, and backend ownership contract. |
 | [Screenshot delivery](screenshot-delivery.md) | The implemented worktree contract for typed command-result images, owner-scoped recovery, application-image authorization, and presentation failures, with explicit acceptance limits. |
+| [Lifecycle fixes](lifecycle-fixes.md) | Decisions and design for session end, cancelled acquisition, finish extraction and cancellable guest commands, with the two items that wait for the owner's decision. |
 | [Verification](verification.md) | Measured implementation evidence, historical gates and environment-specific acceptance—not unimplemented design promises |
 | [README](../README.md) | Installation and operational instructions, with worktree-only features identified separately from deployment. |
 
