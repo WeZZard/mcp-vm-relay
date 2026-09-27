@@ -137,3 +137,19 @@ test('local helper bounds output and timeouts', async () => {
  await assert.rejects(command([process.execPath, '-e', "console.log('x'.repeat(1000))"], { maxBytes: 10 }), /output exceeded/);
  await assert.rejects(command([process.execPath, '-e', 'setInterval(()=>{},100)'], { timeoutMs: 10 }), /timed out/);
 });
+
+test('R8 (owner decision): relay state of about 14 MiB per recorded step passes the 512 MiB transfer bound at step 37, so packaging fails', { todo: 'waiting for the owner\'s decision: a full-display PNG before and after each step makes the state grow about 14 MiB per step, and the state inventory is bounded at 512 MiB / 10000 files (src/transfer.ts); this documents the current behavior' }, async t => {
+ const root = await realpath(await mkdtemp(join(tmpdir(), 'relay-state-bound-'))); t.after(() => rm(root, { recursive: true, force: true }));
+ const state = join(root, 'state', 'snapshots'); await mkdir(state, { recursive: true });
+ const channel: VmChannel = {
+  exec: async (_name, argv) => { const result = await command(argv, { maxBytes: 16 * 1024 * 1024 }); return { ...result, stdout: result.stdout.slice(-64000) }; },
+  push: async (_name, l, r) => copyFile(l, r), pull: async (_name, r, l) => copyFile(r, l),
+ };
+ const transfer = new Transfer(channel, 'fake', process.execPath, { guestRoot: root, hostTempRoot: join(root, 'temp') });
+ // Sparse stand-ins for one step's before and after display PNGs, 7 MiB each.
+ const step = async (n: number) => { for (const phase of ['before', 'after']) { const path = join(state, `step-${String(n).padStart(3, '0')}-${phase}.png`); await writeFile(path, ''); await truncate(path, 7 * 1024 * 1024); } };
+ for (let n = 1; n <= 36; n++) await step(n);
+ await assert.doesNotReject(transfer.scan(join(root, 'state'), root), '36 steps (504 MiB) are within the bound');
+ await step(37);
+ await assert.rejects(transfer.scan(join(root, 'state'), root), /512MiB \/ 10000 files/, 'the 37th step (518 MiB) passes the bound, so finish cannot package the state');
+});
