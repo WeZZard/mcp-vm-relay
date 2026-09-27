@@ -91,7 +91,26 @@ flowchart TD
 
 ## Verification
 
-- Each item has a reproducer test that failed on the 0.6.1 source for the stated reason before its fix.
-- The server tests start the built `dist/server.mjs` against an in-process fake vm-service or a closed port, with a temporary state directory, registry, project and home directory.
-- The tests never use a real VM, the live vm-service, Tart or `vmctl`.
-- The reproducers for R3 (session identity), R7 and R8 are marked `todo` with the note "waiting for the owner's decision" and assert the current behavior.
+- Each item R1 to R6 has a reproducer test that was committed on its own and failed on the unfixed source for the stated reason, followed by a separate fix commit.
+- The server tests start the built `dist/server.mjs` against an in-process fake vm-service or a closed port, with a temporary state directory, registry, project and home directory, and a fake `tart` script.
+- The tests never use a real VM, the live vm-service, the real Tart or `vmctl`.
+- The reproducers for R3 (session identity), R7 and R8 are marked `todo` with the note "waiting for the owner's decision", and they assert the current behavior.
+
+| Item | Test file | Test |
+|---|---|---|
+| R1 | `tests/lifecycle.test.ts` | "R1: the server exits when its client closes stdin after a call that took the owner lock" |
+| R1 | `tests/lifecycle.test.ts` | "R1: closing stdin with an owned lease pauses renewal, retains the VM and exits" |
+| R1 | `tests/lifecycle.test.ts` | "R1: closing stdin during an in-flight release lets the release complete before exit" |
+| R1 | `tests/lifecycle.test.ts` | "R1: shutdown behind an operation that never settles is bounded by the grace period and still pauses renewal" (added with the fix) |
+| R2 | `tests/lifecycle.test.ts` | "R2: a response written after the client closed its reader ends the session with cleanup, not an unhandled EPIPE" |
+| R3 | `tests/lifecycle.test.ts` | "R3: relay_release on a session that owns no lease says so instead of looking like a release" |
+| R3 (todo) | `tests/lifecycle.test.ts` | "R3 (session identity): a restarted server with the default random session identity cannot see the lease of the process before it" |
+| R4 | `tests/manager.test.ts` | "R4: a lease that arrives after the caller cancelled relay_acquire is renewed and reported, not left without a heartbeat" |
+| R5 | `tests/manager.test.ts` | "R5: finish records a declared output that was never produced as incomplete and still delivers and releases" |
+| R6 | `tests/manager.test.ts` | "R6: release does not wait behind a cancelled diagnostic command whose guest answer never comes" |
+| R6 | `tests/manager.test.ts` | "R6: release does not wait behind a cancelled recorded run whose receiver answer never comes" |
+| R7 (todo) | `tests/manager.test.ts` | "R7 (owner decision): a finish whose packaging fails keeps the VM and does not release it" |
+| R8 (todo) | `tests/transfer.test.ts` | "R8 (owner decision): relay state of about 14 MiB per recorded step passes the 512 MiB transfer bound at step 37, so packaging fails" |
+
+- Run the suite with `npm run check`, which builds `dist/`, type-checks and runs `npm test`.
+- The end-to-end suite with headless Claude Code (`npm run test:e2e`) was not run for these fixes.

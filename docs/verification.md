@@ -1,5 +1,12 @@
 # Implementation verification
 
+## Lifecycle fixes (2026-09-27)
+
+- The [lifecycle fixes](lifecycle-fixes.md) R1 to R6 were each preceded by a reproducer test that failed on the 0.6.1 source for the stated reason, on branch `WeZZard/lifecycle-reproducers`.
+- The final `npm run check` passed its build, typecheck and test suite. The Node test runner reported 419 tests: 413 passed, zero failed, three were skipped and three were marked todo.
+- The three skipped tests need sibling `pilot-images` or `vm-service` checkouts, which were absent. The three todo tests document behavior that waits for the owner's decision (R3 session identity, R7 and R8).
+- The tests used fake vm-service instances, a closed port and temporary state, registry, project and home directories. No VM, live vm-service, Tart, `vmctl` or user state was used, and the headless end-to-end suite was not run.
+
 ## Console and screenshot merge verification (2026-09-21)
 
 - The merge preserves local console commits `6e555c0` and `a5092b2` alongside remote screenshot-delivery commit `cb31161`. The tool exposes thirteen actions, including all console actions and `image`. Generated `dist/` files were rebuilt from the merged source rather than selected from either parent.
