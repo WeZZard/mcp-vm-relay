@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { deflateSync } from 'node:zlib';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { chmod, copyFile, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, copyFile, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -1245,4 +1245,27 @@ test('R7 (owner decision): a finish whose packaging fails keeps the VM and does 
   assert.equal((await json(join(f.manager.root, 'lease.json'))).delivered, undefined, 'nothing was delivered');
   assert.equal(f.service.releaseCalls, 0, 'finish did not release the VM');
   f.service.corruptPull = false; await rm(join(acquired.guestRoot, 'state', 'artifact.txt'));
+});
+
+/** Total bytes of the regular files under a directory; 0 when it does not exist. */
+async function bytesUnder(path: string): Promise<number> {
+  let total = 0;
+  for (const entry of await readdir(path, { withFileTypes: true, recursive: true }).catch(() => [])) {
+    if (entry.isFile()) total += (await lstat(join(entry.parentPath, entry.name))).size;
+  }
+  return total;
+}
+
+test('finish keeps one host copy of the relay state: the pulled state is moved into the package, not copied', { timeout: 30000 }, async t => {
+  const f = await fixture(t);
+  const acquired = await f.manager.acquire(acquireInput()); await f.stage();
+  await f.manager.run(operation('state-bytes'));
+  const guestState = await bytesUnder(join(acquired.guestRoot, 'state'));
+  const delivered = await f.manager.finish(); assert.equal(delivered.deliveryVerified, true);
+  const attempts = `${acquired.output}.finalization-attempts`;
+  const pulled = (await readdir(attempts)).filter(name => name !== 'previous');
+  assert.equal(pulled.length, 1, 'one finalization attempt');
+  assert.equal(await bytesUnder(join(attempts, pulled[0])), 0, 'no second copy of the state stays behind in the finalization attempt');
+  assert.ok(await bytesUnder(join(acquired.output!, 'state')) >= guestState, 'the package holds the whole state');
+  await f.assertClean();
 });

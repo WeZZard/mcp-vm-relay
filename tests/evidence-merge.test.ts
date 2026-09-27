@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { chmod, link, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, link, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { refreshEvidenceState } from "../src/evidence-merge.js";
@@ -18,20 +18,49 @@ async function fixture(t: test.TestContext) {
   const refresh = () => refreshEvidenceState(incoming, destination, archive);
   return { root, incoming, destination, archive, refresh };
 }
+/** refreshEvidenceState with an injected rename, to exercise the cross-volume copy path. */
+const refreshWith = refreshEvidenceState as (incoming: string, destination: string, archiveRoot: string, options: { rename: (from: string, to: string) => Promise<void> }) => Promise<void>;
 async function absent(path: string) {
   await assert.rejects(lstat(path), { code: "ENOENT" });
 }
 
-test("refresh creates state exclusively without consuming incoming or making an unnecessary archive", async t => {
+test("refresh creates state without making an unnecessary archive", async t => {
   const f = await fixture(t);
   await save(f.incoming, "snapshots/session/before.png", "original");
   await save(f.incoming, "journal/events.jsonl", "journal");
   await mkdir(join(f.incoming, "empty"));
   await f.refresh();
   assert.equal(await readFile(join(f.destination, "snapshots/session/before.png"), "utf8"), "original");
-  assert.equal(await readFile(join(f.incoming, "journal/events.jsonl"), "utf8"), "journal");
+  assert.equal(await readFile(join(f.destination, "journal/events.jsonl"), "utf8"), "journal");
   assert.ok((await lstat(join(f.destination, "empty"))).isDirectory());
   await absent(f.archive);
+});
+
+test("refresh moves incoming into state on the same volume instead of copying it, so the state is not stored twice", async t => {
+  const f = await fixture(t);
+  await save(f.incoming, "snapshots/session/before.png", "original");
+  await save(f.incoming, "journal/events.jsonl", "journal");
+  const inode = (await lstat(join(f.incoming, "snapshots/session/before.png"))).ino;
+  await f.refresh();
+  assert.equal((await lstat(join(f.destination, "snapshots/session/before.png"))).ino, inode, "the delivered snapshot is the pulled file, not a copy");
+  assert.equal(await readFile(join(f.destination, "journal/events.jsonl"), "utf8"), "journal");
+  await absent(f.incoming);
+});
+
+test("refresh falls back to copying when incoming is on another volume, and keeps incoming", async t => {
+  const f = await fixture(t);
+  await save(f.destination, "snapshots/session/original.png", "retained");
+  await save(f.incoming, "snapshots/session/before.png", "original");
+  await save(f.incoming, "journal/events.jsonl", "journal");
+  const renames: string[] = [];
+  await refreshWith(f.incoming, f.destination, f.archive, { rename: async (from, to) => {
+    if (from === f.incoming) { renames.push(from); throw Object.assign(new Error("EXDEV: cross-device link not permitted"), { code: "EXDEV" }); }
+    await rename(from, to);
+  } });
+  assert.equal(await readFile(join(f.destination, "snapshots/session/before.png"), "utf8"), "original");
+  assert.equal(await readFile(join(f.destination, "snapshots/session/original.png"), "utf8"), "retained");
+  assert.deepEqual(renames, [f.incoming], "the move is tried first");
+  assert.equal(await readFile(join(f.incoming, "journal/events.jsonl"), "utf8"), "journal", "a copy keeps its source");
 });
 
 test("equal snapshots are allowed, mutable records refresh, and every previous attempt is archived", async t => {
@@ -53,7 +82,7 @@ test("equal snapshots are allowed, mutable records refresh, and every previous a
   assert.equal(await readFile(join(archived, "records/actions/a.json"), "utf8"), "old action");
   assert.equal(await readFile(join(f.destination, "journal/events.jsonl"), "utf8"), "new journal");
   assert.equal(await readFile(join(f.destination, "records/actions/a.json"), "utf8"), "new action");
-  assert.equal(await readFile(join(f.incoming, "snapshots/session/after.png"), "utf8"), "after");
+  await save(f.incoming, "journal/events.jsonl", "newer journal");
   await f.refresh();
   assert.equal((await readdir(f.archive)).length, 2);
   assert.equal(await readFile(join(archived, "journal/events.jsonl"), "utf8"), "old journal");
@@ -156,8 +185,13 @@ test("copy failure retains the archived original state and incoming staging for 
   await save(f.incoming, "journal/events.jsonl", "fresh journal");
   const source = join(f.incoming, "journal/events.jsonl");
   await chmod(source, 0o000);
+  // The copy path runs when incoming is on another volume than the state.
+  const crossVolume = async (from: string, to: string) => {
+    if (from === f.incoming) throw Object.assign(new Error("EXDEV: cross-device link not permitted"), { code: "EXDEV" });
+    await rename(from, to);
+  };
   try {
-    await assert.rejects(f.refresh(), { code: "EACCES" });
+    await assert.rejects(refreshWith(f.incoming, f.destination, f.archive, { rename: crossVolume }), { code: "EACCES" });
   } finally {
     await chmod(source, 0o600);
   }
