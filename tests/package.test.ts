@@ -152,7 +152,7 @@ test("review page orders steps by time and reads commands, exit status, output s
   assert.match(diagnostic, /stderr<\/span><pre>denied<\/pre>/);
   assert.match(diagnostic, /Screenshots were not requested for this diagnostic/);
   // Without script, a step is selected as the :target: each thumbnail links to its step, which shows
-  // the compare view, and a step with snapshots offers its before and after views as targets inside it.
+  // its before and after snapshots side by side.
   assert.deepEqual([...html.split('<footer class="track"')[1]!.matchAll(/<li[^>]*><a href="([^"]+)"/g)].map(m => m[1]), ["#step-diagnostic-early", "#step-step-0"]);
   // The top row switches between the trajectory, which starts at the first step, and the overview.
   assert.match(html, /<nav class="tabs" aria-label="View"><a class="t-traj" href="#step-diagnostic-early">Trajectory<\/a><a class="t-over" href="#overview">Overview/);
@@ -161,8 +161,12 @@ test("review page orders steps by time and reads commands, exit status, output s
   assert.match(html, /<article id="step-diagnostic-early" class="step bad err">/);
   assert.match(html, /<li class="bad diagnostic err"><a href="#step-diagnostic-early"/);
   const action = html.split('<article id="step-step-0"')[1]!.split("</article>")[0]!;
-  assert.match(action, /<a class="s-compare" href="#step-step-0">Compare<\/a><a class="s-before" href="#step-step-0--before">Before<\/a><a class="s-after" href="#step-step-0--after">After<\/a>/);
-  assert.match(action, /<div class="view v-compare"><figure class="shot">/);
+  // The viewport always compares the two snapshots; there is no switch to either one alone.
+  assert.doesNotMatch(action, /class="seg"|s-compare|id="step-step-0--(before|after)"/);
+  assert.match(action, /<div class="pair"><figure class="shot"><button type="button" class="zoom" popovertarget="lightbox-step-0--before" title="Enlarge the before snapshot"><img alt="Before dispatch snapshot"/);
+  // Pressing a snapshot opens it alone in a lightbox, which links to the original.
+  assert.match(action, /<div class="lightbox" id="lightbox-step-0--after" popover><figure><img loading="lazy" alt="After dispatch snapshot, enlarged" src="[^"]+"><figcaption><span class="label">Step 02 · After<\/span>/);
+  assert.match(action, /<button type="button" class="close" popovertarget="lightbox-step-0--after" popovertargetaction="hide" aria-label="Close">/);
   // The viewport's arrows come in two pairs; "Focus on errors" swaps in the pair that skips to steps with errors.
   assert.match(action, /<a class="arrow prev all" href="#step-diagnostic-early" aria-label="Previous step">/);
   assert.match(action, /<a class="arrow prev errs" href="#step-diagnostic-early" aria-label="Previous step with errors">/);
@@ -170,8 +174,10 @@ test("review page orders steps by time and reads commands, exit status, output s
   // The panel has no paging; its stable link is an icon on the step's line.
   assert.match(action, /<a class="permalink" href="#step-step-0" title="Stable link to this step" aria-label="Stable link to step 02">/);
   assert.doesNotMatch(action, /class="pager"/);
-  assert.match(action, /<div class="view v-before" id="step-step-0--before">/);
-  assert.match(action, /<div class="view v-after" id="step-step-0--after">/);
+  // Each thumbnail with both snapshots carries the time between them; a diagnostic retains no end time.
+  const track = html.split('<footer class="track"')[1]!;
+  assert.match(track, /<li class="ok"><a href="#step-step-0"[^>]*><span class="face"><img [^>]+><span class="took" title="Time from the before snapshot to the after snapshot">\d+\.\d s<\/span>/);
+  assert.doesNotMatch(track.split('<li class="ok">')[0]!, /class="took"/);
   assert.match(html, /<span class="where">evidence<\/span><span class="count">1 file · [^<]+<\/span><\/summary><ul class="flist"><li><a href="extractions\/evidence\/run-1\/result.json">run-1\/result.json<\/a>/);
   assert.doesNotMatch(withoutKeyScript(html), /<script|https?:\/\/|fetch\(/);
   assert.equal((await verifyDeliveredPackage(root)).deliveryVerified, true);
