@@ -178,6 +178,8 @@ test("review page orders steps by time and reads commands, exit status, output s
   // and, filled in by the page's script, in the reader's time zone.
   assert.match(html, /<h1 title="[^"]+">Relay<span class="task">[^<]+<\/span><\/h1>/);
   assert.match(html, /<li class="at"><time datetime="2026-09-12T23:59:00\.000Z" title="Started [^"]+">Sep 12, 2026, 23:59 UTC<\/time><span class="local" hidden><span class="sep" aria-hidden="true">·<\/span><time datetime="2026-09-12T23:59:00\.000Z" data-local title="Started, in your time zone"><\/time><\/span><\/li>/);
+  // Beside the verdicts, the Trajectory view lists its keyboard shortcuts.
+  assert.match(html, /<ul class="pills"><li class="keys" title="Keyboard shortcuts"><kbd aria-label="Left arrow">←<\/kbd><kbd aria-label="Right arrow">→<\/kbd><span>Steps<\/span><kbd>Space<\/kbd><span>Enlarge<\/span><\/li>/);
   // The overview is one column; the package's identity and files close it.
   assert.doesNotMatch(html.split('id="overview"')[1]!, /<aside/);
   assert.match(html, /<section class="block"><h3>Package<\/h3><div class="package"><dl class="ids">/);
