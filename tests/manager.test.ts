@@ -1161,3 +1161,17 @@ test('untruthful service release cannot unregister while authoritative VM invent
   assert.equal((await json(join(f.manager.root, 'lease.json'))).released, undefined);
   absent = true; await f.manager.release(); await f.assertClean();
 });
+
+test('R4: a lease that arrives after the caller cancelled relay_acquire is renewed and reported, not left without a heartbeat', async t => {
+  const f = await fixture(t, { heartbeatMs: 20 }), controller = new AbortController();
+  f.service.acquireHook = async () => { controller.abort(new Error('cancel during allocation')); };
+  const failure = await f.manager.acquire(acquireInput(), controller.signal).then(() => assert.fail('a cancelled acquire is still an error'), (error: Error) => error);
+  const vm = [...f.service.leases.keys()][0];
+  await f.assertRetained(vm);
+  await new Promise(done => setTimeout(done, 300));
+  assert.equal(f.manager.status().active, true, 'the owned lease is being renewed');
+  assert.ok(f.service.heartbeatCount > 0, 'a retained lease is renewed rather than left to expire unnoticed');
+  assert.match(failure.message, /cancel during allocation/);
+  assert.match(failure.message, new RegExp(`${vm}.*retained`), 'the error names the VM that is now owned and retained');
+  await f.manager.release(); await f.assertClean();
+});
