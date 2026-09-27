@@ -1230,6 +1230,8 @@ test('R6: release does not wait behind a cancelled recorded run whose receiver a
   assert.equal(observed, 'settled', 'a cancelled run must stop waiting for the receiver, so the queued release can run');
   await released; await f.assertClean();
   assert.equal(f.service.leases.has(acquired.vm!), false);
+  // The cancelled guest command still runs; let it finish so teardown removes everything it writes.
+  while (f.service.receiverActive) await new Promise(done => setTimeout(done, 20));
 });
 
 test('R7 (owner decision): a finish whose packaging fails keeps the VM and does not release it', { timeout: 30000, todo: 'waiting for the owner\'s decision: README "Ownership, failure and recovery" documents that a failed delivery retains the VM; this documents the current behavior' }, async t => {
