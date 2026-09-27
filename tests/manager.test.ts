@@ -96,6 +96,8 @@ class FixtureService {
   screenshotPullFailures = 0;
   acquireHook?: () => Promise<void>;
   receiverHook?: () => Promise<void>;
+  /** Runs before any guest command; a test can hold one open. */
+  execHook?: (argv: string[]) => Promise<void>;
   receiverActive = 0;
   maxReceiverActive = 0;
   receiverCalls = 0;
@@ -160,6 +162,7 @@ class FixtureService {
         this.guestRoots.add(path.split('/').slice(0, 4).join('/'));
       }
     }
+    await this.execHook?.(argv);
     const isReceiver = argv[0] === '/usr/bin/env';
     if (isReceiver) { this.receiverCalls++; this.receiverActive++; this.maxReceiverActive = Math.max(this.maxReceiverActive, this.receiverActive); }
     try {
@@ -1190,4 +1193,39 @@ test('R5: finish records a declared output that was never produced as incomplete
   const events = await Promise.all((await readdir(join(acquired.output!, 'host/events'))).map(path => json(join(acquired.output!, 'host/events', path))));
   assert.equal(events.find(event => event.kind === 'extraction-incomplete')?.details.name, 'missing');
   await f.assertClean(); assert.equal(f.service.releaseCalls, 1);
+});
+
+/** Resolves 'settled' when `work` settles within `ms`, otherwise 'waiting'. */
+const settledWithin = (work: Promise<unknown>, ms: number) => Promise.race([work.then(() => 'settled', () => 'settled'), new Promise(done => setTimeout(done, ms, 'waiting'))]);
+
+test('R6: release does not wait behind a cancelled diagnostic command whose guest answer never comes', { timeout: 30000 }, async t => {
+  const f = await fixture(t), controller = new AbortController(), hold = deferred(), entered = deferred();
+  const acquired = await f.manager.acquire(acquireInput());
+  f.service.execHook = async argv => { if (argv.includes('/* R6 hang */')) { entered.resolve(); await hold.promise; } };
+  const running = f.manager.run(operation('hang', { diagnostic: true, argv: [process.execPath, '-e', '/* R6 hang */'], snapshots: undefined }), controller.signal);
+  running.catch(() => {});
+  await entered.promise;
+  const released = f.manager.release();
+  controller.abort(new Error('the caller cancelled the command'));
+  const observed = await settledWithin(released, 5000);
+  hold.resolve(); // let the held guest answer come, so a failing case still tears down
+  assert.equal(observed, 'settled', 'a cancelled command must stop waiting for its guest answer, so the queued release can run');
+  await released; await f.assertClean();
+  assert.equal(f.service.leases.has(acquired.vm), false);
+});
+
+test('R6: release does not wait behind a cancelled recorded run whose receiver answer never comes', { timeout: 30000 }, async t => {
+  const f = await fixture(t), controller = new AbortController(), hold = deferred(), entered = deferred();
+  const acquired = await f.manager.acquire(acquireInput()); await f.stage();
+  f.service.receiverHook = async () => { entered.resolve(); await hold.promise; };
+  const running = f.manager.run(operation('hang'), controller.signal);
+  running.catch(() => {});
+  await entered.promise;
+  const released = f.manager.release();
+  controller.abort(new Error('the caller cancelled the command'));
+  const observed = await settledWithin(released, 10000);
+  hold.resolve(); // let the held guest answer come, so a failing case still tears down
+  assert.equal(observed, 'settled', 'a cancelled run must stop waiting for the receiver, so the queued release can run');
+  await released; await f.assertClean();
+  assert.equal(f.service.leases.has(acquired.vm), false);
 });
