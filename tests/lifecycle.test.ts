@@ -228,3 +228,29 @@ test('R2: a response written after the client closed its reader ends the session
   assert.ok((await f.events(owned.hostRoot)).some(event => event.kind === 'renewal-paused'), 'a renewal-paused event is written');
   assert.equal(f.fake.releaseCalls, 0);
 });
+
+test('R3: relay_release on a session that owns no lease says so instead of looking like a release', { timeout: 30000 }, async t => {
+  const f = await fixture(t);
+  const relay = await f.start('http://127.0.0.1:9');
+  const result = await relay.call('relay_release');
+  const text = result.content[0].text;
+  assert.equal(result.isError, true, `a release that released nothing must not look like success: ${text}`);
+  assert.match(text, /owns no lease/);
+  assert.match(text, /MCP_VM_RELAY_SESSION/, 'the result names how an earlier session\'s lease can be reached');
+  relay.child.stdin.end(); await relay.exited;
+});
+
+test('R3 (session identity): a restarted server with the default random session identity cannot see the lease of the process before it', { timeout: 30000, todo: 'waiting for the owner\'s decision: the default session identity is a fresh random UUID per server process (src/server.ts), so this documents the current behavior' }, async t => {
+  const f = await withService(t);
+  const first = await f.start(f.fake.url, undefined);
+  assert.equal((await first.call('relay_acquire', acquireArgs)).isError, false);
+  const [vm] = [...f.fake.leases.keys()];
+  first.child.kill('SIGTERM'); await first.exited;
+  const second = await f.start(f.fake.url, undefined);
+  await second.call('relay_release');
+  const status = JSON.parse((await second.call('relay_status')).content[0].text);
+  assert.equal(status.active, false, 'the new process owns nothing');
+  assert.equal(f.fake.releaseCalls, 0, 'nothing was released');
+  assert.equal(f.fake.leases.has(vm!), true, 'the earlier lease is still held at the backend, reachable only through its TTL or its old session identity');
+  second.child.stdin.end(); await second.exited;
+});
