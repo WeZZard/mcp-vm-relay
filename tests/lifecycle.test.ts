@@ -164,6 +164,23 @@ test('R1: closing stdin with an owned lease pauses renewal, retains the VM and e
   assert.equal(f.fake.heartbeats, heartbeats, 'no heartbeat after the session ended');
 });
 
+test('H6: closing stdin sends one final renewal for the lease\'s remaining TTL, after renewing only a short window', { timeout: 30000 }, async t => {
+  const f = await withService(t);
+  const relay = await f.start(f.fake.url);
+  const acquired = await relay.call('relay_acquire', { ...acquireArgs, ttlHours: 2 });
+  assert.equal(acquired.isError, false, acquired.content[0].text);
+  const ttls = (suffix: string) => f.fake.requests.filter(r => r.path.endsWith(suffix)).map(r => r.body.ttl_hours as number);
+  assert.deepEqual(ttls('/acquire'), [0.25], 'acquire asks for the 15-minute renewal window');
+  const before = ttls('/heartbeat').length;
+  relay.child.stdin.end();
+  const exit = await exitWithin(relay, 5000);
+  assert.ok(exit, 'the server must end its session when stdin reaches end of file');
+  const final = ttls('/heartbeat').slice(before);
+  assert.equal(final.length, 1, 'one final renewal at session end');
+  assert.ok(final[0]! > 1.99 && final[0]! <= 2, `the final renewal covers the lease's remaining TTL (${final[0]} h)`);
+  assert.equal(f.fake.releaseCalls, 0, 'session end never releases the VM');
+});
+
 test('R1: closing stdin during an in-flight release lets the release complete before exit', { timeout: 30000 }, async t => {
   const f = await withService(t);
   const relay = await f.start(f.fake.url);

@@ -1293,3 +1293,58 @@ test('finish fails before pulling the relay state when the evidence volume has t
   const delivered = await f.manager.finish(); assert.equal(delivered.deliveryVerified, true);
   await f.assertClean();
 });
+
+/** The ttl_hours of every acquire and heartbeat request the fixture service received. */
+const renewals = (service: FixtureService) => ({
+  acquire: service.requests.filter(r => r.path === '/acquire').map(r => r.body.ttl_hours as number),
+  heartbeats: service.requests.filter(r => r.path.endsWith('/heartbeat')).map(r => r.body.ttl_hours as number),
+});
+
+test('H6: acquire and each heartbeat ask vm-service for a 15-minute window, not the lease\'s whole TTL', { timeout: 30000 }, async t => {
+  const f = await fixture(t);
+  await f.manager.acquire(acquireInput({ ttlHours: 4 }));
+  await (f.manager as any).heartbeat(); await (f.manager as any).heartbeat();
+  const seen = renewals(f.service);
+  assert.deepEqual(seen.acquire, [0.25], 'acquire asks for the renewal window');
+  assert.equal(seen.heartbeats.length, 2);
+  for (const ttl of seen.heartbeats) assert.equal(ttl, 0.25, 'a heartbeat renews the window, not the 4-hour TTL');
+  await f.manager.release(); await f.assertClean();
+});
+
+test('H6: renewal never reaches past the lease\'s own deadline and stops at its end', { timeout: 30000 }, async t => {
+  const f = await fixture(t); // the 60 s fixture timer never fires here; the test drives each heartbeat
+  await f.manager.acquire(acquireInput({ ttlHours: 1 }));
+  assert.ok((f.manager as any).timer, 'renewal is running');
+  const enclosure = (f.manager as any).enclosure;
+  // Move the lease's start back so that 10 minutes of its 1-hour TTL remain.
+  enclosure.startedAt = new Date(Date.now() - 50 * 60000).toISOString();
+  await (f.manager as any).heartbeat();
+  const last = renewals(f.service).heartbeats.at(-1)!;
+  assert.ok(last > 9.9 / 60 && last <= 10 / 60, `the renewal ends at the lease's deadline (${last} h), not 15 minutes out`);
+  // With 5 minutes left, less than vm-service's 0.1 h minimum renewal, the lease
+  // already expires at its deadline, so renewal stops; so it does past the deadline.
+  for (const minutesAgo of [55, 61]) {
+    enclosure.startedAt = new Date(Date.now() - minutesAgo * 60000).toISOString();
+    const count = renewals(f.service).heartbeats.length;
+    await (f.manager as any).heartbeat();
+    assert.equal(renewals(f.service).heartbeats.length, count, `no renewal ${60 - minutesAgo} minutes before the lease's deadline`);
+    assert.equal((f.manager as any).timer, undefined, 'the renewal timer stops');
+    assert.equal(f.manager.status().active, false, 'status shows that renewal stopped');
+  }
+  await f.assertRetained(); // stopping renewal never releases
+  await f.manager.release(); await f.assertClean();
+});
+
+for (const pause of ['cleanup', 'settle'] as const) test(`H6: a graceful pause (${pause}) sends one final renewal for the lease's remaining TTL`, { timeout: 30000 }, async t => {
+  const f = await fixture(t);
+  const acquired = await f.manager.acquire(acquireInput({ ttlHours: 2 }));
+  const count = renewals(f.service).heartbeats.length;
+  if (pause === 'cleanup') await f.manager.cleanup('Enclosure session ended'); else await f.manager.settle();
+  const sent = renewals(f.service).heartbeats.slice(count);
+  assert.equal(sent.length, 1, 'one final renewal');
+  assert.ok(sent[0] > 1.99 && sent[0] <= 2, `the final renewal covers the remaining TTL (${sent[0]} h)`);
+  assert.ok(f.service.leases.has(acquired.vm!), 'the VM is retained');
+  const lease = await json(join(f.manager.root, 'lease.json'));
+  assert.equal(lease.active, false, 'renewal is paused');
+  assert.ok(lease.expiresAt >= Date.now() / 1000 + 1.99 * 3600, 'the recorded expiry is the lease\'s own deadline');
+});
