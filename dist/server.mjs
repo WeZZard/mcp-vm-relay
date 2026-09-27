@@ -29537,7 +29537,7 @@ function overlaps2(a, b) {
   const path = relative5(a, b);
   return path === "" || !isAbsolute5(path) && path !== ".." && !path.startsWith("../");
 }
-async function refreshEvidenceState(incoming, destination, archiveRoot) {
+async function refreshEvidenceState(incoming, destination, archiveRoot, options2 = {}) {
   incoming = safePath(incoming);
   destination = safePath(destination);
   archiveRoot = safePath(archiveRoot);
@@ -29568,7 +29568,6 @@ async function refreshEvidenceState(incoming, destination, archiveRoot) {
     await rename4(destination, archived);
   }
   await directory(dirname8(destination), true);
-  await mkdir8(destination);
   const copy = async (source, tree) => {
     for (const [path, kind] of tree) {
       const target2 = join13(destination, path);
@@ -29579,7 +29578,17 @@ async function refreshEvidenceState(incoming, destination, archiveRoot) {
       }
     }
   };
-  await copy(incoming, fresh);
+  let moved = false;
+  try {
+    await (options2.rename ?? rename4)(incoming, destination);
+    moved = true;
+  } catch (error2) {
+    if (error2.code !== "EXDEV") throw error2;
+  }
+  if (!moved) {
+    await mkdir8(destination);
+    await copy(incoming, fresh);
+  }
   if (archived) await copy(archived, retained);
 }
 

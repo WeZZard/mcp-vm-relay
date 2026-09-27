@@ -112,6 +112,14 @@ flowchart TD
 - `pushFile` and `pushTree` keep the 512 MiB and 10,000-file bound, because that bound limits what a client stages into the guest, not the evidence.
 - The 64 MiB check on one image original (`src/transfer.ts`, `src/images.ts`, `src/guest/receiver.ts`) is unchanged.
 
+### What replaces the bound's protection
+
+- Finalization pulls the relay state into `<package>.finalization-attempts/<uuid>/state` and then refreshes the package's `state/` from it.
+- The refresh moves the verified incoming tree into place with one rename, so the host holds the state once rather than twice. The rename is atomic: the state is either wholly moved or not moved.
+- When the incoming tree is on another volume than the package (`EXDEV`), the refresh falls back to copying it and keeps the incoming tree, as before.
+- Previous state is still archived under `<package>.finalization-attempts/previous/`, and snapshots missing from the incoming state are still retained by copying them from that archive.
+- The delivered `state/` directories keep the private mode (0700) that the pull gives them.
+
 ## Verification
 
 - Each item R1 to R6 has a reproducer test that was committed on its own and failed on the unfixed source for the stated reason, followed by a separate fix commit.

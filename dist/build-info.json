@@ -1003,7 +1003,7 @@
     "src/core.ts": "f024e17d480ec5b4e1f7727fa32bb1b75e5483e371d1cd4685148b66be7e239f",
     "src/doctor.ts": "707baccd5d54c7776d121674d3c14d18cde090b067887ea2ce800a321d75e3fc",
     "src/environment.ts": "e7f71ff1892d76d2fa10c23937b3d6775f34af513c5b394972f0494396a82885",
-    "src/evidence-merge.ts": "e74227f97ca80d54a93c9441157b33cf7cabb4072bcf6fe078b48748996e68f8",
+    "src/evidence-merge.ts": "2f2759e28e70595ef9284fec85e1d6082bf25e815d04f0a36a253c24bfb75110",
     "src/guest/image-evidence.ts": "0960bb4fc0c43997bfba1c2063fe28f9a325702e684b780185050fdc634a958d",
     "src/guest/mcp-host.ts": "e93ec85059120bd2383582c7ee34570c61bc834f6079f9396f01f9eac96caf04",
     "src/guest/receiver.ts": "544736deb0c331ce261cca685c1440c834d86eab248642939e74fec88fc3af68",

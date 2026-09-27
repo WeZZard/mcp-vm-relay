@@ -59,14 +59,21 @@ function overlaps(a: string, b: string): boolean {
   return path === "" || (!isAbsolute(path) && path !== ".." && !path.startsWith("../"));
 }
 
+export interface RefreshOptions {
+  /** Injected for tests; defaults to fs.promises.rename. */
+  rename?: (from: string, to: string) => Promise<void>;
+}
+
 /**
  * Refresh unsealed state from a verified, private staging tree. Callers must
- * serialize access to these trees and retain incoming staging on failure.
- * Snapshot conflicts fail before mutation. Previous state is archived under
- * archiveRoot/<unique-attempt>/state; missing old snapshots are retained too.
- * Copy failures retain both the archive and any partially copied new state.
+ * serialize access to these trees. Snapshot conflicts fail before mutation.
+ * Previous state is archived under archiveRoot/<unique-attempt>/state; missing
+ * old snapshots are retained too. The incoming tree is moved into place in one
+ * rename, so the state is not stored twice; when it is on another volume
+ * (EXDEV) it is copied and kept. Copy failures retain both the archive and any
+ * partially copied new state, and incoming staging.
  */
-export async function refreshEvidenceState(incoming: string, destination: string, archiveRoot: string): Promise<void> {
+export async function refreshEvidenceState(incoming: string, destination: string, archiveRoot: string, options: RefreshOptions = {}): Promise<void> {
   incoming = safePath(incoming);
   destination = safePath(destination);
   archiveRoot = safePath(archiveRoot);
@@ -98,7 +105,6 @@ export async function refreshEvidenceState(incoming: string, destination: string
     await rename(destination, archived);
   }
   await directory(dirname(destination), true);
-  await mkdir(destination);
   const copy = async (source: string, tree: Tree) => {
     for (const [path, kind] of tree) {
       const target = join(destination, path);
@@ -109,6 +115,12 @@ export async function refreshEvidenceState(incoming: string, destination: string
       }
     }
   };
-  await copy(incoming, fresh);
+  let moved = false;
+  try { await (options.rename ?? rename)(incoming, destination); moved = true; }
+  catch (error) { if ((error as NodeJS.ErrnoException).code !== "EXDEV") throw error; }
+  if (!moved) {
+    await mkdir(destination);
+    await copy(incoming, fresh);
+  }
   if (archived) await copy(archived, retained);
 }
