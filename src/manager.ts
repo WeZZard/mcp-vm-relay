@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, rm, cp, access, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, cp, access, writeFile, statfs } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { relayStateRoot } from './config.js';
 import { fileURLToPath } from 'node:url';
@@ -8,7 +8,7 @@ import { VmService, VmServiceError, type VmLease, type VmBackend } from './vm-se
 import { canonicalPath, environmentVariables, matchesEnvironment, selectedEnvironment, type SelectedEnvironment } from './environment.js';
 import { homedir } from 'node:os';
 import { Registry, type RegistryRow } from './registry.js';
-import { Transfer, assertHostPath, type VmChannel } from './transfer.js';
+import { Transfer, assertHostPath, type FileFact, type VmChannel } from './transfer.js';
 import { VmTransport } from './transport.js';
 import { command, hash, jsonFile, within } from './util.js';
 import { deliverPackage, type DeliveryResult } from './package.js';
@@ -74,6 +74,8 @@ export interface ManagerOptions {
   targetPackages?: Partial<Record<Exclude<Target, 'cua'>, TargetPackages>>;
   tarballSource?: TarballSource;
   packageCache?: string;
+  /** Test seam: free space of the evidence volume; default `fs.promises.statfs`. */
+  statfs?: (path: string) => Promise<{ bavail: number | bigint; bsize: number | bigint }>;
 }
 /** The workspace directory and extraction name that carry relay_run results home: each call's full result, the targets' images and files, and the servers' logs. */
 export const RELAY_RUN_OUTPUTS = 'relay-run';
@@ -741,7 +743,7 @@ export class RelayManager {
     const marker = await transfer.checked([e.node!, '-e', 'const fs=require("fs"),p=require("path");console.log(fs.existsSync(p.join(process.argv[1],"recordings",process.argv[2]))?"archived":"current");', e.guestRoot, reset.id]);
     const attempts = `${reset.from}.reset-attempts`;
     const incoming = join(attempts, randomUUID(), 'state');
-    await transfer.pullVerified(marker.trim() === 'archived' ? archive : join(e.guestRoot, 'state'), incoming, e.guestRoot, attempts);
+    await transfer.pullVerified(marker.trim() === 'archived' ? archive : join(e.guestRoot, 'state'), incoming, e.guestRoot, attempts, { beforePull: facts => this.assertFreeSpace(reset.from, facts) });
     await this.imageStore().materializeDisplayOriginals(reset.from);
     await refreshEvidenceState(incoming, join(reset.from, 'state'), join(attempts, 'previous'));
     await this.log('recording-reset-intent', undefined, reset);
@@ -803,12 +805,25 @@ export class RelayManager {
       catch (error) { await this.log('workspace-incomplete', undefined, { error: String(error) }).catch(() => {}); }
     }
   }
+  /**
+   * A precondition, not a limit (PS-D12): refuse to pull the relay state when
+   * the evidence volume cannot hold it, before any byte is pulled, so the disk
+   * is not filled part way and the VM stays for a retry after space is freed.
+   */
+  private async assertFreeSpace(hostRoot: string, facts: FileFact[]) {
+    const needed = facts.reduce((sum, fact) => sum + BigInt(fact.bytes), 0n);
+    const info = await (this.options.statfs ?? (path => statfs(path, { bigint: true })))(hostRoot);
+    const free = BigInt(info.bavail) * BigInt(info.bsize);
+    if (needed <= free) return;
+    const mib = (bytes: bigint) => `${(Number(bytes) / 1048576).toFixed(1)} MiB`;
+    throw new Error(`Not enough free space on the evidence volume at ${hostRoot}: the relay state needs ${needed} bytes (${mib(needed)}), ${free} bytes are free (${mib(free)}), short by ${needed - free} bytes (${mib(needed - free)}). Nothing of the state was pulled and the VM is kept; free space on that volume, then call relay_finish again.`);
+  }
   private async packageInternal() {
     const e = this.current();
     if (!e.staged || !e.sessionId) throw new Error('No staged session to package');
     const attempts = `${e.hostRoot}.finalization-attempts`;
     const incoming = join(attempts, randomUUID(), 'state');
-    await this.transfer().pullVerified(join(e.guestRoot, 'state'), incoming, e.guestRoot, attempts);
+    await this.transfer().pullVerified(join(e.guestRoot, 'state'), incoming, e.guestRoot, attempts, { beforePull: facts => this.assertFreeSpace(e.hostRoot, facts) });
     await this.imageStore().materializeDisplayOriginals(e.hostRoot);
     await refreshEvidenceState(incoming, join(e.hostRoot, 'state'), join(attempts, 'previous'));
     const result = await deliverPackage(e.hostRoot, { packageId: `pkg-${e.purpose}`, sessionId: e.sessionId, taskId: e.purpose });

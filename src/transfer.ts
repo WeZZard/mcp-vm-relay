@@ -434,9 +434,11 @@ export class Transfer {
       finally { await assertHostPath(tempRoot, hostDirectory); await rm(hostDirectory, { recursive: true, force: true }); }
     }
   }
-  /** Capture source hashes before pull, compare host bytes, then source inventory again. */
-  async pullVerified(remote: string, local: string, approvedRoot = remote, localRoot = dirname(local)) {
+  /** Capture source hashes before pull, compare host bytes, then source inventory again.
+   * `beforePull` sees the source inventory before any byte is pulled and may refuse the pull. */
+  async pullVerified(remote: string, local: string, approvedRoot = remote, localRoot = dirname(local), options: { beforePull?: (facts: FileFact[]) => Promise<void> } = {}) {
     const before = await this.scan(remote, approvedRoot);
+    await options.beforePull?.(before);
     await assertHostPath(localRoot, local, true);
     await mkdir(dirname(local), { recursive: true, mode: 0o700 });
     await assertHostPath(localRoot, local, true);

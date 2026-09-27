@@ -324,7 +324,10 @@ Relay evidence has no size limit (owner decision PS-D12): screenshots are
 delivered as captured, never scaled, compressed, deduplicated or budgeted, and
 the relay state is delivered whatever its total size or file count. Only what a
 client stages into the guest is bounded (512 MiB and 10,000 files per staging
-request), and a single image original must be at most 64 MiB to be valid.
+request), and a single image original must be at most 64 MiB to be valid. Before
+`finish` pulls the relay state it checks that the evidence volume has room for
+it; when it does not, `finish` fails before pulling, names the shortfall and
+keeps the VM for a retry after space is freed.
 
 ## Configuration
 

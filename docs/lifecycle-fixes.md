@@ -119,6 +119,8 @@ flowchart TD
 - When the incoming tree is on another volume than the package (`EXDEV`), the refresh falls back to copying it and keeps the incoming tree, as before.
 - Previous state is still archived under `<package>.finalization-attempts/previous/`, and snapshots missing from the incoming state are still retained by copying them from that archive.
 - The delivered `state/` directories keep the private mode (0700) that the pull gives them.
+- Before any byte of the relay state is pulled, for `finish`, for a `release` that packages, and for a recording reset, the relay compares the total bytes of the guest's state inventory with the free space of the evidence volume (`statfs` on the package directory).
+- When the state does not fit, the operation fails before the pull with a diagnostic that names the bytes needed, the bytes free and the shortfall. This is a precondition, not a limit: `finish` keeps the VM, so the agent can free space and call `relay_finish` again. A `release` still releases, as it does for any delivery failure, and records the diagnostic in `<package>.delivery-error.json`.
 
 ## Verification
 
