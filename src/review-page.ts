@@ -162,10 +162,17 @@ function shot(step: ReviewPageStep, detail: StepDetail | undefined, role: "befor
   return `<figure class="shot"><a href="${src(path)}" title="Open the original snapshot"><img alt="${name} dispatch snapshot" src="${src(path)}"></a>${caption}</figure>`;
 }
 
+/** The steps around a step: adjacent ones, and the nearest ones with errors. */
+type Around = { previous?: ReviewPageStep; next?: ReviewPageStep; previousError?: ReviewPageStep; nextError?: ReviewPageStep };
+
 /** The viewport of a step: its snapshots, side by side by default, with a switch to either one alone; or its command. */
-function stage(step: ReviewPageStep, detail: StepDetail | undefined, number: string, previous?: ReviewPageStep, next?: ReviewPageStep) {
+function stage(step: ReviewPageStep, detail: StepDetail | undefined, number: string, around: Around) {
   const { headline, command } = describe(step, detail);
-  const arrows = `${previous ? `<a class="arrow prev" href="${escapeHtml(link(previous))}" aria-label="Previous step">‹</a>` : ""}${next ? `<a class="arrow next" href="${escapeHtml(link(next))}" aria-label="Next step">›</a>` : ""}`;
+  // Two pairs of arrows: to the adjacent steps, and to the nearest steps with
+  // errors. "Focus on errors" shows the second pair instead of the first.
+  const arrow = (target: ReviewPageStep | undefined, side: "prev" | "next", set: "all" | "errs") => target
+    ? `<a class="arrow ${side} ${set}" href="${escapeHtml(link(target))}" aria-label="${side === "prev" ? "Previous" : "Next"} step${set === "errs" ? " with errors" : ""}">${side === "prev" ? "‹" : "›"}</a>` : "";
+  const arrows = arrow(around.previous, "prev", "all") + arrow(around.next, "next", "all") + arrow(around.previousError, "prev", "errs") + arrow(around.nextError, "next", "errs");
   if (!step.snapshots) {
     return `<section class="stage terminal" aria-label="Step ${number} command">${arrows}<div class="term"><div class="term-bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span>${step.inputMode === "diagnostic" ? "Diagnostic command" : "Command"} · no snapshots</span></div>
 <pre class="term-cmd"><span class="prompt" aria-hidden="true">$</span>${escapeHtml(command ?? headline)}</pre>${detail?.output ? streamsOf(detail.output) || `<p class="quiet">No output.</p>` : ""}
@@ -179,21 +186,23 @@ ${arrows}<div class="views"><div class="view v-compare">${shot(step, detail, "be
 }
 
 /** The right panel of a step: what it was, why it was sent, and what came back. */
-function panel(step: ReviewPageStep, detail: StepDetail | undefined, number: string, total: number, previous?: ReviewPageStep, next?: ReviewPageStep) {
+function panel(step: ReviewPageStep, detail: StepDetail | undefined, number: string, total: number) {
   const { headline, command, reasonShown, kind } = describe(step, detail);
   const interval = step.snapshots?.declaredAfterIntervalMs;
   const at = time(detail?.at);
   const fact = (term: string, value: string) => `<div><dt>${term}</dt><dd>${value}</dd></div>`;
   return `<aside class="panel" aria-label="Step ${number} details"><div class="panel-scroll">
-<p class="eyebrow"><span>Step ${number} <span class="of">of ${String(total).padStart(2, "0")}</span></span><span>${kind}</span>${at ? `<time>${at} UTC</time>` : ""}</p>
+<p class="eyebrow"><span>Step ${number} <span class="of">of ${String(total).padStart(2, "0")}</span></span><span>${kind}</span>${at ? `<time>${at} UTC</time>` : ""}<a class="permalink" href="${escapeHtml(link(step))}" title="Stable link to this step" aria-label="Stable link to step ${number}">${linkIcon}</a></p>
 <h2>${escapeHtml(headline)}</h2><p class="state"><span class="sr">Execution: </span>${verdict(step.execution)}</p>
 ${reasonShown ? `<section class="block"><h3>Reason</h3><p>${escapeHtml(step.because ?? "Not present in retained host metadata")}</p></section>` : ""}
 ${command && step.snapshots ? `<section class="block"><h3>Command</h3><pre class="command">${escapeHtml(command)}</pre></section>` : ""}
 <section class="block"><h3>Expected</h3><p>${escapeHtml(step.expected || "Not supplied")}</p></section>
 <section class="block"><h3>Observed</h3>${observed(step, detail?.output, !!step.snapshots)}</section>
 <dl class="facts">${fact("State", escapeHtml(step.state))}${fact("Input", escapeHtml(step.inputMode))}${fact("After interval", interval === undefined ? "unavailable" : `${interval} ms`)}${step.snapshots?.groupId ? fact("Group", escapeHtml(step.snapshots.groupId)) : ""}</dl>
-</div><nav class="pager" aria-label="Step ${number}">${previous ? `<a href="${escapeHtml(link(previous))}" title="Left arrow key">← Previous</a>` : `<span class="off">← Previous</span>`}<a class="stable" href="${escapeHtml(link(step))}">Stable link</a>${next ? `<a href="${escapeHtml(link(next))}" title="Right arrow key">Next →</a>` : `<span class="off">Next →</span>`}</nav></aside>`;
+</div></aside>`;
 }
+
+const linkIcon = `<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M6.6 9.4l2.8-2.8M7.2 4.6l.9-.9a2.8 2.8 0 0 1 4 4l-.9.9M8.8 11.4l-.9.9a2.8 2.8 0 0 1-4-4l.9-.9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
 
 /** One thumbnail of the bottom track: the step's after snapshot, or its command. */
 function thumb(step: ReviewPageStep, detail: StepDetail | undefined, number: string) {
@@ -269,10 +278,11 @@ export function renderReviewPage(model: ReviewPageModel): string {
 <header class="top"><div class="brand"><span class="mark" aria-hidden="true"></span><div><h1 title="${escapeHtml(model.packageId)}">${escapeHtml(title)}</h1>
 <ul class="stats">${stat(noun(steps.length, "step"), String(steps.length))}${stat(noun(actions, "action"), String(actions))}${stat(noun(diagnostics, "diagnostic"), String(diagnostics))}${times.length ? `${stat("UTC", time(new Date(Math.min(...times)).toISOString())!)}${stat("", duration(Math.max(...times) - Math.min(...times)))}` : ""}</ul></div></div>
 <nav class="tabs" aria-label="View"><a class="t-traj" href="${steps[0] ? escapeHtml(link(steps[0])) : "#"}">Trajectory</a><a class="t-over" href="#overview">Overview<span class="${model.findings.length ? "has" : ""}">${model.findings.length}</span></a></nav>
-<ul class="pills"><li class="focus"><label title="Highlight the steps with errors, and move between them with the arrow keys"><input type="checkbox" id="focus-errors"${errors ? "" : " disabled"}>Focus on errors<span>${errors}</span></label></li>${pill("Snapshots", model.completeness)}${pill("Execution", model.execution)}${pill("Review", "pending")}</ul></header>
-<main class="center">${steps.map((step, i) => `<article id="step-${escapeHtml(step.id)}" class="step ${tone(step.execution)}${erred(step) ? " err" : ""}">${stage(step, model.details.get(step.id), numbers.get(step.id)!, steps[i - 1], steps[i + 1])}${panel(step, model.details.get(step.id), numbers.get(step.id)!, steps.length, steps[i - 1], steps[i + 1])}</article>`).join("\n")}
+<ul class="pills">${pill("Snapshots", model.completeness)}${pill("Execution", model.execution)}${pill("Review", "pending")}</ul></header>
+<main class="center">${steps.map((step, i) => `<article id="step-${escapeHtml(step.id)}" class="step ${tone(step.execution)}${erred(step) ? " err" : ""}">${stage(step, model.details.get(step.id), numbers.get(step.id)!, {
+    previous: steps[i - 1], next: steps[i + 1], previousError: steps.slice(0, i).findLast(erred), nextError: steps.slice(i + 1).find(erred) })}${panel(step, model.details.get(step.id), numbers.get(step.id)!, steps.length)}</article>`).join("\n")}
 ${overview}</main>
-<footer class="track" aria-label="Steps"><ol>${steps.map(step => thumb(step, model.details.get(step.id), numbers.get(step.id)!)).join("")}</ol></footer>
+<footer class="track" aria-label="Steps"><label class="focus" title="Highlight the steps with errors, and move between them with the arrows"><input type="checkbox" id="focus-errors"${errors ? "" : " disabled"}>Focus on errors<span>${errors}</span></label><ol>${steps.map(step => thumb(step, model.details.get(step.id), numbers.get(step.id)!)).join("")}</ol></footer>
 </div><script>${keys}</script></body></html>
 `;
 }
@@ -297,26 +307,26 @@ b,time,.n,.exit,dd,.gap{font-variant-numeric:tabular-nums}
 .ok{--tone:var(--ok)}.bad{--tone:var(--bad)}.warn{--tone:var(--warn)}.pend{--tone:var(--pend)}
 .verdict{display:inline-flex;align-items:center;gap:.45rem;font:600 12.5px/1 var(--sans);color:var(--tone,var(--dim));text-transform:capitalize}
 .verdict i{flex:none;width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 0 3px color-mix(in srgb,currentColor 18%,transparent)}
-.app{height:100vh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;grid-template-columns:minmax(0,1fr);overflow:clip}.track{min-width:0;position:relative;z-index:0}
-.top{display:flex;align-items:center;gap:1rem 2.25rem;flex-wrap:wrap;padding:1.1rem 1.75rem}
-.brand{flex:1 1 18rem;display:flex;align-items:center;gap:.9rem;min-width:0}
+.app{height:100vh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;grid-template-columns:minmax(0,1fr);overflow:clip}.track{min-width:0;position:relative;z-index:0;display:flex}
+.top{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:1rem 1.25rem;padding:1.1rem 1.75rem}
+.brand{display:flex;align-items:center;gap:.9rem;min-width:0}
 .mark{flex:none;width:1.9rem;height:1.9rem;border-radius:50%;background:var(--grad);box-shadow:0 6px 18px var(--ring)}
 h1{font:700 1.3rem/1.15 var(--round);letter-spacing:-.015em;margin:0}
 .stats{display:flex;flex-wrap:wrap;gap:.15rem 1rem;list-style:none;margin:.3rem 0 0;padding:0;font-size:12.5px;color:var(--faint)}.stats b{font:700 12.5px var(--round);color:var(--text)}
-.pills{flex:1 1 auto;display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:.4rem;list-style:none;margin:0;padding:0}.pills li,.stats li{white-space:nowrap}
+.pills{justify-self:end;display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:.4rem;list-style:none;margin:0;padding:0}.pills li,.stats li{white-space:nowrap}
 .pill{display:flex;align-items:center;gap:.5rem;padding:.42rem .8rem;border-radius:999px;background:color-mix(in srgb,var(--tone) 12%,transparent);font-size:12px;color:var(--dim)}
-.tabs{flex:none;display:flex;gap:.2rem;padding:.25rem;border-radius:999px;background:var(--s2)}
+.tabs{justify-self:center;display:flex;gap:.2rem;padding:.25rem;border-radius:999px;background:var(--s2)}
 .tabs a{display:inline-flex;align-items:center;gap:.5rem;padding:.4rem 1rem;border-radius:999px;color:var(--dim);font-size:13px;font-weight:600}.tabs a:hover{text-decoration:none;color:var(--text)}
 .tabs a span{display:grid;place-items:center;min-width:1.35rem;height:1.35rem;padding:0 .35rem;font:700 11px/1 var(--round);border-radius:999px;background:var(--s3);color:var(--dim)}.tabs a span.has{background:var(--grad);color:var(--on)}
 .app:not(:has(#overview:target)) .t-traj,.app:has(#overview:target) .t-over{background:var(--s1);color:var(--text);box-shadow:var(--shadow)}
-.focus label{display:flex;align-items:center;gap:.5rem;padding:.38rem .8rem .38rem .6rem;border-radius:999px;font-size:12px;font-weight:600;color:var(--dim);cursor:pointer;user-select:none}
-.focus label:hover{background:var(--s2)}.focus input{appearance:none;margin:0;width:1.05rem;height:1.05rem;border-radius:6px;background:var(--s1);box-shadow:inset 0 0 0 1.5px var(--faint);display:grid;place-items:center;cursor:pointer}
+.focus{flex:none;align-self:center;margin-left:1.75rem;display:flex;align-items:center;gap:.45rem;padding:.45rem .7rem;border-radius:999px;font-size:12px;font-weight:600;color:var(--dim);cursor:pointer;user-select:none}
+.focus:hover{background:var(--s2)}.focus input{appearance:none;margin:0;width:1.05rem;height:1.05rem;border-radius:6px;background:var(--s1);box-shadow:inset 0 0 0 1.5px var(--faint);display:grid;place-items:center;cursor:pointer}
 .focus input:checked{background:var(--bad);box-shadow:none}.focus input:checked::after{content:"";width:.28rem;height:.55rem;border:solid #fff;border-width:0 2px 2px 0;rotate:45deg;translate:0 -1px}
-.focus input:disabled,.focus label:has(input:disabled){cursor:default;opacity:.55}.focus span{font:700 11px/1 var(--round);color:var(--bad)}.focus label:has(input:disabled) span{color:var(--faint)}
+.focus input:disabled,.focus:has(input:disabled){cursor:default;opacity:.55}.focus span{font:700 11px/1 var(--round);color:var(--bad)}.focus:has(input:disabled) span{color:var(--faint)}
 .app:has(#focus-errors:checked) .track li:not(.err){opacity:.35;filter:grayscale(1)}
 .app:has(#focus-errors:checked) .track li.err .face{box-shadow:0 0 0 2px var(--bad),0 6px 16px color-mix(in srgb,var(--bad) 25%,transparent)}
 .app:has(#focus-errors:checked) .track li.err .t{color:var(--bad)}
-.app:has(#overview:target) .track,.app:has(#overview:target) .focus{display:none}
+.app:has(#overview:target) .track{display:none}
 .center{display:grid;grid-template-columns:minmax(0,1fr) minmax(20rem,25rem);grid-template-areas:"stage panel";gap:0 .75rem;padding:0 .75rem;min-height:0;position:relative;z-index:1}
 .step{display:none}.step:is(:target,:has(:target)){display:contents}.center:not(:has(:target))>.step:first-of-type{display:contents}
 .stage{grid-area:stage;position:relative;min-width:0;min-height:0;border-radius:22px;background:radial-gradient(80% 60% at 50% 40%,rgba(255,255,255,.7),transparent 70%),var(--stage);display:grid;grid-template-rows:auto minmax(0,1fr);overflow:clip}
@@ -335,6 +345,7 @@ h1{font:700 1.3rem/1.15 var(--round);letter-spacing:-.015em;margin:0}
 .v-compare .shot:last-child figcaption .label{color:var(--accent)}
 .void{display:grid;place-items:center;border-radius:14px;background:var(--s1);color:var(--faint);padding:2rem;text-align:center;aspect-ratio:16/9}
 .arrow{position:absolute;top:50%;translate:0 -50%;z-index:3;display:grid;place-items:center;width:2.75rem;height:2.75rem;border-radius:50%;background:rgba(255,255,255,.85);backdrop-filter:blur(8px);color:var(--text);font-size:1.5rem;line-height:1;box-shadow:var(--shadow)}
+.arrow.errs,.app:has(#focus-errors:checked) .arrow.all{display:none}.app:has(#focus-errors:checked) .arrow.errs{display:grid}
 .arrow:hover{text-decoration:none;background:var(--grad);color:var(--on)}.arrow.prev{left:1rem}.arrow.next{right:1rem}
 .terminal{grid-template-rows:minmax(0,1fr);place-items:center;padding:2rem 4.75rem}
 .term{width:min(100%,56rem);max-height:100%;overflow:auto;background:var(--s1);border-radius:18px;box-shadow:var(--shadow)}
@@ -345,8 +356,9 @@ h1{font:700 1.3rem/1.15 var(--round);letter-spacing:-.015em;margin:0}
 .stream .label{display:block;margin-bottom:.35rem}.stream pre,.plain,.command{background:var(--s2);border-radius:12px;padding:.75rem .9rem;max-height:14rem;overflow:auto;color:var(--text)}
 .panel{grid-area:panel;min-height:0;display:grid;grid-template-rows:minmax(0,1fr) auto;background:var(--s1);border-radius:22px;box-shadow:var(--shadow)}
 .panel-scroll{overflow:auto;padding:1.5rem 1.5rem 1.25rem;scrollbar-width:thin;scrollbar-color:var(--s3) transparent}
-.eyebrow{display:flex;flex-wrap:wrap;align-items:baseline;gap:.3rem .9rem;margin:0;font-size:12px;color:var(--faint)}
+.eyebrow{display:flex;flex-wrap:wrap;align-items:center;gap:.3rem .9rem;margin:0;font-size:12px;color:var(--faint)}
 .eyebrow>span:first-child{font:700 12.5px var(--round);background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}.eyebrow .of{-webkit-text-fill-color:var(--faint);color:var(--faint);font-weight:500}.eyebrow time{font-family:var(--mono)}
+.permalink{margin-left:auto;display:grid;place-items:center;width:1.9rem;height:1.9rem;margin-block:-.4rem;border-radius:999px;color:var(--faint)}.permalink:hover{background:var(--s2);color:var(--accent)}
 .panel h2{font:700 1.3rem/1.3 var(--round);letter-spacing:-.01em;margin:.5rem 0 .55rem;overflow-wrap:anywhere}
 .state{margin:0}
 .block{margin-top:1.5rem}.block h3{margin:0 0 .45rem}.block p{margin:0;color:var(--dim)}
@@ -375,7 +387,7 @@ h1{font:700 1.3rem/1.15 var(--round);letter-spacing:-.015em;margin:0}
 .gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(8.5rem,1fr));gap:.75rem}.flist+.gallery{margin-top:.75rem}
 .gthumb{display:grid;gap:.4rem;font:11.5px var(--mono);min-width:0;color:var(--dim)}.gthumb span{display:flex;justify-content:space-between;gap:.5rem;overflow:hidden;white-space:nowrap}.gthumb small{color:var(--faint);font-size:inherit;flex:none}
 .gthumb img{width:100%;aspect-ratio:16/9;object-fit:contain;border-radius:10px;display:block;background:var(--s2);box-shadow:inset 0 0 0 1px var(--hair);transition:box-shadow .15s}.gthumb:hover img{box-shadow:0 0 0 2px var(--accent)}
-.track ol{list-style:none;margin:0;padding:.85rem 1.75rem 1rem;display:flex;gap:.6rem;overflow-x:auto;scrollbar-width:thin;scrollbar-color:var(--s3) transparent}
+.track ol{flex:1;min-width:0;list-style:none;margin:0;padding:.85rem 1.75rem 1rem .75rem;display:flex;gap:.6rem;overflow-x:auto;scrollbar-width:thin;scrollbar-color:var(--s3) transparent}
 .track li{flex:none;width:9.25rem}
 .track a{display:grid;gap:.45rem;padding:.35rem;border-radius:16px;color:var(--text);transition:background .15s}
 .track a:hover{text-decoration:none;background:var(--s1)}
@@ -386,7 +398,7 @@ h1{font:700 1.3rem/1.15 var(--round);letter-spacing:-.015em;margin:0}
 .cap .n{font:700 11px var(--round);color:var(--faint)}.dot{flex:none;width:7px;height:7px;border-radius:50%;background:var(--tone)}
 .cap .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dim)}
 .track li.bad .face{box-shadow:0 0 0 2px var(--bad)}
-@media(max-width:960px){.app{height:auto;min-height:100vh;overflow:visible}.center{grid-template-columns:minmax(0,1fr);grid-template-areas:"stage" "panel";gap:.75rem}
+@media(max-width:960px){.top{grid-template-columns:minmax(0,1fr)}.pills{justify-self:center;justify-content:center}.app{height:auto;min-height:100vh;overflow:visible}.center{grid-template-columns:minmax(0,1fr);grid-template-areas:"stage" "panel";gap:.75rem}
 .stage{min-height:60vh}.views{padding:.5rem 3.75rem 1rem}.step:target .v-compare,.center:not(:has(:target))>.step:first-of-type .v-compare{grid-template-columns:1fr}.track{position:sticky;bottom:0;background:var(--bg)}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 @media print{.app{height:auto;display:block}.track,.arrow,.seg,.pager,.tabs,.focus{display:none}.center{display:block}.step{display:block!important;break-inside:avoid;margin-bottom:1rem}.stage{background:none}.view{display:none!important}.v-compare{display:grid!important;grid-template-columns:1fr 1fr}}`;

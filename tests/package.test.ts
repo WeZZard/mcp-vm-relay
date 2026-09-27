@@ -141,6 +141,13 @@ test("review page orders steps by time and reads commands, exit status, output s
   const action = html.split('<article id="step-step-0"')[1]!.split("</article>")[0]!;
   assert.match(action, /<a class="s-compare" href="#step-step-0">Compare<\/a><a class="s-before" href="#step-step-0--before">Before<\/a><a class="s-after" href="#step-step-0--after">After<\/a>/);
   assert.match(action, /<div class="view v-compare"><figure class="shot">/);
+  // The viewport's arrows come in two pairs; "Focus on errors" swaps in the pair that skips to steps with errors.
+  assert.match(action, /<a class="arrow prev all" href="#step-diagnostic-early" aria-label="Previous step">/);
+  assert.match(action, /<a class="arrow prev errs" href="#step-diagnostic-early" aria-label="Previous step with errors">/);
+  assert.doesNotMatch(action, /arrow next/);
+  // The panel has no paging; its stable link is an icon on the step's line.
+  assert.match(action, /<a class="permalink" href="#step-step-0" title="Stable link to this step" aria-label="Stable link to step 02">/);
+  assert.doesNotMatch(action, /class="pager"/);
   assert.match(action, /<div class="view v-before" id="step-step-0--before">/);
   assert.match(action, /<div class="view v-after" id="step-step-0--after">/);
   assert.match(html, /<span class="where">evidence<\/span><span class="count">1 file · [^<]+<\/span><\/summary><ul class="flist"><li><a href="extractions\/evidence\/run-1\/result.json">run-1\/result.json<\/a>/);

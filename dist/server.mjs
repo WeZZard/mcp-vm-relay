@@ -20356,9 +20356,10 @@ function shot(step2, detail, role) {
   if (!path) return `<figure class="shot missing"><div class="void">${name}: unavailable \u2014 incomplete evidence</div>${caption}</figure>`;
   return `<figure class="shot"><a href="${src(path)}" title="Open the original snapshot"><img alt="${name} dispatch snapshot" src="${src(path)}"></a>${caption}</figure>`;
 }
-function stage(step2, detail, number3, previous, next) {
+function stage(step2, detail, number3, around) {
   const { headline, command: command2 } = describe2(step2, detail);
-  const arrows = `${previous ? `<a class="arrow prev" href="${escapeHtml(link2(previous))}" aria-label="Previous step">\u2039</a>` : ""}${next ? `<a class="arrow next" href="${escapeHtml(link2(next))}" aria-label="Next step">\u203A</a>` : ""}`;
+  const arrow = (target2, side, set) => target2 ? `<a class="arrow ${side} ${set}" href="${escapeHtml(link2(target2))}" aria-label="${side === "prev" ? "Previous" : "Next"} step${set === "errs" ? " with errors" : ""}">${side === "prev" ? "\u2039" : "\u203A"}</a>` : "";
+  const arrows = arrow(around.previous, "prev", "all") + arrow(around.next, "next", "all") + arrow(around.previousError, "prev", "errs") + arrow(around.nextError, "next", "errs");
   if (!step2.snapshots) {
     return `<section class="stage terminal" aria-label="Step ${number3} command">${arrows}<div class="term"><div class="term-bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span>${step2.inputMode === "diagnostic" ? "Diagnostic command" : "Command"} \xB7 no snapshots</span></div>
 <pre class="term-cmd"><span class="prompt" aria-hidden="true">$</span>${escapeHtml(command2 ?? headline)}</pre>${detail?.output ? streamsOf(detail.output) || `<p class="quiet">No output.</p>` : ""}
@@ -20370,21 +20371,22 @@ function stage(step2, detail, number3, previous, next) {
 <nav class="seg" aria-label="Snapshot view"><a class="s-compare" href="${escapeHtml(link2(step2))}">Compare</a><a class="s-before" href="${href("--before")}">Before</a><a class="s-after" href="${href("--after")}">After</a>${gap ? `<span class="gap" title="Time between the before and after snapshots">${gap}</span>` : ""}</nav>
 ${arrows}<div class="views"><div class="view v-compare">${shot(step2, detail, "before")}${shot(step2, detail, "after")}</div><div class="view v-before" id="${escapeHtml(`${id2}--before`)}">${shot(step2, detail, "before")}</div><div class="view v-after" id="${escapeHtml(`${id2}--after`)}">${shot(step2, detail, "after")}</div></div></section>`;
 }
-function panel(step2, detail, number3, total, previous, next) {
+function panel(step2, detail, number3, total) {
   const { headline, command: command2, reasonShown, kind } = describe2(step2, detail);
   const interval2 = step2.snapshots?.declaredAfterIntervalMs;
   const at = time3(detail?.at);
   const fact = (term, value) => `<div><dt>${term}</dt><dd>${value}</dd></div>`;
   return `<aside class="panel" aria-label="Step ${number3} details"><div class="panel-scroll">
-<p class="eyebrow"><span>Step ${number3} <span class="of">of ${String(total).padStart(2, "0")}</span></span><span>${kind}</span>${at ? `<time>${at} UTC</time>` : ""}</p>
+<p class="eyebrow"><span>Step ${number3} <span class="of">of ${String(total).padStart(2, "0")}</span></span><span>${kind}</span>${at ? `<time>${at} UTC</time>` : ""}<a class="permalink" href="${escapeHtml(link2(step2))}" title="Stable link to this step" aria-label="Stable link to step ${number3}">${linkIcon}</a></p>
 <h2>${escapeHtml(headline)}</h2><p class="state"><span class="sr">Execution: </span>${verdict(step2.execution)}</p>
 ${reasonShown ? `<section class="block"><h3>Reason</h3><p>${escapeHtml(step2.because ?? "Not present in retained host metadata")}</p></section>` : ""}
 ${command2 && step2.snapshots ? `<section class="block"><h3>Command</h3><pre class="command">${escapeHtml(command2)}</pre></section>` : ""}
 <section class="block"><h3>Expected</h3><p>${escapeHtml(step2.expected || "Not supplied")}</p></section>
 <section class="block"><h3>Observed</h3>${observed(step2, detail?.output, !!step2.snapshots)}</section>
 <dl class="facts">${fact("State", escapeHtml(step2.state))}${fact("Input", escapeHtml(step2.inputMode))}${fact("After interval", interval2 === void 0 ? "unavailable" : `${interval2} ms`)}${step2.snapshots?.groupId ? fact("Group", escapeHtml(step2.snapshots.groupId)) : ""}</dl>
-</div><nav class="pager" aria-label="Step ${number3}">${previous ? `<a href="${escapeHtml(link2(previous))}" title="Left arrow key">\u2190 Previous</a>` : `<span class="off">\u2190 Previous</span>`}<a class="stable" href="${escapeHtml(link2(step2))}">Stable link</a>${next ? `<a href="${escapeHtml(link2(next))}" title="Right arrow key">Next \u2192</a>` : `<span class="off">Next \u2192</span>`}</nav></aside>`;
+</div></aside>`;
 }
+var linkIcon = `<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M6.6 9.4l2.8-2.8M7.2 4.6l.9-.9a2.8 2.8 0 0 1 4 4l-.9.9M8.8 11.4l-.9.9a2.8 2.8 0 0 1-4-4l.9-.9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
 function thumb(step2, detail, number3) {
   const { headline, command: command2 } = describe2(step2, detail);
   const image = step2.snapshots?.after ?? step2.snapshots?.before;
@@ -20428,10 +20430,15 @@ function renderReviewPage(model) {
 <header class="top"><div class="brand"><span class="mark" aria-hidden="true"></span><div><h1 title="${escapeHtml(model.packageId)}">${escapeHtml(title)}</h1>
 <ul class="stats">${stat2(noun(steps.length, "step"), String(steps.length))}${stat2(noun(actions, "action"), String(actions))}${stat2(noun(diagnostics, "diagnostic"), String(diagnostics))}${times.length ? `${stat2("UTC", time3(new Date(Math.min(...times)).toISOString()))}${stat2("", duration3(Math.max(...times) - Math.min(...times)))}` : ""}</ul></div></div>
 <nav class="tabs" aria-label="View"><a class="t-traj" href="${steps[0] ? escapeHtml(link2(steps[0])) : "#"}">Trajectory</a><a class="t-over" href="#overview">Overview<span class="${model.findings.length ? "has" : ""}">${model.findings.length}</span></a></nav>
-<ul class="pills"><li class="focus"><label title="Highlight the steps with errors, and move between them with the arrow keys"><input type="checkbox" id="focus-errors"${errors ? "" : " disabled"}>Focus on errors<span>${errors}</span></label></li>${pill("Snapshots", model.completeness)}${pill("Execution", model.execution)}${pill("Review", "pending")}</ul></header>
-<main class="center">${steps.map((step2, i) => `<article id="step-${escapeHtml(step2.id)}" class="step ${tone(step2.execution)}${erred(step2) ? " err" : ""}">${stage(step2, model.details.get(step2.id), numbers.get(step2.id), steps[i - 1], steps[i + 1])}${panel(step2, model.details.get(step2.id), numbers.get(step2.id), steps.length, steps[i - 1], steps[i + 1])}</article>`).join("\n")}
+<ul class="pills">${pill("Snapshots", model.completeness)}${pill("Execution", model.execution)}${pill("Review", "pending")}</ul></header>
+<main class="center">${steps.map((step2, i) => `<article id="step-${escapeHtml(step2.id)}" class="step ${tone(step2.execution)}${erred(step2) ? " err" : ""}">${stage(step2, model.details.get(step2.id), numbers.get(step2.id), {
+    previous: steps[i - 1],
+    next: steps[i + 1],
+    previousError: steps.slice(0, i).findLast(erred),
+    nextError: steps.slice(i + 1).find(erred)
+  })}${panel(step2, model.details.get(step2.id), numbers.get(step2.id), steps.length)}</article>`).join("\n")}
 ${overview}</main>
-<footer class="track" aria-label="Steps"><ol>${steps.map((step2) => thumb(step2, model.details.get(step2.id), numbers.get(step2.id))).join("")}</ol></footer>
+<footer class="track" aria-label="Steps"><label class="focus" title="Highlight the steps with errors, and move between them with the arrows"><input type="checkbox" id="focus-errors"${errors ? "" : " disabled"}>Focus on errors<span>${errors}</span></label><ol>${steps.map((step2) => thumb(step2, model.details.get(step2.id), numbers.get(step2.id))).join("")}</ol></footer>
 </div><script>${keys}</script></body></html>
 `;
 }
@@ -20451,26 +20458,26 @@ b,time,.n,.exit,dd,.gap{font-variant-numeric:tabular-nums}
 .ok{--tone:var(--ok)}.bad{--tone:var(--bad)}.warn{--tone:var(--warn)}.pend{--tone:var(--pend)}
 .verdict{display:inline-flex;align-items:center;gap:.45rem;font:600 12.5px/1 var(--sans);color:var(--tone,var(--dim));text-transform:capitalize}
 .verdict i{flex:none;width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 0 3px color-mix(in srgb,currentColor 18%,transparent)}
-.app{height:100vh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;grid-template-columns:minmax(0,1fr);overflow:clip}.track{min-width:0;position:relative;z-index:0}
-.top{display:flex;align-items:center;gap:1rem 2.25rem;flex-wrap:wrap;padding:1.1rem 1.75rem}
-.brand{flex:1 1 18rem;display:flex;align-items:center;gap:.9rem;min-width:0}
+.app{height:100vh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;grid-template-columns:minmax(0,1fr);overflow:clip}.track{min-width:0;position:relative;z-index:0;display:flex}
+.top{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:1rem 1.25rem;padding:1.1rem 1.75rem}
+.brand{display:flex;align-items:center;gap:.9rem;min-width:0}
 .mark{flex:none;width:1.9rem;height:1.9rem;border-radius:50%;background:var(--grad);box-shadow:0 6px 18px var(--ring)}
 h1{font:700 1.3rem/1.15 var(--round);letter-spacing:-.015em;margin:0}
 .stats{display:flex;flex-wrap:wrap;gap:.15rem 1rem;list-style:none;margin:.3rem 0 0;padding:0;font-size:12.5px;color:var(--faint)}.stats b{font:700 12.5px var(--round);color:var(--text)}
-.pills{flex:1 1 auto;display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:.4rem;list-style:none;margin:0;padding:0}.pills li,.stats li{white-space:nowrap}
+.pills{justify-self:end;display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:.4rem;list-style:none;margin:0;padding:0}.pills li,.stats li{white-space:nowrap}
 .pill{display:flex;align-items:center;gap:.5rem;padding:.42rem .8rem;border-radius:999px;background:color-mix(in srgb,var(--tone) 12%,transparent);font-size:12px;color:var(--dim)}
-.tabs{flex:none;display:flex;gap:.2rem;padding:.25rem;border-radius:999px;background:var(--s2)}
+.tabs{justify-self:center;display:flex;gap:.2rem;padding:.25rem;border-radius:999px;background:var(--s2)}
 .tabs a{display:inline-flex;align-items:center;gap:.5rem;padding:.4rem 1rem;border-radius:999px;color:var(--dim);font-size:13px;font-weight:600}.tabs a:hover{text-decoration:none;color:var(--text)}
 .tabs a span{display:grid;place-items:center;min-width:1.35rem;height:1.35rem;padding:0 .35rem;font:700 11px/1 var(--round);border-radius:999px;background:var(--s3);color:var(--dim)}.tabs a span.has{background:var(--grad);color:var(--on)}
 .app:not(:has(#overview:target)) .t-traj,.app:has(#overview:target) .t-over{background:var(--s1);color:var(--text);box-shadow:var(--shadow)}
-.focus label{display:flex;align-items:center;gap:.5rem;padding:.38rem .8rem .38rem .6rem;border-radius:999px;font-size:12px;font-weight:600;color:var(--dim);cursor:pointer;user-select:none}
-.focus label:hover{background:var(--s2)}.focus input{appearance:none;margin:0;width:1.05rem;height:1.05rem;border-radius:6px;background:var(--s1);box-shadow:inset 0 0 0 1.5px var(--faint);display:grid;place-items:center;cursor:pointer}
+.focus{flex:none;align-self:center;margin-left:1.75rem;display:flex;align-items:center;gap:.45rem;padding:.45rem .7rem;border-radius:999px;font-size:12px;font-weight:600;color:var(--dim);cursor:pointer;user-select:none}
+.focus:hover{background:var(--s2)}.focus input{appearance:none;margin:0;width:1.05rem;height:1.05rem;border-radius:6px;background:var(--s1);box-shadow:inset 0 0 0 1.5px var(--faint);display:grid;place-items:center;cursor:pointer}
 .focus input:checked{background:var(--bad);box-shadow:none}.focus input:checked::after{content:"";width:.28rem;height:.55rem;border:solid #fff;border-width:0 2px 2px 0;rotate:45deg;translate:0 -1px}
-.focus input:disabled,.focus label:has(input:disabled){cursor:default;opacity:.55}.focus span{font:700 11px/1 var(--round);color:var(--bad)}.focus label:has(input:disabled) span{color:var(--faint)}
+.focus input:disabled,.focus:has(input:disabled){cursor:default;opacity:.55}.focus span{font:700 11px/1 var(--round);color:var(--bad)}.focus:has(input:disabled) span{color:var(--faint)}
 .app:has(#focus-errors:checked) .track li:not(.err){opacity:.35;filter:grayscale(1)}
 .app:has(#focus-errors:checked) .track li.err .face{box-shadow:0 0 0 2px var(--bad),0 6px 16px color-mix(in srgb,var(--bad) 25%,transparent)}
 .app:has(#focus-errors:checked) .track li.err .t{color:var(--bad)}
-.app:has(#overview:target) .track,.app:has(#overview:target) .focus{display:none}
+.app:has(#overview:target) .track{display:none}
 .center{display:grid;grid-template-columns:minmax(0,1fr) minmax(20rem,25rem);grid-template-areas:"stage panel";gap:0 .75rem;padding:0 .75rem;min-height:0;position:relative;z-index:1}
 .step{display:none}.step:is(:target,:has(:target)){display:contents}.center:not(:has(:target))>.step:first-of-type{display:contents}
 .stage{grid-area:stage;position:relative;min-width:0;min-height:0;border-radius:22px;background:radial-gradient(80% 60% at 50% 40%,rgba(255,255,255,.7),transparent 70%),var(--stage);display:grid;grid-template-rows:auto minmax(0,1fr);overflow:clip}
@@ -20489,6 +20496,7 @@ h1{font:700 1.3rem/1.15 var(--round);letter-spacing:-.015em;margin:0}
 .v-compare .shot:last-child figcaption .label{color:var(--accent)}
 .void{display:grid;place-items:center;border-radius:14px;background:var(--s1);color:var(--faint);padding:2rem;text-align:center;aspect-ratio:16/9}
 .arrow{position:absolute;top:50%;translate:0 -50%;z-index:3;display:grid;place-items:center;width:2.75rem;height:2.75rem;border-radius:50%;background:rgba(255,255,255,.85);backdrop-filter:blur(8px);color:var(--text);font-size:1.5rem;line-height:1;box-shadow:var(--shadow)}
+.arrow.errs,.app:has(#focus-errors:checked) .arrow.all{display:none}.app:has(#focus-errors:checked) .arrow.errs{display:grid}
 .arrow:hover{text-decoration:none;background:var(--grad);color:var(--on)}.arrow.prev{left:1rem}.arrow.next{right:1rem}
 .terminal{grid-template-rows:minmax(0,1fr);place-items:center;padding:2rem 4.75rem}
 .term{width:min(100%,56rem);max-height:100%;overflow:auto;background:var(--s1);border-radius:18px;box-shadow:var(--shadow)}
@@ -20499,8 +20507,9 @@ h1{font:700 1.3rem/1.15 var(--round);letter-spacing:-.015em;margin:0}
 .stream .label{display:block;margin-bottom:.35rem}.stream pre,.plain,.command{background:var(--s2);border-radius:12px;padding:.75rem .9rem;max-height:14rem;overflow:auto;color:var(--text)}
 .panel{grid-area:panel;min-height:0;display:grid;grid-template-rows:minmax(0,1fr) auto;background:var(--s1);border-radius:22px;box-shadow:var(--shadow)}
 .panel-scroll{overflow:auto;padding:1.5rem 1.5rem 1.25rem;scrollbar-width:thin;scrollbar-color:var(--s3) transparent}
-.eyebrow{display:flex;flex-wrap:wrap;align-items:baseline;gap:.3rem .9rem;margin:0;font-size:12px;color:var(--faint)}
+.eyebrow{display:flex;flex-wrap:wrap;align-items:center;gap:.3rem .9rem;margin:0;font-size:12px;color:var(--faint)}
 .eyebrow>span:first-child{font:700 12.5px var(--round);background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}.eyebrow .of{-webkit-text-fill-color:var(--faint);color:var(--faint);font-weight:500}.eyebrow time{font-family:var(--mono)}
+.permalink{margin-left:auto;display:grid;place-items:center;width:1.9rem;height:1.9rem;margin-block:-.4rem;border-radius:999px;color:var(--faint)}.permalink:hover{background:var(--s2);color:var(--accent)}
 .panel h2{font:700 1.3rem/1.3 var(--round);letter-spacing:-.01em;margin:.5rem 0 .55rem;overflow-wrap:anywhere}
 .state{margin:0}
 .block{margin-top:1.5rem}.block h3{margin:0 0 .45rem}.block p{margin:0;color:var(--dim)}
@@ -20529,7 +20538,7 @@ h1{font:700 1.3rem/1.15 var(--round);letter-spacing:-.015em;margin:0}
 .gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(8.5rem,1fr));gap:.75rem}.flist+.gallery{margin-top:.75rem}
 .gthumb{display:grid;gap:.4rem;font:11.5px var(--mono);min-width:0;color:var(--dim)}.gthumb span{display:flex;justify-content:space-between;gap:.5rem;overflow:hidden;white-space:nowrap}.gthumb small{color:var(--faint);font-size:inherit;flex:none}
 .gthumb img{width:100%;aspect-ratio:16/9;object-fit:contain;border-radius:10px;display:block;background:var(--s2);box-shadow:inset 0 0 0 1px var(--hair);transition:box-shadow .15s}.gthumb:hover img{box-shadow:0 0 0 2px var(--accent)}
-.track ol{list-style:none;margin:0;padding:.85rem 1.75rem 1rem;display:flex;gap:.6rem;overflow-x:auto;scrollbar-width:thin;scrollbar-color:var(--s3) transparent}
+.track ol{flex:1;min-width:0;list-style:none;margin:0;padding:.85rem 1.75rem 1rem .75rem;display:flex;gap:.6rem;overflow-x:auto;scrollbar-width:thin;scrollbar-color:var(--s3) transparent}
 .track li{flex:none;width:9.25rem}
 .track a{display:grid;gap:.45rem;padding:.35rem;border-radius:16px;color:var(--text);transition:background .15s}
 .track a:hover{text-decoration:none;background:var(--s1)}
@@ -20540,7 +20549,7 @@ h1{font:700 1.3rem/1.15 var(--round);letter-spacing:-.015em;margin:0}
 .cap .n{font:700 11px var(--round);color:var(--faint)}.dot{flex:none;width:7px;height:7px;border-radius:50%;background:var(--tone)}
 .cap .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dim)}
 .track li.bad .face{box-shadow:0 0 0 2px var(--bad)}
-@media(max-width:960px){.app{height:auto;min-height:100vh;overflow:visible}.center{grid-template-columns:minmax(0,1fr);grid-template-areas:"stage" "panel";gap:.75rem}
+@media(max-width:960px){.top{grid-template-columns:minmax(0,1fr)}.pills{justify-self:center;justify-content:center}.app{height:auto;min-height:100vh;overflow:visible}.center{grid-template-columns:minmax(0,1fr);grid-template-areas:"stage" "panel";gap:.75rem}
 .stage{min-height:60vh}.views{padding:.5rem 3.75rem 1rem}.step:target .v-compare,.center:not(:has(:target))>.step:first-of-type .v-compare{grid-template-columns:1fr}.track{position:sticky;bottom:0;background:var(--bg)}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 @media print{.app{height:auto;display:block}.track,.arrow,.seg,.pager,.tabs,.focus{display:none}.center{display:block}.step{display:block!important;break-inside:avoid;margin-bottom:1rem}.stage{background:none}.view{display:none!important}.v-compare{display:grid!important;grid-template-columns:1fr 1fr}}`;
