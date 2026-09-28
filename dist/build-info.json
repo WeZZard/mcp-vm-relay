@@ -3,19 +3,19 @@
   "packages": [
     {
       "name": "@wezzard/relay-driver-core",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "license": "MIT",
       "source": "https://github.com/WeZZard/relay-driver"
     },
     {
       "name": "@wezzard/relay-driver-host-sdk",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "license": "MIT",
       "source": "https://github.com/WeZZard/relay-driver"
     },
     {
       "name": "@wezzard/relay-driver-remote-runtime",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "license": "MIT",
       "source": "https://github.com/WeZZard/relay-driver"
     }
@@ -36,10 +36,10 @@
     "node_modules/@modelcontextprotocol/sdk/dist/esm/types.js": "962836b0f8dad85bcd398ad3ddb5ba81a7c7530c706955aa846dd8dfc02dd6a9",
     "node_modules/@modelcontextprotocol/sdk/dist/esm/validation/ajv-provider.js": "1893726b2b43d0688e8c37ce48b3c5f87a55eb93ca370433f882ae81c09c491a",
     "node_modules/@wezzard/relay-driver-core/dist/src/clock-mapping.js": "fad3b1110e9e40d354daf53d6775b9181fec69cb7c55d9b488d60f281cfd2d5e",
-    "node_modules/@wezzard/relay-driver-core/dist/src/event-state.js": "f1dce12db59ea733cb09a28d2cebe11a7736506b69c9544795386569a997b485",
+    "node_modules/@wezzard/relay-driver-core/dist/src/event-state.js": "f59dbf06c8072f0bb6280ce60e888af9554e1c6dd002fc6b8343c7e523e1130e",
     "node_modules/@wezzard/relay-driver-core/dist/src/identity.js": "a325a6e1b86a3c9fe35f4105587e7a06403a05c3718c7d52cf8e8565bea55eb7",
     "node_modules/@wezzard/relay-driver-core/dist/src/index.js": "74cbb33e14f53755c02318c217556ec0d4cfa2abc6862c52c6c4fda5cfba9ac0",
-    "node_modules/@wezzard/relay-driver-core/dist/src/journal.js": "41bcfabcf0ac4e2a2130adde7511c99e809c765b7d12187435c66a0d5aa9b90e",
+    "node_modules/@wezzard/relay-driver-core/dist/src/journal.js": "29109672b74b47c6ded357b818f76e9a60bbd28a63dab7deb01fbad984d5b074",
     "node_modules/@wezzard/relay-driver-core/dist/src/rational.js": "6cfc24f1df3afb29146189f491ea07645fcbf4a4378d75a08202e6dff73b35bf",
     "node_modules/@wezzard/relay-driver-host-sdk/dist/src/evidence-package.js": "dd79274d1ed8e5bbff9ff69e92e3e45a1f018104b44b58463900721757b4da14",
     "node_modules/@wezzard/relay-driver-host-sdk/dist/src/index.js": "f52f42eea51be24386986a79ffabd7c3b3e46304f9855c6c4d58beff83b43cd4",
@@ -47,14 +47,14 @@
     "node_modules/@wezzard/relay-driver-host-sdk/dist/src/ssh-transport.js": "283d6ae0b003d7703c40800cdfe70850f8dd4c327204861a18cfeb5176bacc56",
     "node_modules/@wezzard/relay-driver-host-sdk/dist/src/submission-store.js": "2cf15dd4aa2a87656510ad50de30f5477af92512bb02222fd828800027d8dfd6",
     "node_modules/@wezzard/relay-driver-host-sdk/dist/src/trajectory.js": "eb8b74411e0dddbf900b300b212b8a2afc0c7221f8beb9b89f68750ef15bf0a3",
-    "node_modules/@wezzard/relay-driver-remote-runtime/dist/src/admission.js": "7f516ce1bde8027e91b902e86f294aca8306ee269ec36dc260c6470711addd8e",
+    "node_modules/@wezzard/relay-driver-remote-runtime/dist/src/admission.js": "888504176c3955c1d972f48d3716a5c86524d8b18fda7820d15a4cbe62b6b2ca",
     "node_modules/@wezzard/relay-driver-remote-runtime/dist/src/argv.js": "a61d456cc5de5aec4087d03765b6df2fc4f7bbe88c582eeb24aa0cd627fce752",
     "node_modules/@wezzard/relay-driver-remote-runtime/dist/src/capture-gate.js": "83360724a0ffd07ac7d3cba37504c85857f70985cf6669f746ef3ebc804db9fc",
     "node_modules/@wezzard/relay-driver-remote-runtime/dist/src/continuation.js": "20d6e6d8f7836cfa8ddcbdf059fc0fd0f3f3864684d9d2d3a1aabe0c33a4b964",
     "node_modules/@wezzard/relay-driver-remote-runtime/dist/src/index.js": "c1cbc0d78fff733bbcc391ea7d2261d1a3d27fa2b008b1e568e91a3e51da815c",
-    "node_modules/@wezzard/relay-driver-remote-runtime/dist/src/record-store.js": "d922090776ee5f1ffd786f7f20408b45ed75e0fffe76a8279431b4e8de6d36df",
+    "node_modules/@wezzard/relay-driver-remote-runtime/dist/src/record-store.js": "83a9ddad3ba913bc4af652ff84ac2ec18f614ba9f56de3676c7d46783b3c3414",
     "node_modules/@wezzard/relay-driver-remote-runtime/dist/src/resources.js": "6f71fc45f0828a78529241590f48ae10392c645056b5f2f79aac3a4eea4c2a07",
-    "node_modules/@wezzard/relay-driver-remote-runtime/dist/src/snapshots.js": "94a22a6e273d6f7830ebb481162c225cf1b73234f3a750f6cbe2b4b83f83abef",
+    "node_modules/@wezzard/relay-driver-remote-runtime/dist/src/snapshots.js": "27e70a9f05eb6e93094051fa641e336e8215ecca5cd8116684c2a9ad9fa99545",
     "node_modules/ajv-formats/dist/formats.js": "b61693a26869970a92cc1fe832c931ccd3afe8b6d66802b19c48306349e84880",
     "node_modules/ajv-formats/dist/index.js": "3f3014150293846086d11058bb8bf43e669e354a98b37adcf10281454d5e753b",
     "node_modules/ajv-formats/dist/limit.js": "ffc374031a55c3f6e39dc3fe69e663f8251b9d9d7ddb8f513a6807c985c18bb8",
