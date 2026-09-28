@@ -505,7 +505,7 @@ kbd{display:inline-grid;place-items:center;min-width:1.3rem;height:1.3rem;paddin
 .term-cmd{padding:.4rem 1.2rem 1.1rem;font-size:13px;color:var(--text)}.prompt{color:var(--accent);margin-right:.6em;user-select:none}
 .term .stream{margin:0 1.2rem 1rem}.term .quiet,.term-note{margin:0 1.2rem 1.1rem;font-size:12.5px;color:var(--faint)}
 .stream .label{display:block;margin-bottom:.35rem}.stream pre,.plain,.command{background:var(--s2);border-radius:12px;padding:.75rem .9rem;max-height:14rem;overflow:auto;color:var(--text)}
-.panel{grid-area:panel;min-height:0;display:grid;grid-template-rows:minmax(0,1fr) auto;background:var(--s1);border-radius:22px;box-shadow:var(--shadow)}
+.panel{grid-area:panel;min-height:0;display:grid;grid-template-rows:minmax(0,1fr)}
 .panel-scroll{overflow:auto;padding:1.5rem 1.5rem 1.25rem;scrollbar-width:thin;scrollbar-color:var(--s3) transparent}
 .eyebrow{display:flex;flex-wrap:wrap;align-items:center;gap:.3rem .9rem;margin:0;font-size:12px;color:var(--faint)}
 .eyebrow>span:first-child{font:700 12.5px var(--round);background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}.eyebrow .of{-webkit-text-fill-color:var(--faint);color:var(--faint);font-weight:500}.eyebrow time{font-family:var(--mono)}
