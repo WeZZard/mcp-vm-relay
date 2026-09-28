@@ -151,30 +151,36 @@ test("review page orders steps by time and reads commands, exit status, output s
   assert.match(diagnostic, /stdout<\/span><pre>listing<\/pre>/);
   assert.match(diagnostic, /stderr<\/span><pre>denied<\/pre>/);
   assert.match(diagnostic, /Screenshots were not requested for this diagnostic/);
-  // Without script, a step is selected as the :target: each thumbnail links to its step, which shows
-  // its before and after snapshots side by side.
-  assert.deepEqual([...html.split('<footer class="track"')[1]!.matchAll(/<li[^>]*><a href="([^"]+)"/g)].map(m => m[1]), ["#step-diagnostic-early", "#step-step-0"]);
+  // The trajectory is read view by view: one snapshot, or a command. Without script the selected view is
+  // the :target, and the track has a thumbnail per view, grouped by step.
+  assert.deepEqual([...html.split('<footer class="track"')[1]!.matchAll(/<a data-t="(\d+)" href="([^"]+)"/g)].map(m => `${m[1]} ${m[2]}`),
+    ["0 #step-diagnostic-early--command", "1 #step-step-0--before", "2 #step-step-0--after"]);
   // The top row switches between the trajectory, which starts at the first step, and the overview.
   assert.match(html, /<nav class="tabs" aria-label="View"><a class="t-traj" href="#step-diagnostic-early">Trajectory<\/a><a class="t-over" href="#overview">Overview/);
   // The failed diagnostic is the one step with errors: "Focus on errors" counts it and marks its thumbnail and step.
   assert.match(html, /<input type="checkbox" id="focus-errors">Focus on errors<span>1<\/span>/);
-  assert.match(html, /<article id="step-diagnostic-early" class="step bad err">/);
-  assert.match(html, /<li class="bad diagnostic err"><a href="#step-diagnostic-early"/);
+  assert.match(html, /<article id="step-diagnostic-early" data-first="0" class="step bad err">/);
+  assert.match(html, /<li class="bad diagnostic err"><div class="faces"><a data-t="0" href="#step-diagnostic-early--command"/);
   const action = html.split('<article id="step-step-0"')[1]!.split("</article>")[0]!;
-  // The viewport always compares the two snapshots; there is no switch to either one alone.
-  assert.doesNotMatch(action, /class="seg"|s-compare|id="step-step-0--(before|after)"/);
-  assert.match(action, /<div class="pair"><figure class="shot"><button type="button" class="zoom" popovertarget="lightbox-step-0--before" title="Enlarge the before snapshot"><img alt="Before dispatch snapshot"/);
+  // Each view shows one snapshot, with a capsule naming it and its capture time, and the step's name and
+  // duration centered below. A step's own fragment selects its first view.
+  const before = action.split('id="step-step-0--before"')[1]!.split("</section>")[0]!, after = action.split('id="step-step-0--after"')[1]!.split("</section>")[0]!;
+  assert.match(action, /<section class="stage view first" id="step-step-0--before" data-v="1" aria-label="Step 02, before">/);
+  assert.match(action, /<section class="stage view" id="step-step-0--after" data-v="2" aria-label="Step 02, after">/);
+  assert.match(before, /<div class="solo"><button type="button" class="zoom" popovertarget="lightbox-step-0--before" title="Enlarge the before snapshot"><img alt="Before dispatch snapshot" src="[^"]+"><\/button><\/div>/);
+  assert.match(before, /<div class="vlabel"><span class="badge" data-role="before"><span class="role">Before<\/span><time>[^<]+<\/time><\/span>\n<p class="sname"><span class="d">02<\/span><span class="h">[^<]+<\/span><span class="took" title="Time from the before snapshot to the after snapshot">\d+\.\d s<\/span><\/p><\/div>/);
+  assert.doesNotMatch(action, /class="(pair|seg)"/);
   // Pressing a snapshot opens it in a lightbox, which links to the original. The lightboxes form one
   // sequence in step order, commands included, and each one's arrows name the item before and after it.
   assert.deepEqual([...html.matchAll(/<div class="lightbox" id="([^"]+)" data-step="([^"]+)" popover>/g)].map(m => `${m[1]} ${m[2]}`),
-    ["lightbox-diagnostic-early--command step-diagnostic-early", "lightbox-step-0--before step-step-0", "lightbox-step-0--after step-step-0"]);
-  assert.match(html, /<div class="lightbox" id="lightbox-step-0--after" data-step="step-step-0" popover><div class="lb-body"><img loading="lazy" alt="After dispatch snapshot, enlarged" src="[^"]+"><\/div><button type="button" class="lb-nav prev" popovertarget="lightbox-step-0--before" aria-label="Previous: Step 02 · Before, [^"]+">/);
+    ["lightbox-diagnostic-early--command step-diagnostic-early--command", "lightbox-step-0--before step-step-0--before", "lightbox-step-0--after step-step-0--after"]);
+  assert.match(html, /<div class="lightbox" id="lightbox-step-0--after" data-step="step-step-0--after" popover><div class="lb-body"><img loading="lazy" alt="After dispatch snapshot, enlarged" src="[^"]+"><\/div><button type="button" class="lb-nav prev" popovertarget="lightbox-step-0--before" aria-label="Previous: Step 02 · Before, [^"]+">/);
   assert.match(html, /<p class="lb-cap"><span class="label">Step <span class="d">02<\/span> · After<\/span><time>[^<]+<\/time><a href="[^"]+">Open the original<\/a><button type="button" class="close" popovertarget="lightbox-step-0--after" popovertargetaction="hide" aria-label="Close">/);
   // A lightbox arrow names only the neighbouring item's step and role.
   assert.match(html, /aria-label="Previous: Step 02 · Before, [^"]+"><span class="dir" aria-hidden="true">‹<\/span><span class="role">Step <span class="d">02<\/span> · Before<\/span><\/button>/);
   // A command has a lightbox too, where it reads in larger text.
   assert.match(diagnostic, /<button type="button" class="enlarge" popovertarget="lightbox-diagnostic-early--command" title="Enlarge the command">/);
-  assert.match(html, /id="lightbox-diagnostic-early--command" data-step="step-diagnostic-early" popover><div class="lb-body"><div class="lb-term"><pre class="lb-cmd">/);
+  assert.match(html, /id="lightbox-diagnostic-early--command" data-step="step-diagnostic-early--command" popover><div class="lb-body"><div class="lb-term"><pre class="lb-cmd">/);
   assert.match(html, /<button type="button" class="lb-nav next" popovertarget="lightbox-step-0--before" aria-label="Next: Step 02 · Before, /);
   // The title is the relay's, with the task beside it. The statistics say when the run started in UTC,
   // and, filled in by the page's script, in the reader's time zone.
@@ -185,16 +191,19 @@ test("review page orders steps by time and reads commands, exit status, output s
   // The overview is one column; the package's identity and files close it.
   assert.doesNotMatch(html.split('id="overview"')[1]!, /<aside/);
   assert.match(html, /<section class="block"><h3>Package<\/h3><div class="package"><dl class="ids">/);
-  // The viewport's arrows come in two pairs; "Focus on errors" swaps in the pair that skips to steps with errors.
-  assert.match(action, /<a class="arrow prev all" href="#step-diagnostic-early" aria-label="Previous step">/);
-  assert.match(action, /<a class="arrow prev errs" href="#step-diagnostic-early" aria-label="Previous step with errors">/);
-  assert.doesNotMatch(action, /arrow next/);
+  // The viewport's arrows move between views and come in two pairs; "Focus on errors" swaps in the pair
+  // that skips to the views of steps with errors.
+  assert.match(before, /<a class="arrow prev all" href="#step-diagnostic-early--command" aria-label="Previous: step 01, diagnostic">/);
+  assert.match(before, /<a class="arrow prev errs" href="#step-diagnostic-early--command" aria-label="Previous with errors: step 01, diagnostic">/);
+  assert.match(before, /<a class="arrow next all" href="#step-step-0--after" aria-label="Next: step 02, after">/);
+  assert.doesNotMatch(after, /arrow next/);
   // The panel has no paging; its stable link is an icon on the step's line.
   assert.match(action, /<a class="permalink" href="#step-step-0" title="Stable link to this step" aria-label="Stable link to step 02">/);
   assert.doesNotMatch(html, /class="pager"|Start at step/);
-  // Each thumbnail with both snapshots carries the time between them; a diagnostic retains no end time.
+  // A step's caption in the track carries its duration; a diagnostic retains no end time.
   const track = html.split('<footer class="track"')[1]!;
-  assert.match(track, /<li class="ok"><a href="#step-step-0"[^>]*><span class="face"><img [^>]+><span class="took" title="Time from the before snapshot to the after snapshot">\d+\.\d s<\/span>/);
+  assert.match(track, /<li class="ok"><div class="faces"><a data-t="1" [^>]+><span class="face"><img [^>]+><span class="role">Before<\/span><\/span><\/a><a data-t="2" [^>]+><span class="face"><img [^>]+><span class="role">After<\/span>/);
+  assert.match(track.split('<li class="ok">')[1]!, /<span class="took">\d+\.\d s<\/span><\/span>/);
   assert.doesNotMatch(track.split('<li class="ok">')[0]!, /class="took"/);
   assert.match(html, /<span class="where">evidence<\/span><span class="count">1 file · [^<]+<\/span><\/summary><ul class="flist"><li><a href="extractions\/evidence\/run-1\/result.json">run-1\/result.json<\/a>/);
   assert.doesNotMatch(withoutKeyScript(html), /<script|https?:\/\/|fetch\(/);
@@ -406,7 +415,7 @@ for (const scenario of ["driver-refused", "driver-uncertain", "transport-uncerta
     assert.match(trajectory.steps[0].observed, /Original subprocess\/action evidence \(not an authoritative input-success verdict\):/);
     assert.ok(trajectory.steps[0].observed.includes(JSON.stringify(completion.toolOutcome)));
     const html = await readFile(join(root, "index.html"), "utf8");
-    assert.match(html, new RegExp(`<span class="t">Click Save</span></span><span class="sr">${expected}</span>`));
+    assert.match(html, new RegExp(`<span class="t">Click Save</span>(<span class="took">[^<]*</span>)?</span><span class="sr">${expected}</span>`));
     assert.match(html, new RegExp(`Execution: </span><span class="verdict [a-z]+"><i aria-hidden="true"></i>${expected}</span>`));
     assert.doesNotMatch(html, /Execution: <\/span><span class="verdict ok"><i aria-hidden="true"><\/i>completed/);
     assert.match(html, /Authoritative receipt outcomes:/);

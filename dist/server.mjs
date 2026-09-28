@@ -20358,14 +20358,6 @@ function took(detail) {
   const ms = Date.parse(detail?.afterAt ?? "") - Date.parse(detail?.beforeAt ?? "");
   return Number.isFinite(ms) && ms >= 0 ? duration3(ms) : void 0;
 }
-function shot(step2, detail, role) {
-  const path = step2.snapshots?.[role];
-  const name = role === "before" ? "Before" : "After";
-  const at = preciseTime(role === "before" ? detail?.beforeAt : detail?.afterAt);
-  const caption = `<figcaption><span class="label">${name}</span>${at ? `<time>${at}</time>` : ""}</figcaption>`;
-  if (!path) return `<figure class="shot missing"><div class="void">${name}: unavailable \u2014 incomplete evidence</div>${caption}</figure>`;
-  return `<figure class="shot"><button type="button" class="zoom" popovertarget="${escapeHtml(boxId(step2, role))}" title="Enlarge the ${role} snapshot"><img alt="${name} dispatch snapshot" src="${src(path)}"></button>${caption}</figure>`;
-}
 var boxId = (step2, role) => `lightbox-${step2.id}--${role}`;
 var labelHtml = (label) => escapeHtml(label).replace(/^Step (\d+)/, `Step <span class="d">$1</span>`);
 var expandIcon = `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M9.5 2.5h4v4M6.5 13.5h-4v-4M13.5 2.5 9 7M2.5 13.5 7 9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
@@ -20375,12 +20367,12 @@ function lightboxes(boxes) {
 }
 function trajectoryBoxes(steps, model, numbers) {
   return steps.flatMap((step2) => {
-    const detail = model.details.get(step2.id), number3 = numbers.get(step2.id), { headline, command: command2 } = describe2(step2, detail), view = `step-${step2.id}`;
+    const detail = model.details.get(step2.id), number3 = numbers.get(step2.id), { headline, command: command2 } = describe2(step2, detail), view = (role) => `step-${step2.id}--${role}`;
     if (!step2.snapshots) {
       const at = time3(detail?.at);
       return [{
         id: boxId(step2, "command"),
-        step: view,
+        step: view("command"),
         label: `Step ${number3} \xB7 ${step2.inputMode === "diagnostic" ? "Diagnostic" : "Command"}`,
         title: headline,
         body: `<div class="lb-term"><pre class="lb-cmd"><span class="prompt" aria-hidden="true">$</span>${escapeHtml(command2 ?? headline)}</pre>${detail?.output ? streamsOf(detail.output) || `<p class="quiet">No output.</p>` : ""}</div>`,
@@ -20391,7 +20383,7 @@ function trajectoryBoxes(steps, model, numbers) {
       const path = step2.snapshots[role], name = role === "before" ? "Before" : "After", at = preciseTime(role === "before" ? detail?.beforeAt : detail?.afterAt);
       return {
         id: boxId(step2, role),
-        step: view,
+        step: view(role),
         label: `Step ${number3} \xB7 ${name}`,
         title: headline,
         body: `<img loading="lazy" alt="${name} dispatch snapshot, enlarged" src="${src(path)}">`,
@@ -20400,16 +20392,31 @@ function trajectoryBoxes(steps, model, numbers) {
     });
   });
 }
-function stage(step2, detail, number3, around) {
-  const { headline, command: command2 } = describe2(step2, detail);
-  const arrow = (target2, side, set) => target2 ? `<a class="arrow ${side} ${set}" href="${escapeHtml(link2(target2))}" aria-label="${side === "prev" ? "Previous" : "Next"} step${set === "errs" ? " with errors" : ""}">${side === "prev" ? "\u2039" : "\u203A"}</a>` : "";
+function viewsOf(steps) {
+  const views = [];
+  for (const step2 of steps) (step2.snapshots ? ["before", "after"] : ["command"]).forEach((role, i) => views.push({ step: step2, role, id: `step-${step2.id}--${role}`, index: views.length, first: i === 0 }));
+  return views;
+}
+var viewLink = (view) => `#${encodeURIComponent(view.id)}`;
+var roleName = (view) => view.role === "before" ? "Before" : view.role === "after" ? "After" : view.step.inputMode === "diagnostic" ? "Diagnostic" : "Command";
+function stage(view, detail, numbers, around) {
+  const step2 = view.step, { headline, command: command2 } = describe2(step2, detail), number3 = numbers.get(step2.id);
+  const numberOf = (target2) => numbers.get(target2.step.id);
+  const arrow = (target2, side, set) => target2 ? `<a class="arrow ${side} ${set}" href="${escapeHtml(viewLink(target2))}" aria-label="${side === "prev" ? "Previous" : "Next"}${set === "errs" ? " with errors" : ""}: step ${numberOf(target2)}, ${roleName(target2).toLowerCase()}">${side === "prev" ? "\u2039" : "\u203A"}</a>` : "";
   const arrows = arrow(around.previous, "prev", "all") + arrow(around.next, "next", "all") + arrow(around.previousError, "prev", "errs") + arrow(around.nextError, "next", "errs");
-  if (!step2.snapshots) {
-    return `<section class="stage terminal" aria-label="Step ${number3} command">${arrows}<div class="term"><div class="term-bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span>${step2.inputMode === "diagnostic" ? "Diagnostic command" : "Command"} \xB7 no snapshots</span><button type="button" class="enlarge" popovertarget="${escapeHtml(boxId(step2, "command"))}" title="Enlarge the command">${expandIcon}Enlarge</button></div>
+  const span = took(detail);
+  const at = view.role === "command" ? time3(detail?.at) ? `${time3(detail?.at)} UTC` : void 0 : preciseTime(view.role === "before" ? detail?.beforeAt : detail?.afterAt);
+  const label = `<div class="vlabel"><span class="badge" data-role="${view.role}"><span class="role">${roleName(view)}</span>${at ? `<time>${at}</time>` : ""}</span>
+<p class="sname"><span class="d">${number3}</span><span class="h">${escapeHtml(headline)}</span>${span ? `<span class="took" title="Time from the before snapshot to the after snapshot">${span}</span>` : ""}</p></div>`;
+  const open7 = `<section class="stage view${view.role === "command" ? " terminal" : ""}${view.first ? " first" : ""}" id="${escapeHtml(view.id)}" data-v="${view.index}" aria-label="Step ${number3}, ${roleName(view).toLowerCase()}">${arrows}`;
+  if (view.role === "command") {
+    return `${open7}<div class="term"><div class="term-bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span>${step2.inputMode === "diagnostic" ? "Diagnostic command" : "Command"} \xB7 no snapshots</span><button type="button" class="enlarge" popovertarget="${escapeHtml(boxId(step2, "command"))}" title="Enlarge the command">${expandIcon}Enlarge</button></div>
 <pre class="term-cmd"><span class="prompt" aria-hidden="true">$</span>${escapeHtml(command2 ?? headline)}</pre>${detail?.output ? streamsOf(detail.output) || `<p class="quiet">No output.</p>` : ""}
-<p class="term-note">${step2.inputMode === "diagnostic" ? "Screenshots were not requested for this diagnostic." : "No snapshots were captured for this step."}</p></div></section>`;
+<p class="term-note">${step2.inputMode === "diagnostic" ? "Screenshots were not requested for this diagnostic." : "No snapshots were captured for this step."}</p></div>${label}</section>`;
   }
-  return `<section class="stage" aria-label="Step ${number3} snapshots">${arrows}<div class="pair">${shot(step2, detail, "before")}${shot(step2, detail, "after")}</div></section>`;
+  const path = step2.snapshots?.[view.role];
+  const picture = path ? `<button type="button" class="zoom" popovertarget="${escapeHtml(boxId(step2, view.role))}" title="Enlarge the ${view.role} snapshot"><img alt="${roleName(view)} dispatch snapshot" src="${src(path)}"></button>` : `<div class="void">${roleName(view)}: unavailable \u2014 incomplete evidence</div>`;
+  return `${open7}<div class="solo">${picture}</div>${label}</section>`;
 }
 function panel(step2, detail, number3, total, concerns) {
   const { headline, command: command2, reasonShown, kind } = describe2(step2, detail);
@@ -20428,19 +20435,27 @@ ${command2 && step2.snapshots ? `<section class="block"><h3>Command</h3><pre cla
 </div></aside>`;
 }
 var linkIcon = `<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M6.6 9.4l2.8-2.8M7.2 4.6l.9-.9a2.8 2.8 0 0 1 4 4l-.9.9M8.8 11.4l-.9.9a2.8 2.8 0 0 1-4-4l.9-.9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
-function thumb(step2, detail, number3, flagged) {
+function thumb(step2, detail, number3, flagged, views) {
   const { headline, command: command2 } = describe2(step2, detail);
-  const image = step2.snapshots?.after ?? step2.snapshots?.before;
-  const face = image ? `<img loading="lazy" alt="" src="${src(image)}">` : `<pre aria-hidden="true"><span class="prompt">$</span>${escapeHtml(command2 ?? headline)}</pre>`;
   const span = took(detail);
-  return `<li class="${tone(step2.execution)}${step2.inputMode === "diagnostic" ? " diagnostic" : ""}${erred(step2) ? " err" : ""}"><a href="${escapeHtml(link2(step2))}" title="${escapeHtml(headline)}"><span class="face${image ? "" : " text"}">${face}${span ? `<span class="took" title="Time from the before snapshot to the after snapshot">${span}</span>` : ""}${flagged ? `<span class="flag" title="This step affects the verdicts">!</span>` : ""}</span><span class="cap"><span class="n">${number3}</span><i class="dot" aria-hidden="true"></i><span class="t">${escapeHtml(headline)}</span></span><span class="sr">${escapeHtml(step2.execution)}</span></a></li>`;
+  const faces = views.map((view, i) => {
+    const image = view.role === "command" ? void 0 : step2.snapshots?.[view.role];
+    const face = view.role === "command" ? `<pre aria-hidden="true"><span class="prompt">$</span>${escapeHtml(command2 ?? headline)}</pre>` : image ? `<img loading="lazy" alt="" src="${src(image)}">` : `<span class="none">No ${view.role} snapshot</span>`;
+    return `<a data-t="${view.index}" href="${escapeHtml(viewLink(view))}" title="${escapeHtml(`Step ${number3} \xB7 ${roleName(view)} \xB7 ${headline}`)}"><span class="face${view.role === "command" ? " text" : ""}">${face}${view.role === "command" ? "" : `<span class="role">${roleName(view)}</span>`}${flagged && i === 0 ? `<span class="flag" title="This step affects the verdicts">!</span>` : ""}</span></a>`;
+  }).join("");
+  return `<li class="${tone(step2.execution)}${step2.inputMode === "diagnostic" ? " diagnostic" : ""}${erred(step2) ? " err" : ""}"><div class="faces">${faces}</div><span class="cap"><span class="n">${number3}</span><i class="dot" aria-hidden="true"></i><span class="t">${escapeHtml(headline)}</span>${span ? `<span class="took">${span}</span>` : ""}</span><span class="sr">${escapeHtml(step2.execution)}</span></li>`;
 }
-var keys = `(()=>{const steps=()=>[...document.querySelectorAll(".center>.step:not(.overview)")];const still=()=>matchMedia("(prefers-reduced-motion: reduce)").matches,body=box=>box.querySelector(".lb-body>*");const sourceOf=box=>{for(const o of document.querySelectorAll(".zoom,.enlarge,.gthumb")){if(o.getAttribute("popovertarget")!==box.id)continue;const s=o.classList.contains("enlarge")?o.closest(".term"):o.querySelector("img");if(s&&s.getBoundingClientRect().width)return s}return null};const from=(el,src)=>{const now=getComputedStyle(el).transform;el.style.transition="none";el.style.transform="none";const b=el.getBoundingClientRect(),a=src.getBoundingClientRect();el.style.transform=now==="none"?"":now;el.getBoundingClientRect();el.style.transition="";if(!b.width)return"";const k=a.width/b.width;return"translate("+(a.left+a.width/2-b.left-b.width*k/2)+"px,"+(a.top+a.height/2-b.top-b.height*k/2)+"px) scale("+k+")"};let hidden=null,token=0;const unhide=()=>{if(hidden)hidden.style.visibility="";hidden=null};const open=box=>{token++;unhide();const src=still()?null:sourceOf(box);box.toggleAttribute("data-flip",!!src);box.showPopover();const el=body(box);if(src&&el){const f=from(el,src);el.style.transition="none";el.style.transform=f;el.getBoundingClientRect();el.style.transition="";el.style.transform="";src.style.visibility="hidden";hidden=src}};const leave=box=>{if(box.hasAttribute("data-instant"))return;const el=body(box),src=hidden,n=++token;if(src&&el&&!still()&&src.getBoundingClientRect().width){box.setAttribute("data-flip","");el.style.transform=from(el,src);el.addEventListener("transitionend",()=>{if(n===token)unhide()},{once:true});setTimeout(()=>{if(n===token)unhide()},450)}else{box.removeAttribute("data-flip");unhide()}setTimeout(()=>{if(n===token&&!box.matches(":popover-open")&&el)el.style.transform=""},520)};document.querySelectorAll(".lightbox").forEach(b=>b.addEventListener("beforetoggle",e=>{if(e.newState==="closed")leave(b)}));const go=b=>{const box=b.closest(".lightbox"),next=document.getElementById(b.getAttribute("popovertarget"));if(!next)return;const instant=[box,next].filter(Boolean);instant.forEach(x=>x.setAttribute("data-instant",""));token++;unhide();if(box)box.hidePopover();const s=next.dataset.step;if(s&&decodeURIComponent(location.hash.slice(1))!==s)location.hash=encodeURIComponent(s);const el=body(next);if(el)el.style.transform="";next.showPopover();const src=sourceOf(next);if(src){src.style.visibility="hidden";hidden=src}setTimeout(()=>instant.forEach(x=>x.removeAttribute("data-instant")),60)};document.addEventListener("click",e=>{const t=e.target instanceof Element?e.target:null;const b=t&&t.closest(".lb-nav");if(b){e.preventDefault();go(b);return}const o=t&&t.closest(".zoom,.enlarge,.gthumb"),lb=o&&document.getElementById(o.getAttribute("popovertarget"));if(lb){e.preventDefault();open(lb);return}if(t&&t.classList.contains("lightbox"))t.hidePopover()});try{document.querySelectorAll("time[data-local]").forEach(t=>{const d=new Date(t.dateTime);if(isNaN(d.getTime())||!d.getTimezoneOffset())return;t.textContent=new Intl.DateTimeFormat(undefined,{...(d.getFullYear()!==d.getUTCFullYear()?{year:"numeric"}:{}),month:"short",day:"numeric",hour:"numeric",minute:"2-digit",timeZoneName:"short"}).format(d);const li=t.closest("[hidden]");if(li)li.hidden=false})}catch{}const current=()=>{let el=null;try{el=document.getElementById(decodeURIComponent(location.hash.slice(1)))}catch{}const step=el&&el.closest(".step");return step?steps().indexOf(step):0};const focused=()=>{const f=document.getElementById("focus-errors");return!!(f&&f.checked)};let last="";const reveal=()=>{const i=current();if(i>=0)last=location.hash;const li=document.querySelectorAll(".track li")[i];if(li)li.scrollIntoView({block:"nearest",inline:"nearest"})};document.addEventListener("keydown",e=>{if(e.defaultPrevented||e.altKey||e.ctrlKey||e.metaKey||e.shiftKey)return;const t=e.target;if(t instanceof HTMLElement&&(t.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)))return;let box=null;try{box=document.querySelector(".lightbox:popover-open")}catch{}if(e.key===" "){if(box){e.preventDefault();if(!e.repeat)box.hidePopover();return}const opener=t instanceof Element?t.closest(".zoom,.enlarge,.gthumb"):null;if(t instanceof Element&&!opener&&(t.closest("summary")||t.closest("button")))return;e.preventDefault();if(e.repeat)return;if(opener&&opener.classList.contains("gthumb")){const g=document.getElementById(opener.getAttribute("popovertarget"));if(g)open(g);return}const i=current(),step=steps()[i<0?-1:i];if(!step)return;const base=step.id.replace(/^step-/,"lightbox-");const lb=["--before","--after","--command"].map(r=>document.getElementById(base+r)).find(Boolean);if(lb)open(lb);return}const d=e.key==="ArrowRight"?1:e.key==="ArrowLeft"?-1:0;if(!d)return;if(box){e.preventDefault();const b=box.querySelector(d<0?".lb-nav.prev":".lb-nav.next");if(b)go(b);return}const all=steps();let j=current();if(j<0){if(d<0)return;j=-1}do j+=d;while(j>=0&&j<all.length&&focused()&&!all[j].classList.contains("err"));if(j<0||j>=all.length)return;e.preventDefault();location.hash=encodeURIComponent(all[j].id)});const tab=document.querySelector(".tabs .t-traj");if(tab)tab.addEventListener("click",e=>{if(last){e.preventDefault();location.hash=last}});addEventListener("hashchange",()=>{let id="";try{id=decodeURIComponent(location.hash.slice(1))}catch{}try{document.querySelectorAll(":popover-open").forEach(p=>{if(p.dataset.step!==id)p.hidePopover()})}catch{}reveal()});reveal()})();`;
+var keys = `(()=>{const views=()=>[...document.querySelectorAll(".center .view")];const still=()=>matchMedia("(prefers-reduced-motion: reduce)").matches,body=box=>box.querySelector(".lb-body>*");const sourceOf=box=>{for(const o of document.querySelectorAll(".zoom,.enlarge,.gthumb")){if(o.getAttribute("popovertarget")!==box.id)continue;const s=o.classList.contains("enlarge")?o.closest(".term"):o.querySelector("img");if(s&&s.getBoundingClientRect().width)return s}return null};const from=(el,src)=>{const now=getComputedStyle(el).transform;el.style.transition="none";el.style.transform="none";const b=el.getBoundingClientRect(),a=src.getBoundingClientRect();el.style.transform=now==="none"?"":now;el.getBoundingClientRect();el.style.transition="";if(!b.width)return"";const k=a.width/b.width;return"translate("+(a.left+a.width/2-b.left-b.width*k/2)+"px,"+(a.top+a.height/2-b.top-b.height*k/2)+"px) scale("+k+")"};let hidden=null,token=0;const unhide=()=>{if(hidden)hidden.style.visibility="";hidden=null};const open=box=>{token++;unhide();const src=still()?null:sourceOf(box);box.toggleAttribute("data-flip",!!src);box.showPopover();const el=body(box);if(src&&el){const f=from(el,src);el.style.transition="none";el.style.transform=f;el.getBoundingClientRect();el.style.transition="";el.style.transform="";src.style.visibility="hidden";hidden=src}};const leave=box=>{if(box.hasAttribute("data-instant"))return;const el=body(box),src=hidden,n=++token;if(src&&el&&!still()&&src.getBoundingClientRect().width){box.setAttribute("data-flip","");el.style.transform=from(el,src);el.addEventListener("transitionend",()=>{if(n===token)unhide()},{once:true});setTimeout(()=>{if(n===token)unhide()},450)}else{box.removeAttribute("data-flip");unhide()}setTimeout(()=>{if(n===token&&!box.matches(":popover-open")&&el)el.style.transform=""},520)};document.querySelectorAll(".lightbox").forEach(b=>b.addEventListener("beforetoggle",e=>{if(e.newState==="closed")leave(b)}));const go=b=>{const box=b.closest(".lightbox"),next=document.getElementById(b.getAttribute("popovertarget"));if(!next)return;const instant=[box,next].filter(Boolean);instant.forEach(x=>x.setAttribute("data-instant",""));token++;unhide();if(box)box.hidePopover();const s=next.dataset.step;if(s&&decodeURIComponent(location.hash.slice(1))!==s)location.hash=encodeURIComponent(s);const el=body(next);if(el)el.style.transform="";next.showPopover();const src=sourceOf(next);if(src){src.style.visibility="hidden";hidden=src}setTimeout(()=>instant.forEach(x=>x.removeAttribute("data-instant")),60)};document.addEventListener("click",e=>{const t=e.target instanceof Element?e.target:null;const b=t&&t.closest(".lb-nav");if(b){e.preventDefault();go(b);return}const o=t&&t.closest(".zoom,.enlarge,.gthumb"),lb=o&&document.getElementById(o.getAttribute("popovertarget"));if(lb){e.preventDefault();open(lb);return}if(t&&t.classList.contains("lightbox"))t.hidePopover()});try{document.querySelectorAll("time[data-local]").forEach(t=>{const d=new Date(t.dateTime);if(isNaN(d.getTime())||!d.getTimezoneOffset())return;t.textContent=new Intl.DateTimeFormat(undefined,{...(d.getFullYear()!==d.getUTCFullYear()?{year:"numeric"}:{}),month:"short",day:"numeric",hour:"numeric",minute:"2-digit",timeZoneName:"short"}).format(d);const li=t.closest("[hidden]");if(li)li.hidden=false})}catch{}const current=()=>{let el=null;try{el=document.getElementById(decodeURIComponent(location.hash.slice(1)))}catch{}if(!el)return 0;const v=el.classList.contains("step")?el.querySelector(".view.first"):el.closest(".view");return v?views().indexOf(v):-1};const focused=()=>{const f=document.getElementById("focus-errors");return!!(f&&f.checked)};let last="";const reveal=()=>{const i=current();if(i<0)return;last=location.hash;const a=document.querySelector('.track a[data-t="'+i+'"]');if(a)a.scrollIntoView({block:"nearest",inline:"nearest"})};document.addEventListener("keydown",e=>{if(e.defaultPrevented||e.altKey||e.ctrlKey||e.metaKey||e.shiftKey)return;const t=e.target;if(t instanceof HTMLElement&&(t.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)))return;let box=null;try{box=document.querySelector(".lightbox:popover-open")}catch{}if(e.key===" "){if(box){e.preventDefault();if(!e.repeat)box.hidePopover();return}const opener=t instanceof Element?t.closest(".zoom,.enlarge,.gthumb"):null;if(t instanceof Element&&!opener&&(t.closest("summary")||t.closest("button")))return;e.preventDefault();if(e.repeat)return;if(opener&&opener.classList.contains("gthumb")){const g=document.getElementById(opener.getAttribute("popovertarget"));if(g)open(g);return}const i=current(),v=i<0?null:views()[i];const lb=v&&document.getElementById(v.id.replace(/^step-/,"lightbox-"));if(lb)open(lb);return}const d=e.key==="ArrowRight"?1:e.key==="ArrowLeft"?-1:0;if(!d)return;if(box){e.preventDefault();const b=box.querySelector(d<0?".lb-nav.prev":".lb-nav.next");if(b)go(b);return}const all=views();let j=current();if(j<0)return;do j+=d;while(j>=0&&j<all.length&&focused()&&!all[j].closest(".step").classList.contains("err"));if(j<0||j>=all.length)return;e.preventDefault();location.hash=encodeURIComponent(all[j].id)});const tab=document.querySelector(".tabs .t-traj");if(tab)tab.addEventListener("click",e=>{if(last){e.preventDefault();location.hash=last}});addEventListener("hashchange",()=>{let id="";try{id=decodeURIComponent(location.hash.slice(1))}catch{}try{document.querySelectorAll(":popover-open").forEach(p=>{if(p.dataset.step!==id)p.hidePopover()})}catch{}reveal()});reveal()})();`;
 var keysPolicy = `'sha256-${createHash4("sha256").update(keys).digest("base64")}'`;
-var selection = (count) => !count ? "" : Array.from({ length: count }, (_, i) => `.app:has(.center>.step:nth-of-type(${i + 1}):target) .track li:nth-child(${i + 1}) a`).join(",") + ",.app:not(:has(.center :target)) .track li:first-child a{background:var(--s2)}" + Array.from({ length: count }, (_, i) => `.app:has(.center>.step:nth-of-type(${i + 1}):target) .track li:nth-child(${i + 1}) .face`).join(",") + ",.app:not(:has(.center :target)) .track li:first-child .face{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--accent),0 0 18px var(--ring)}";
+var selection = (steps, firsts, views) => !steps ? "" : Array.from({ length: steps }, (_, i) => `.app:has(.center>.step:nth-of-type(${i + 1}):target) .track li:nth-child(${i + 1}),.app:has(.center>.step:nth-of-type(${i + 1}) :target) .track li:nth-child(${i + 1})`).join(",") + ",.app:not(:has(.center :target)) .track li:first-child{background:var(--s2)}" + [
+  ...Array.from({ length: views }, (_, k) => `.app:has([data-v="${k}"]:target) .track [data-t="${k}"] .face`),
+  ...firsts.map((k) => `.app:has(.center>.step[data-first="${k}"]:target) .track [data-t="${k}"] .face`),
+  `.app:not(:has(.center :target)) .track [data-t="0"] .face`
+].join(",") + "{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--accent),0 0 18px var(--ring)}";
 function renderReviewPage(model) {
   const steps = chronological(model);
   const numbers = new Map(steps.map((step2, i) => [step2.id, String(i + 1).padStart(2, "0")]));
+  const views = viewsOf(steps);
   const times = steps.map((s) => Date.parse(model.details.get(s.id)?.at ?? "")).filter(Number.isFinite);
   const diagnostics = steps.filter((s) => s.inputMode === "diagnostic").length, actions = steps.length - diagnostics;
   const errors = steps.filter(erred).length;
@@ -20479,21 +20494,24 @@ function renderReviewPage(model) {
 <section class="block"><h3>Declared outputs <span class="count">${model.outputs.length}</span></h3>${outputs ? `<div class="outputs">${outputs}</div>` : `<p class="quiet">No declared outputs were delivered.</p>`}</section>
 <section class="block"><h3>Package</h3><div class="package"><dl class="ids"><div><dt>Package</dt><dd>${escapeHtml(model.packageId)}</dd></div><div><dt>Task</dt><dd>${escapeHtml(model.taskId)}</dd></div><div><dt>Session</dt><dd>${escapeHtml(model.sessionId)}</dd></div></dl>
 <ul class="files"><li><a href="manifest.json">manifest.json</a><span>Checksums of every artifact</span></li><li><a href="summary.json">summary.json</a><span>Verdicts and findings</span></li><li><a href="trajectory.json">trajectory.json</a><span>Steps as recorded</span></li></ul></div></section></div></section></article>`;
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' file:; style-src 'unsafe-inline'; script-src ${keysPolicy}; base-uri 'none'; form-action 'none'"><title>Relay review: ${escapeHtml(model.packageId)}</title><style>${css}${selection(steps.length)}</style></head><body>
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' file:; style-src 'unsafe-inline'; script-src ${keysPolicy}; base-uri 'none'; form-action 'none'"><title>Relay review: ${escapeHtml(model.packageId)}</title><style>${css}${selection(steps.length, views.filter((v) => v.first).map((v) => v.index), views.length)}</style></head><body>
 <div class="app">
 <header class="top"><div class="brand"><span class="mark" aria-hidden="true">${relayMark}</span><h1 title="${escapeHtml(model.packageId)}">Relay<span class="task">${escapeHtml(title)}</span></h1>
 <ul class="stats">${stat2(noun(steps.length, "step"), String(steps.length))}${stat2(noun(actions, "action"), String(actions))}${stat2(noun(diagnostics, "diagnostic"), String(diagnostics))}${started ? `<li class="at"><time datetime="${started}" title="Started ${started}">${utcStamp(started)}</time><span class="local" hidden><span class="sep" aria-hidden="true">\xB7</span><time datetime="${started}" data-local title="Started, in your time zone"></time></span></li>` : ""}${times.length ? stat2("", duration3(Math.max(...times) - Math.min(...times))) : ""}</ul></div>
 <div class="mid"><nav class="tabs" aria-label="View"><a class="t-traj" href="${steps[0] ? escapeHtml(link2(steps[0])) : "#"}">Trajectory</a><a class="t-over" href="#overview">Overview<span class="${model.findings.length ? "has" : ""}">${model.findings.length}</span></a></nav>
 <label class="focus" title="Highlight the steps with errors, and move between them with the arrows"><input type="checkbox" id="focus-errors"${errors ? "" : " disabled"}>Focus on errors<span>${errors}</span></label></div>
 <ul class="pills"><li class="keys" title="Keyboard shortcuts"><kbd aria-label="Left arrow">\u2190</kbd><kbd aria-label="Right arrow">\u2192</kbd><span>Steps</span><kbd>Space</kbd><span>Enlarge</span></li>${pill("snapshots", "Snapshots", model.completeness)}${pill("execution", "Execution", model.execution)}</ul></header>
-<main class="center">${steps.map((step2, i) => `<article id="step-${escapeHtml(step2.id)}" class="step ${tone(step2.execution)}${erred(step2) ? " err" : ""}">${stage(step2, model.details.get(step2.id), numbers.get(step2.id), {
-    previous: steps[i - 1],
-    next: steps[i + 1],
-    previousError: steps.slice(0, i).findLast(erred),
-    nextError: steps.slice(i + 1).find(erred)
-  })}${panel(step2, model.details.get(step2.id), numbers.get(step2.id), steps.length, concerns.get(step2.id) ?? [])}</article>`).join("\n")}
+<main class="center">${steps.map((step2) => {
+    const own2 = views.filter((v) => v.step === step2);
+    return `<article id="step-${escapeHtml(step2.id)}" data-first="${own2[0].index}" class="step ${tone(step2.execution)}${erred(step2) ? " err" : ""}">${own2.map((v) => stage(v, model.details.get(step2.id), numbers, {
+      previous: views[v.index - 1],
+      next: views[v.index + 1],
+      previousError: views.slice(0, v.index).findLast((w) => erred(w.step)),
+      nextError: views.slice(v.index + 1).find((w) => erred(w.step))
+    })).join("")}${panel(step2, model.details.get(step2.id), numbers.get(step2.id), steps.length, concerns.get(step2.id) ?? [])}</article>`;
+  }).join("\n")}
 ${overview}</main>
-<footer class="track" aria-label="Steps"><ol>${steps.map((step2) => thumb(step2, model.details.get(step2.id), numbers.get(step2.id), concerns.has(step2.id))).join("")}</ol></footer>
+<footer class="track" aria-label="Steps"><ol>${steps.map((step2) => thumb(step2, model.details.get(step2.id), numbers.get(step2.id), concerns.has(step2.id), views.filter((v) => v.step === step2))).join("")}</ol></footer>
 </div>
 ${lightboxes(trajectoryBoxes(steps, model, numbers))}
 ${lightboxes(outputBoxes)}
@@ -20542,7 +20560,7 @@ h1 .task{font:600 12.5px/1 var(--round);letter-spacing:0;padding:.3rem .6rem;bor
 .concern ul{list-style:none;margin:0;padding:0;display:grid;gap:.6rem}.concern li{display:grid;gap:.2rem}.concern .label{color:var(--warn-ink)}.concern p{margin:0;color:var(--text);font-size:14px;line-height:1.55}
 .vblock{padding:.95rem 1.1rem;border-radius:14px;background:var(--s1);box-shadow:var(--shadow)}.vblock+.vblock{margin-top:.6rem}
 .vblock h4{display:flex;align-items:center;gap:.7rem;margin:0 0 .5rem;font:700 14px var(--round)}.vwhy{margin:0 0 .6rem;font-size:12.5px;color:var(--faint)}.vblock>.quiet{font-size:13.5px}
-.face{position:relative}.took{position:absolute;top:.35rem;left:.35rem;padding:.18rem .45rem;border-radius:999px;background:rgba(42,29,21,.72);color:#fff;font:700 10.5px/1 var(--round);backdrop-filter:blur(4px)}.flag{position:absolute;top:.35rem;right:.35rem;display:grid;place-items:center;width:1.1rem;height:1.1rem;border-radius:50%;background:var(--warn);color:#fff;font:800 11px/1 var(--round);box-shadow:0 2px 6px rgba(0,0,0,.2)}
+.face{position:relative}.flag{position:absolute;top:.35rem;right:.35rem;display:grid;place-items:center;width:1.1rem;height:1.1rem;border-radius:50%;background:var(--warn);color:#fff;font:800 11px/1 var(--round);box-shadow:0 2px 6px rgba(0,0,0,.2)}
 .focus{display:flex;align-items:center;gap:.45rem;padding:.3rem .6rem;border-radius:999px;font-size:12px;font-weight:600;color:var(--dim);cursor:pointer;user-select:none}
 .focus:hover{background:var(--s2)}.focus input{appearance:none;margin:0;width:1.05rem;height:1.05rem;border-radius:6px;background:var(--s1);box-shadow:inset 0 0 0 1.5px var(--faint);display:grid;place-items:center;cursor:pointer}
 .focus input:checked{background:var(--bad);box-shadow:none}.focus input:checked::after{content:"";width:.28rem;height:.55rem;border:solid #fff;border-width:0 2px 2px 0;rotate:45deg;translate:0 -1px}
@@ -20554,15 +20572,20 @@ h1 .task{font:600 12.5px/1 var(--round);letter-spacing:0;padding:.3rem .6rem;bor
 .keys{display:flex;align-items:center;gap:.25rem;margin-right:.4rem;font-size:11px;color:var(--faint)}.keys span{margin:0 .35rem 0 .1rem}.keys span:last-child{margin-right:0}
 kbd{display:inline-grid;place-items:center;min-width:1.3rem;height:1.3rem;padding:0 .3rem;border-radius:6px;background:var(--s1);box-shadow:0 0 0 1px var(--hair),0 1.5px 0 var(--s3);font:600 10.5px/1 var(--sans);color:var(--dim)}.overview>.doc{grid-area:auto;grid-column:1/-1;grid-row:1}
 .center{display:grid;grid-template-columns:minmax(0,1fr) minmax(20rem,25rem);grid-template-areas:"stage panel";gap:0 .75rem;padding:0 .75rem;min-height:0;position:relative;z-index:1}
-.step{display:none}.step:target{display:contents}.center:not(:has(:target))>.step:first-of-type{display:contents}
+.step{display:none}.step:is(:target,:has(:target)){display:contents}.center:not(:has(:target))>.step:first-of-type{display:contents}
+.step>.view{display:none}.step>.view:target,.step:target>.view.first,.center:not(:has(:target))>.step:first-of-type>.view.first{display:flex}
 .stage{grid-area:stage;position:relative;min-width:0;min-height:0;background:var(--bg);display:grid;grid-template-rows:minmax(0,1fr);overflow:clip}
-.pair{min-height:0;display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;align-items:center;padding:1.25rem 4.75rem 1.4rem}
-.shot{margin:0;min-height:0;min-width:0;display:grid;grid-template-rows:minmax(0,1fr) auto;gap:.7rem}
-.zoom{all:unset;display:grid;place-items:center;min-height:0;cursor:zoom-in;border-radius:12px}.zoom:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
-.shot img{max-width:100%;max-height:100%;object-fit:contain;border-radius:12px;box-shadow:0 2px 4px rgba(60,30,10,.08),0 18px 44px rgba(60,30,10,.16);background:#fff;transition:box-shadow .15s}
-.zoom:hover img{box-shadow:0 0 0 2px var(--accent),0 18px 44px rgba(60,30,10,.18)}
-.shot figcaption{display:flex;justify-content:center;gap:.7rem;align-items:baseline}.shot figcaption time{font:12px var(--mono);color:var(--faint)}
-.pair .shot:last-child figcaption .label{color:var(--accent)}
+.view{flex-direction:column;align-items:center;justify-content:center;gap:1rem;padding:1.5rem 4.75rem 1.25rem}
+.solo{flex:0 1 auto;min-height:0;max-width:100%;display:flex;justify-content:center}
+.zoom{all:unset;display:flex;min-height:0;max-height:100%;max-width:100%;cursor:zoom-in;border-radius:12px}.zoom:focus-visible{outline:none}
+.solo img{max-width:100%;max-height:100%;object-fit:contain;border-radius:12px;box-shadow:0 2px 4px rgba(60,30,10,.08),0 18px 44px rgba(60,30,10,.16);background:#fff;transition:box-shadow .15s}
+.zoom:hover img,.zoom:focus-visible img{box-shadow:0 0 0 2px var(--accent),0 18px 44px rgba(60,30,10,.18)}
+.vlabel{display:grid;justify-items:center;gap:.55rem;min-width:0}
+.badge{display:inline-flex;align-items:center;gap:.65rem;padding:.32rem .85rem;border-radius:999px;background:var(--s1);box-shadow:0 0 0 1px var(--hair),0 1px 3px rgba(90,50,20,.07)}
+.badge .role{font:600 11px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--dim)}.badge[data-role="after"] .role{color:var(--accent)}.badge time{font:12px/1 var(--mono);color:var(--faint)}
+.sname{display:flex;align-items:baseline;gap:.6rem;max-width:100%;margin:0;font:600 15px/1.35 var(--round);color:var(--text)}
+.sname .d{flex:none;font-size:13px;color:var(--faint)}.sname .h{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sname .took{flex:none;align-self:center;padding:.18rem .5rem;border-radius:999px;background:color-mix(in srgb,var(--accent) 11%,transparent);font:700 11.5px/1 var(--round);color:var(--accent)}
 .lightbox{position:fixed;inset:0;width:auto;height:auto;max-width:none;max-height:none;margin:0;padding:1.5rem 1.5rem 1.25rem;border:0;background:none;color:var(--text);overflow:hidden;transition:overlay .36s allow-discrete,display .36s allow-discrete}
 .lb-body>*{transform-origin:0 0;transition:transform .36s cubic-bezier(.3,.9,.3,1),opacity .24s ease}
 .lightbox:not([data-flip]):not(:popover-open) .lb-body>*{opacity:0}@starting-style{.lightbox:popover-open:not([data-flip]) .lb-body>*{opacity:0}}
@@ -20588,7 +20611,7 @@ kbd{display:inline-grid;place-items:center;min-width:1.3rem;height:1.3rem;paddin
 .arrow{position:absolute;top:50%;translate:0 -50%;z-index:3;display:grid;place-items:center;width:2.75rem;height:2.75rem;border-radius:50%;background:rgba(255,255,255,.85);backdrop-filter:blur(8px);color:var(--text);font-size:1.5rem;line-height:1;box-shadow:var(--shadow)}
 .arrow.errs,.app:has(#focus-errors:checked) .arrow.all{display:none}.app:has(#focus-errors:checked) .arrow.errs{display:grid}
 .arrow:hover{text-decoration:none;background:var(--grad);color:var(--on)}.arrow.prev{left:1rem}.arrow.next{right:1rem}
-.terminal{grid-template-rows:minmax(0,1fr);place-items:center;padding:2rem 4.75rem}
+.terminal .term{flex:0 1 auto;min-height:0}
 .term{width:min(100%,56rem);max-height:100%;overflow:auto;background:var(--s1);border-radius:18px;box-shadow:var(--shadow)}
 .term-bar{display:flex;align-items:center;gap:1rem;padding:.8rem 1.1rem;font-size:12px;color:var(--faint);position:sticky;top:0;background:var(--s1)}
 .dots{display:flex;gap:.35rem}.dots i{width:10px;height:10px;border-radius:50%;background:var(--s3)}.dots i:first-child{background:var(--grad)}
@@ -20639,22 +20662,24 @@ kbd{display:inline-grid;place-items:center;min-width:1.3rem;height:1.3rem;paddin
 .gthumb{all:unset;box-sizing:border-box;cursor:zoom-in;display:grid;gap:.4rem;font:11.5px var(--mono);min-width:0;color:var(--dim)}.gthumb span{display:flex;justify-content:space-between;gap:.5rem;overflow:hidden;white-space:nowrap}.gthumb small{color:var(--faint);font-size:inherit;flex:none}
 .gthumb img{width:100%;aspect-ratio:16/9;object-fit:contain;border-radius:10px;display:block;background:var(--s2);box-shadow:inset 0 0 0 1px var(--hair);transition:box-shadow .15s}.gthumb:hover img,.gthumb:focus-visible img{box-shadow:0 0 0 2px var(--accent)}
 .track ol{min-width:0;list-style:none;margin:0;padding:.75rem 1.75rem 1rem;display:flex;gap:.6rem;overflow-x:auto;scrollbar-width:thin;scrollbar-color:var(--s3) transparent}
-.track li{flex:none;width:9.25rem}
-.track a{display:grid;gap:.45rem;padding:.35rem;border-radius:16px;color:var(--text);transition:background .15s}
-.track a:hover{text-decoration:none;background:var(--s1)}
+.track li{flex:none;display:grid;gap:.45rem;padding:.35rem;border-radius:16px;transition:background .15s}
+.track li:hover{background:var(--s1)}
+.faces{display:flex;gap:.3rem}.faces a{display:block;width:8rem}.faces a:hover{text-decoration:none}
 .face{display:block;aspect-ratio:16/9;border-radius:11px;overflow:hidden;background:var(--s1);box-shadow:0 1px 2px rgba(90,50,20,.08),0 6px 16px rgba(90,50,20,.08)}
 .face img{width:100%;height:100%;object-fit:cover;display:block}
 .face.text pre{padding:.55rem .6rem;font-size:9.5px;line-height:1.45;color:var(--dim);height:100%;overflow:hidden;-webkit-mask-image:linear-gradient(#000 60%,transparent);mask-image:linear-gradient(#000 60%,transparent)}
-.cap{display:flex;align-items:center;gap:.4rem;min-width:0;padding:0 .2rem;font-size:12px}
+.cap{display:flex;align-items:center;gap:.4rem;width:0;min-width:100%;padding:0 .2rem;font-size:12px}.cap .took{flex:none;margin-left:auto;font:700 10.5px var(--round);color:var(--accent)}
+.face .role{position:absolute;left:.3rem;bottom:.3rem;padding:.14rem .4rem;border-radius:999px;background:rgba(255,255,255,.9);font:600 9px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--dim)}
+.face .none{display:grid;place-items:center;height:100%;font-size:10px;color:var(--faint)}
 .cap .n{font:600 11px var(--mono);color:var(--faint)}.dot{flex:none;width:7px;height:7px;border-radius:50%;background:var(--tone)}
 .cap .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dim)}
 .track li.bad .face{box-shadow:0 0 0 2px var(--bad)}
 @media(max-width:960px){.top{grid-template-columns:minmax(0,1fr)}.pills{justify-self:center;justify-content:center}.app{height:auto;min-height:100vh;overflow:visible}.center{grid-template-columns:minmax(0,1fr);grid-template-areas:"stage" "panel";gap:.75rem}
-.stage{min-height:60vh}.pair{padding:.5rem 3.75rem 1rem;grid-template-columns:1fr}.track{position:sticky;bottom:0;background:var(--bg)}}
+.stage{min-height:60vh}.view{padding:.5rem 3.75rem 1rem}.track{position:sticky;bottom:0;background:var(--bg)}}
 @supports (corner-shape:squircle){*,*::before,*::after,::backdrop{corner-shape:squircle}.dot,.verdict i,.arrow,.q,.flag,.close,.dots i,.lb-nav .dir,
-:focus-visible,h1 .task,.pill,.tabs,.tabs a,.tabs a span,.reasons .steps a,.took,.focus,.lb-cap,.lb-nav,.enlarge,.permalink,.exit{corner-shape:round}}
+:focus-visible,h1 .task,.pill,.tabs,.tabs a,.tabs a span,.reasons .steps a,.took,.badge,.face .role,.focus,.lb-cap,.lb-nav,.enlarge,.permalink,.exit{corner-shape:round}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
-@media print{.app{height:auto;display:block}.track,.arrow,.mid,.lightbox,.enlarge{display:none}.center{display:block}.step{display:block!important;break-inside:avoid;margin-bottom:1rem}.stage{background:none}}`;
+@media print{.app{height:auto;display:block}.track,.arrow,.mid,.lightbox,.enlarge{display:none}.center{display:block}.step{display:block!important;break-inside:avoid;margin-bottom:1rem}.view{display:flex!important}.stage{background:none}}`;
 
 // src/package.ts
 var generated = /* @__PURE__ */ new Set(["manifest.json", "summary.json", "trajectory.json", "index.html", "OPENING.txt", "journal/session-events.jsonl"]);
