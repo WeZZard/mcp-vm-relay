@@ -141,7 +141,7 @@ test('pre-stage diagnostic repair is visible as command-only evidence without fa
   assert.equal(result.deliveryVerified, true); assert.equal(result.snapshots, 'complete'); assert.equal(result.execution, 'passed');
   assert.deepEqual(result.findings, []);
   const html = await page(root);
-  assert.doesNotMatch(html, /popovertarget="why-|class="concern"/);
+  assert.doesNotMatch(html, /popovertarget="why-|class="concern /);
   assert.match(html, /<p class="term-note">Screenshots were not requested for this diagnostic.<\/p>/);
   assert.doesNotMatch(html, /Human review|>Review</);
   const walk = ((await reviewData(root)) as any);
@@ -215,7 +215,7 @@ test("review page orders steps by time and reads commands, exit status, output s
   assert.match(html, /<ul class="pills"><li class="keys" title="Keyboard shortcuts"><kbd aria-label="Left arrow">←<\/kbd><kbd aria-label="Right arrow">→<\/kbd><span>Steps<\/span><kbd>Space<\/kbd><span>Enlarge<\/span><\/li>/);
   // The overview is one column; the package's identity and files close it.
   assert.doesNotMatch(html.split('id="overview"')[1]!, /<aside/);
-  assert.match(html, /<section class="block"><h3>Package<\/h3><div class="package"><dl class="ids">/);
+  assert.match(html, /<section class="block s-package"><h3>Package<\/h3><div class="package"><dl class="ids">/);
   assert.match(html, /<div><dt>Started<\/dt><dd>Sep 12, 2026, 23:59 UTC<\/dd><\/div><\/dl>/);
   // The viewport's arrows move between views and come in two pairs; "Focus on errors" swaps in the pair
   // that skips to the views of steps with errors.

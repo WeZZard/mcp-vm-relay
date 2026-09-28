@@ -88,6 +88,8 @@ const erred = (step: ReviewPageStep) => tone(step.execution) !== "ok";
 /** Status is carried by one of four tones, and always shown with its word. */
 const tone = (value: string) => ["passed", "complete", "completed"].includes(value) ? "ok"
   : ["failed", "refused"].includes(value) ? "bad" : "warn";
+/** The most severe of several tones: a failure, then a warning, then a relay defect. */
+const worst = (tones: string[]) => ["bad", "warn", "defect"].find(t => tones.includes(t)) ?? "ok";
 const verdict = (value: string) => `<span class="verdict ${tone(value)}"><i aria-hidden="true"></i>${escapeHtml(value)}</span>`;
 /** Shell-quote only where needed, so the command reads as it would be typed. */
 const shellWord = (word: string) => /^[\w@%+=:,./-]+$/.test(word) ? word : `'${word.replace(/'/g, `'\\''`)}'`;
@@ -263,7 +265,7 @@ function stage(view: View, detail: StepDetail | undefined, numbers: ReadonlyMap<
   return `${open}<div class="solo">${picture}</div>${label}</section>`;
 }
 /** A reason as it concerns one step: the verdict it affects, and why. */
-type Concern = { verdict: string; text: string; action?: string };
+type Concern = { verdict: string; tone: string; text: string; action?: string };
 const whatToDo = (action?: string) => action ? `<p class="do"><b>What you can do:</b> ${escapeHtml(action)}</p>` : "";
 
 /** The right panel of a step: what it was, why it was sent, and what came back. */
@@ -275,7 +277,7 @@ function panel(step: ReviewPageStep, detail: StepDetail | undefined, number: str
   return `<aside class="panel" aria-label="Step ${number} details"><div class="panel-scroll">
 <div class="stephead"><h2 class="stepno"><span class="n">Step <span class="d">${number}</span></span> <span class="of">of <span class="d">${String(total).padStart(2, "0")}</span></span></h2><a class="permalink" href="${escapeHtml(link(step))}" title="Stable link to this step" aria-label="Stable link to step ${number}">${linkIcon}</a></div>
 <p class="meta"><span>${kind}</span>${at ? `<time>${at} UTC</time>` : ""}<span class="state"><span class="sr">Execution: </span>${verdict(step.execution)}</span></p>
-${concerns.length ? `<section class="concern"><h3>Why this step affects the verdicts</h3><ul>${concerns.map(c => `<li><span class="label">${escapeHtml(c.verdict)}</span><p>${escapeHtml(c.text)}</p>${whatToDo(c.action)}</li>`).join("")}</ul></section>` : ""}
+${concerns.length ? `<section class="concern ${worst(concerns.map(c => c.tone))}"><h3>Why this step affects the verdicts</h3><ul>${concerns.map(c => `<li class="${c.tone}"><span class="label">${escapeHtml(c.verdict)}</span><p>${escapeHtml(c.text)}</p>${whatToDo(c.action)}</li>`).join("")}</ul></section>` : ""}
 ${reasonShown ? `<section class="block"><h3>Reason</h3><p>${escapeHtml(step.because ?? "Not present in retained host metadata")}</p></section>` : ""}
 ${command && step.snapshots ? `<section class="block"><h3>Command</h3><pre class="command">${escapeHtml(command)}</pre></section>` : ""}
 <section class="block"><h3>Expected</h3><p>${escapeHtml(step.expected || "Not supplied")}</p></section>
@@ -288,14 +290,14 @@ const linkIcon = `<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="t
 const downloadIcon = `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7.2 8 10.4l3.2-3.2M3 13h10" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
 /** One step of the bottom track: a thumbnail per view (before and after, or the command) over the step's caption. */
-function thumb(step: ReviewPageStep, detail: StepDetail | undefined, number: string, flagged: boolean, views: View[]) {
+function thumb(step: ReviewPageStep, detail: StepDetail | undefined, number: string, flagged: string | undefined, views: View[]) {
   const { headline, command } = describe(step, detail);
   const span = took(detail);
   const faces = views.map((view, i) => {
     const image = view.role === "command" ? undefined : step.snapshots?.[view.role];
     const face = view.role === "command" ? `<pre aria-hidden="true"><span class="prompt">$</span>${escapeHtml(command ?? headline)}</pre>`
       : image ? `<img loading="lazy" alt="" src="${src(image)}">` : `<span class="none">No ${view.role} snapshot</span>`;
-    return `<a data-t="${view.index}" href="${escapeHtml(viewLink(view))}" title="${escapeHtml(`Step ${number} · ${roleName(view)} · ${headline}`)}"><span class="face${view.role === "command" ? " text" : ""}">${face}${view.role === "command" ? "" : `<span class="role">${roleName(view)}</span>`}${flagged && i === 0 ? `<span class="flag" title="This step affects the verdicts">!</span>` : ""}</span></a>`;
+    return `<a data-t="${view.index}" href="${escapeHtml(viewLink(view))}" title="${escapeHtml(`Step ${number} · ${roleName(view)} · ${headline}`)}"><span class="face${view.role === "command" ? " text" : ""}">${face}${view.role === "command" ? "" : `<span class="role">${roleName(view)}</span>`}${flagged && i === 0 ? `<span class="flag ${flagged}" title="This step affects the verdicts">!</span>` : ""}</span></a>`;
   }).join("");
   return `<li class="${tone(step.execution)}${step.inputMode === "diagnostic" ? " diagnostic" : ""}${erred(step) ? " err" : ""}"><div class="faces">${faces}</div><span class="cap"><span class="n">${number}</span><i class="dot" aria-hidden="true"></i><span class="t">${escapeHtml(headline)}</span>${span ? `<span class="took">${span}</span>` : ""}</span><span class="sr">${escapeHtml(step.execution)}</span></li>`;
 }
@@ -336,8 +338,8 @@ export function renderReview(model: ReviewPageModel): { title: string; html: str
   const started = times.length ? new Date(Math.min(...times)).toISOString() : undefined;
   const concerns = new Map<string, Concern[]>();
   const defects = model.reasons.defects ?? [];
-  for (const [key, label] of [["snapshots", `Snapshots ${model.completeness}`], ["execution", `Execution ${model.execution}`], ["defects", "Relay defect"]] as const)
-    for (const reason of key === "defects" ? defects : model.reasons[key]) for (const id of reason.stepIds) concerns.set(id, [...(concerns.get(id) ?? []), { verdict: label, text: reason.text, action: reason.action }]);
+  for (const [key, label, hue] of [["snapshots", `Snapshots ${model.completeness}`, tone(model.completeness)], ["execution", `Execution ${model.execution}`, tone(model.execution)], ["defects", "Relay defect", "defect"]] as const)
+    for (const reason of key === "defects" ? defects : model.reasons[key]) for (const id of reason.stepIds) concerns.set(id, [...(concerns.get(id) ?? []), { verdict: label, tone: hue, text: reason.text, action: reason.action }]);
   // extractions/<name>/<transfer id>/…: outputs are grouped by their declared
   // name. The transfer id is the relay's own bookkeeping, so a file reads as
   // its guest path under that name.
@@ -379,14 +381,14 @@ export function renderReview(model: ReviewPageModel): { title: string; html: str
   const pill = (key: "snapshots" | "execution", label: string, value: string) => model.reasons[key].length
     ? `<li class="pill ${tone(value)}"><button type="button" popovertarget="why-${key}" title="${why(key, value)}"><span>${label}</span>${verdict(value)}<span class="q" aria-hidden="true">?</span></button><div class="why" id="why-${key}" popover><h3>${why(key, value)}</h3>${reasonList(model.reasons[key])}</div></li>`
     : `<li class="pill ${tone(value)}"><span>${label}</span>${verdict(value)}</li>`;
-  const verdictBlock = (key: "snapshots" | "execution", label: string, value: string, fine: string) => `<div class="vblock"><h4>${label} ${verdict(value)}</h4>${model.reasons[key].length ? `<p class="vwhy">${why(key, value)}:</p>${reasonList(model.reasons[key])}` : `<p class="quiet">${fine}</p>`}</div>`;
+  const verdictBlock = (key: "snapshots" | "execution", label: string, value: string, fine: string) => `<div class="vblock ${tone(value)}"><h4>${label} ${verdict(value)}</h4>${model.reasons[key].length ? `<p class="vwhy">${why(key, value)}:</p>${reasonList(model.reasons[key])}` : `<p class="quiet">${fine}</p>`}</div>`;
   const overview = `<article class="step overview" id="overview"><section class="stage doc" aria-label="Package overview"><div class="doc-in">
 <h2>Overview</h2><p class="lede">Delivery integrity is separate from execution success. Snapshots are dispatch-time evidence, not continuous video: each shows the screen just before a step was sent and shortly after it returned.</p>
-<section class="block"><h3>Verdicts</h3>${verdictBlock("snapshots", "Snapshots", model.completeness, "Every snapshot the steps declared is present and tied to its step.")}${verdictBlock("execution", "Execution", model.execution, "Every step completed, and every retained receipt confirms it.")}</section>
-${defects.length ? `<section class="block"><h3>Relay defects <span class="count">${merged(defects).length}</span></h3><div><p class="vwhy">These are faults in the relay's own records, not in the run, and they change no verdict.</p>${reasonList(defects)}</div></section>` : ""}
-<section class="block"><h3>Findings as recorded <span class="count">${model.findings.length}</span></h3>${model.findings.length ? `<ul class="findings">${groupFindings(model.findings).map(g => `<li>${g.ids.length ? `<details><summary>${escapeHtml(g.text)}</summary><code>${g.ids.map(escapeHtml).join("<br>")}</code></details>` : escapeHtml(g.text)}</li>`).join("")}</ul>` : `<p class="quiet">No findings.</p>`}</section>
-<section class="block"><h3>Declared outputs <span class="count">${model.outputs.length}</span></h3>${outputs ? `<div class="outputs">${outputs}</div>` : `<p class="quiet">No declared outputs were delivered.</p>`}</section>
-<section class="block"><h3>Package</h3><div class="package"><dl class="ids"><div><dt>Package</dt><dd>${escapeHtml(model.packageId)}</dd></div><div><dt>Task</dt><dd>${escapeHtml(model.taskId)}</dd></div><div><dt>Session</dt><dd>${escapeHtml(model.sessionId)}</dd></div>${started ? `<div><dt>Started</dt><dd>${utcStamp(started, true)}</dd></div>` : ""}</dl>
+<section class="block ${worst([tone(model.completeness), tone(model.execution)])}"><h3>Verdicts</h3>${verdictBlock("snapshots", "Snapshots", model.completeness, "Every snapshot the steps declared is present and tied to its step.")}${verdictBlock("execution", "Execution", model.execution, "Every step completed, and every retained receipt confirms it.")}</section>
+${defects.length ? `<section class="block defect"><h3>Relay defects <span class="count">${merged(defects).length}</span></h3><div><p class="vwhy">These are faults in the relay's own records, not in the run, and they change no verdict.</p>${reasonList(defects)}</div></section>` : ""}
+<section class="block s-findings"><h3>Findings as recorded <span class="count">${model.findings.length}</span></h3>${model.findings.length ? `<ul class="findings">${groupFindings(model.findings).map(g => `<li>${g.ids.length ? `<details><summary>${escapeHtml(g.text)}</summary><code>${g.ids.map(escapeHtml).join("<br>")}</code></details>` : escapeHtml(g.text)}</li>`).join("")}</ul>` : `<p class="quiet">No findings.</p>`}</section>
+<section class="block s-outputs"><h3>Declared outputs <span class="count">${model.outputs.length}</span></h3>${outputs ? `<div class="outputs">${outputs}</div>` : `<p class="quiet">No declared outputs were delivered.</p>`}</section>
+<section class="block s-package"><h3>Package</h3><div class="package"><dl class="ids"><div><dt>Package</dt><dd>${escapeHtml(model.packageId)}</dd></div><div><dt>Task</dt><dd>${escapeHtml(model.taskId)}</dd></div><div><dt>Session</dt><dd>${escapeHtml(model.sessionId)}</dd></div>${started ? `<div><dt>Started</dt><dd>${utcStamp(started, true)}</dd></div>` : ""}</dl>
 <ul class="files">${generated}</ul></div></section></div></section></article>`;
   return { title: `Relay review: ${model.packageId}`, selection: selection(steps.length, views.filter(v => v.first).map(v => v.index), views.length), html: `<div class="app">
 <header class="top"><div class="brand"><span class="mark" aria-hidden="true">${relayMark}</span><h1 title="${escapeHtml(model.packageId)}">Relay</h1>
@@ -399,7 +401,7 @@ ${defects.length ? `<section class="block"><h3>Relay defects <span class="count"
       previous: views[v.index - 1], next: views[v.index + 1], previousError: views.slice(0, v.index).findLast(w => erred(w.step)), nextError: views.slice(v.index + 1).find(w => erred(w.step)) })).join("")}${panel(step, model.details.get(step.id), numbers.get(step.id)!, steps.length, concerns.get(step.id) ?? [])}</article>`;
   }).join("\n")}
 ${overview}</main>
-<footer class="track" aria-label="Steps"><ol>${steps.map(step => thumb(step, model.details.get(step.id), numbers.get(step.id)!, concerns.has(step.id), views.filter(v => v.step === step))).join("")}</ol></footer>
+<footer class="track" aria-label="Steps"><ol>${steps.map(step => thumb(step, model.details.get(step.id), numbers.get(step.id)!, concerns.has(step.id) ? worst(concerns.get(step.id)!.map(c => c.tone)) : undefined, views.filter(v => v.step === step))).join("")}</ol></footer>
 </div>
 ${lightboxes(trajectoryBoxes(steps, model, numbers))}
 ${lightboxes(outputBoxes)}${windows.join("")}` };
@@ -416,7 +418,9 @@ ${lightboxes(outputBoxes)}${windows.join("")}` };
 // badges are label tape, indicators are lit lights, counts are tiny displays,
 // and code sits on small dark screens. The eight stripes appear only in the
 // app icon, which the monitor's chin carries; a solid navy rules the header,
-// the Overview's title and the concern card. Spacing steps by 8 px and the
+// the Overview's title. Palette colours tint by meaning: labels in steel, and
+// whatever explains a status (concern card, flag, popover, the Overview's
+// explanations and section rules) in that status's tone. Spacing steps by 8 px and the
 // Overview sits on twelve columns. Type: two faces, weights 400 and 700, sizes
 // 12, 14, 16, 20 and 32 px. Every corner is continuous (corner-shape:
 // squircle); only status dots stay round.
@@ -427,7 +431,7 @@ export const reviewCss = `:root{color-scheme:light;
 --chrome:oklch(from var(--paper) l c h / .94);--aura:color-mix(in oklch,var(--steel) 16%,var(--s1));
 --dotgrid:radial-gradient(circle,oklch(from var(--ink) l c h / .17) .7px,transparent 1.1px) center/8px 8px;
 --case:#e6dccb;--case-hi:#f4ede1;--case-edge:#d2c4ad;--bezel:#2a2f36;
---key:#ece3d3;--key-hi:#fbf7f0;--key-edge:#c4b398;--key-blue:oklch(from var(--blue) calc(l + .07) c h);--tape:var(--navy);--tape-text:#f4e9d8;
+--key:#ece3d3;--key-hi:#fbf7f0;--key-edge:#c4b398;--key-blue:oklch(from var(--blue) calc(l + .07) c h);--tape:var(--navy);--tape-text:#f4e9d8;--steel-ink:#3d7282;
 --pop:var(--blue);--accent:var(--blue);--on:#fff;
 --mint:var(--teal);--amber:var(--orange);--cherry:var(--red);
 --ok:#2b6f6d;--warn:#8f5410;--bad:#a12a1b;
@@ -447,7 +451,7 @@ b,time,.n,.exit,dd,.took{font-variant-numeric:tabular-nums}.d{font-family:var(--
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .label,h3,dt{font:700 12px/1.45 var(--sans);letter-spacing:.04em;color:var(--faint);text-transform:uppercase}
 .quiet{color:var(--faint);margin:0}
-.ok{--tone:var(--ok);--dotc:var(--mint)}.bad{--tone:var(--bad);--dotc:var(--cherry)}.warn{--tone:var(--warn);--dotc:var(--amber)}
+.ok{--tone:var(--ok);--dotc:var(--mint)}.defect{--tone:var(--oxblood);--dotc:var(--oxblood)}.bad{--tone:var(--bad);--dotc:var(--cherry)}.warn{--tone:var(--warn);--dotc:var(--amber)}
 .verdict{display:inline-flex;align-items:center;gap:.4rem;font:700 12px/1 var(--sans);color:var(--tone,var(--dim));text-transform:capitalize}
 .verdict i{flex:none;width:8px;height:8px;border-radius:50%;background:var(--dotc,currentColor)}
 .app{height:100vh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;grid-template-columns:minmax(0,1fr);overflow:clip}.track{min-width:0;position:relative;z-index:0;display:grid}
@@ -469,7 +473,7 @@ h1{display:flex;align-items:baseline;gap:.6rem;font:700 20px/1.05 var(--sans);le
 .pill button:focus-visible{outline:2px solid var(--pop);outline-offset:6px}
 .q{display:grid;place-items:center;width:1.1rem;height:1.1rem;border-radius:50%;background:var(--pill-ink,var(--ink));color:#fff;font:700 12px/1 var(--sans)}
 .why{white-space:normal;text-align:left;font:400 14px/1.57 var(--sans);position:fixed;inset:auto;top:5rem;right:1.5rem;margin:0;width:min(26rem,calc(100vw - 2rem));max-height:calc(100vh - 6rem);overflow:auto;padding:0 1.25rem 1.25rem;border:0;border-radius:22px;background:oklch(from var(--s1) l c h / .96);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);color:var(--text);box-shadow:0 0 0 1px oklch(from var(--shade) l c h / .08),0 14px 44px oklch(from var(--shade) l c h / .2)}
-.why h3{margin:0 -1.25rem 1rem;padding:.75rem 1.25rem .65rem;background:var(--s2);border-bottom:3px solid var(--pop);font:700 14px/1.3 var(--sans);letter-spacing:0;text-transform:none;color:var(--text)}
+.why h3{margin:0 -1.25rem 1rem;padding:.75rem 1.25rem .65rem;background:var(--s2);border-bottom:3px solid var(--dotc,var(--pop));font:700 14px/1.3 var(--sans);letter-spacing:0;text-transform:none;color:var(--text)}
 .reasons{list-style:none;margin:0;padding:0;display:grid;gap:.75rem}.reasons li{display:grid;gap:.35rem}.reasons p{margin:0;color:var(--dim);font-size:14px;line-height:1.55}
 .reasons p.do,.concern p.do{color:var(--text)}
 .do b{font-weight:700}
@@ -626,7 +630,7 @@ kbd{display:inline-grid;place-items:center;min-width:1.4rem;height:1.4rem;paddin
 .fw-dl{background:linear-gradient(var(--key-blue),var(--blue));box-shadow:inset 0 1px 0 #fff3,0 0 0 1px var(--navy),0 2px 0 1px var(--navy),0 4px 8px oklch(from var(--shade) l c h / .14)}.fw-dl:active{box-shadow:inset 0 1px 0 #fff3,0 0 0 1px var(--navy)}
 .pill{box-shadow:inset 0 1px 2px oklch(from var(--shade) l c h / .16),0 1px 0 #fff}
 .lb-cap,.focus{background:linear-gradient(var(--key-hi),var(--key));box-shadow:inset 0 1px 0 #fff,0 0 0 1px var(--key-edge),0 4px 12px oklch(from var(--shade) l c h / .16)}
-.label,h3,dt{letter-spacing:.08em;color:var(--dim)}
+.label,h3,dt{letter-spacing:.08em;color:var(--steel-ink)}
 .panel .block{border-top:0;padding-top:0}.panel .block>h3{display:flex;align-items:center;gap:.5rem}.panel .block>h3::after{content:"";flex:1;height:1px;background:var(--hair)}
 .stream pre,.plain,.command,.raw pre{background:radial-gradient(120% 90% at 50% 40%,oklch(from var(--navy) l c h / .3),transparent 70%),var(--term);color:var(--term-text);border:0;border-radius:8px;box-shadow:0 0 0 3px var(--bezel),0 0 0 4px var(--case-edge),inset 0 0 24px oklch(from var(--black) l c h / .7);scrollbar-color:var(--term-line) transparent}
 .stream pre,.plain,.command,.raw pre{margin-inline:4px}.term .stream pre,.lb-term .stream pre{box-shadow:none;margin-inline:0}.stream .label{margin-bottom:.5rem}
@@ -634,12 +638,16 @@ kbd{display:inline-grid;place-items:center;min-width:1.4rem;height:1.4rem;paddin
 .sname .took{padding:.3rem .5rem;font:700 12px/1 var(--mono)}
 .exit{padding:.3rem .5rem;font:700 12px/1 var(--mono);letter-spacing:.04em;text-transform:uppercase}.exit.ok{--tape:var(--ok)}.exit.bad{--tape:var(--bad)}.exit.ok,.exit.bad{color:var(--tape-text);background:linear-gradient(oklch(from var(--tape) calc(l + .05) c h),var(--tape))}
 .face .role{--tape:var(--black);padding:.2rem .35rem;border-radius:3px;font:700 12px/1 var(--sans);letter-spacing:.04em;text-transform:uppercase}
-.fw-note,.concern li>.label{padding:.2rem .45rem;font:700 12px/1.2 var(--sans);letter-spacing:.06em;text-transform:uppercase}.concern li>.label{justify-self:start}
+.concern li>.label{--tape:var(--tone)}.fw-note,.concern li>.label{padding:.2rem .45rem;font:700 12px/1.2 var(--sans);letter-spacing:.06em;text-transform:uppercase}.concern li>.label{justify-self:start}
 .badge{border-radius:8px;background:linear-gradient(var(--key-hi),var(--key));box-shadow:inset 0 1px 0 #fff,0 0 0 1px var(--key-edge),0 2px 4px oklch(from var(--shade) l c h / .1)}.badge .role{letter-spacing:.06em;text-transform:uppercase}
 .verdict i,.dot,.led{background:radial-gradient(circle at 35% 30%,#fffc 0 18%,transparent 50%),var(--dotc,var(--faint));box-shadow:0 0 0 1.5px oklch(from var(--shade) l c h / .2),0 0 6px var(--dotc,transparent)}.led{--dotc:var(--teal)}
-.flag{background:radial-gradient(circle at 35% 30%,#fffc 0 16%,transparent 48%),var(--amber);box-shadow:0 0 0 2px var(--s1),0 0 0 3px oklch(from var(--shade) l c h / .25),0 0 8px var(--amber)}
+.flag{background:radial-gradient(circle at 35% 30%,#fffc 0 16%,transparent 48%),var(--dotc,var(--amber));box-shadow:0 0 0 2px var(--s1),0 0 0 3px oklch(from var(--shade) l c h / .25),0 0 8px var(--dotc,var(--amber))}.flag.bad,.flag.defect{color:#fff}
+.concern h3{color:var(--tone)}
+.lb-cap .label{color:var(--dim)}
+.doc .block{border-top:3px solid var(--sep,var(--navy))}.doc .block:is(.ok,.warn,.bad,.defect){--sep:var(--dotc)}.doc .s-findings{--sep:var(--steel)}.doc .s-outputs{--sep:var(--blue)}.doc .s-package{--sep:var(--navy)}
+.block p.vwhy{color:var(--tone)}.vblock .reasons,.doc .defect .reasons{padding-left:1rem;border-left:3px solid var(--dotc)}
 .tabs a span,.doc h3 .count{display:inline-grid;place-items:center;min-width:1.5rem;height:1.25rem;padding:0 .35rem;border-radius:4px;font:700 12px/1 var(--mono);letter-spacing:0;background:var(--term);color:var(--term-dim);box-shadow:inset 0 1px 2px #000c,0 1px 0 #fff8;vertical-align:.15em}
 .tabs a span.has,.doc h3 .count{color:var(--orange);text-shadow:0 0 4px oklch(from var(--orange) l c h / .6)}
-.concern{padding-top:calc(1rem + 4px);background:linear-gradient(var(--navy),var(--navy)) top/100% 4px no-repeat,var(--s1);box-shadow:0 0 0 1px var(--key-edge),0 2px 6px oklch(from var(--shade) l c h / .08)}
+.concern{padding-top:calc(1rem + 4px);background:linear-gradient(var(--dotc),var(--dotc)) top/100% 4px no-repeat,var(--s1);box-shadow:0 0 0 1px var(--key-edge),0 2px 6px oklch(from var(--shade) l c h / .08)}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 @media print{.app{height:auto;display:block}.track,.arrow,.mid,.lightbox,.enlarge{display:none}.center{display:block}.step{display:block!important;break-inside:avoid;margin-bottom:1rem}.view{display:flex!important}.stage{background:none}}`;
