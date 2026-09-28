@@ -55,12 +55,24 @@ export function bind(doc: Document = document) {
   /** The uncut clip an element's cut grows into. */
   const whole = (el: HTMLElement) => `inset(0 0 0 0 round ${getComputedStyle(el).borderTopLeftRadius})`;
   const flight = "transform .36s cubic-bezier(.3,.9,.3,1),clip-path .36s cubic-bezier(.3,.9,.3,1)";
+  // An enlarged command is the screen's own layout at a larger zoom: as wide
+  // as the screen, with everything inside zoomed alike, so its lines break
+  // where the screen's do and the flight between them is a pure scale. The
+  // command reads at 20 px at most and the whole of it fits the window.
+  const fit = (box: HTMLElement, src: HTMLElement | null) => {
+    const el = body(box);
+    if (!el?.classList.contains("lb-term")) return;
+    if (!src) { el.style.width = ""; el.style.removeProperty("--z"); return; }
+    const w = src.getBoundingClientRect().width, h = src.scrollHeight;
+    const z = Math.max(1, Math.min(20 / 14, (innerWidth - 48) / w, (innerHeight - 120) / h));
+    el.style.width = `${w * z}px`; el.style.setProperty("--z", String(z));
+  };
   let hidden: HTMLElement | null = null, token = 0;
   const unhide = () => { if (hidden) hidden.style.visibility = ""; hidden = null; };
   const open = (box: HTMLElement) => {
     token++; unhide();
-    const src = still() ? null : sourceOf(box);
-    box.toggleAttribute("data-flip", !!src); box.showPopover();
+    const found = sourceOf(box), src = still() ? null : found;
+    fit(box, found); box.toggleAttribute("data-flip", !!src); box.showPopover();
     const el = body(box);
     if (el) el.style.opacity = "";
     if (src && el) {
@@ -97,7 +109,7 @@ export function bind(doc: Document = document) {
     if (s && decodeURIComponent(location.hash.slice(1)) !== s) location.hash = encodeURIComponent(s);
     const el = body(next); if (el) { el.style.transform = ""; el.style.clipPath = ""; el.style.transition = ""; el.style.opacity = ""; }
     next.showPopover();
-    const src = sourceOf(next); if (src) { src.style.visibility = "hidden"; hidden = src; }
+    const src = sourceOf(next); fit(next, src); if (src) { src.style.visibility = "hidden"; hidden = src; }
     setTimeout(() => instant.forEach(x => x.removeAttribute("data-instant")), 60);
   };
   doc.querySelectorAll<HTMLElement>(".fwin").forEach(w => w.addEventListener("beforetoggle", e => { if ((e as ToggleEvent).newState === "open") void fill(w); }));

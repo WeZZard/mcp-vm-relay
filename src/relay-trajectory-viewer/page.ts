@@ -206,7 +206,7 @@ function trajectoryBoxes(steps: ReviewPageStep[], model: ReviewPageModel, number
     if (!step.snapshots) {
       const at = time(detail?.at);
       return [{ id: boxId(step, "command"), step: view("command"), label: `Step ${number} · ${step.inputMode === "diagnostic" ? "Diagnostic" : "Command"}`, title: headline,
-        body: `<div class="lb-term"><pre class="lb-cmd"><span class="prompt" aria-hidden="true">$</span>${escapeHtml(command ?? headline)}</pre>${detail?.output ? streamsOf(detail.output) || `<p class="quiet">No output.</p>` : ""}<p class="term-note">${step.inputMode === "diagnostic" ? "Screenshots were not requested for this diagnostic." : "No snapshots were captured for this step."}</p></div>`,
+        body: `<div class="lb-term"><pre class="term-cmd"><span class="prompt" aria-hidden="true">$</span>${escapeHtml(command ?? headline)}</pre>${detail?.output ? streamsOf(detail.output) || `<p class="quiet">No output.</p>` : ""}<p class="term-note">${step.inputMode === "diagnostic" ? "Screenshots were not requested for this diagnostic." : "No snapshots were captured for this step."}</p></div>`,
         caption: at ? `<time>${at} UTC</time>` : "" }];
     }
     return (["before", "after"] as const).filter(role => step.snapshots?.[role]).map(role => {
@@ -517,8 +517,8 @@ kbd{display:inline-grid;place-items:center;min-width:1.4rem;height:1.4rem;paddin
 .lightbox[data-instant],.lightbox[data-instant]::backdrop,.lightbox[data-instant]>*,.lightbox[data-instant] .lb-body>*{transition:none}
 .lb-body{grid-column:1/-1;grid-row:1;display:grid;place-items:center;min-height:0;height:100%;pointer-events:none}.lb-body>*{pointer-events:auto}
 .lb-body img{display:block;max-width:100%;max-height:calc(100vh - 7.5rem);object-fit:contain;background:#fff;border-radius:16px;box-shadow:0 0 0 1px oklch(from var(--shade) l c h / .1),0 22px 64px oklch(from var(--shade) l c h / .22)}
-.lb-term{width:min(100%,72rem);max-height:calc(100vh - 7.5rem);overflow:auto;padding:2rem 2.5rem;background:radial-gradient(120% 90% at 50% 40%,oklch(from var(--navy) l c h / .35),transparent 70%),var(--term);color:var(--term-text);border-radius:20px;box-shadow:0 0 0 1px oklch(from var(--black) l c h / .6),0 22px 64px oklch(from var(--black) l c h / .4);scrollbar-color:var(--term-line) transparent}
-.lb-cmd{font-size:20px;line-height:1.6;color:var(--term-text)}.lb-term .stream{margin:1.5rem 0 0}.lb-term .stream pre{font-size:16px;max-height:none}.lb-term .quiet,.lb-term .term-note{margin:1.5rem 0 0;font-size:16px;color:var(--term-dim)}
+.lb-term{--z:1.43;width:min(100%,72rem);max-height:calc(100vh - 7.5rem);overflow:auto;padding:0;background:radial-gradient(120% 90% at 50% 40%,oklch(from var(--navy) l c h / .35),transparent 70%),var(--term);color:var(--term-text);border-radius:calc(12px * var(--z));box-shadow:0 0 0 1px oklch(from var(--black) l c h / .6),0 22px 64px oklch(from var(--black) l c h / .4);scrollbar-color:var(--term-line) transparent}
+.lb-term>*{zoom:var(--z)}
 .lb-cap{grid-row:2;grid-column:2;display:flex;align-items:center;gap:1rem;margin:0;padding:.3rem .3rem .3rem 1.1rem;background:oklch(from var(--s1) l c h / .94);border-radius:16px;box-shadow:var(--lift);font-size:12px;white-space:nowrap}
 .lb-cap time,.lb-cap .size{font:12px var(--mono);color:var(--faint)}.lb-cap a{font-weight:700}.lb-cap .file{font:12px var(--mono);color:var(--text)}.lb-cap .label{font-size:12px}
 .lb-nav{all:unset;box-sizing:border-box;corner-shape:squircle;grid-row:2;display:flex;align-items:center;gap:.75rem;min-width:0;max-width:22rem;padding:.3rem 1.1rem .3rem .3rem;background:oklch(from var(--s1) l c h / .94);border-radius:16px;box-shadow:var(--lift);cursor:pointer}
@@ -540,7 +540,7 @@ kbd{display:inline-grid;place-items:center;min-width:1.4rem;height:1.4rem;paddin
 .chin .info{display:flex;align-items:center;gap:.75rem;min-width:0;margin:0;white-space:nowrap;font:400 12px var(--sans);color:var(--dim)}.chin .info b{font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text)}.chin .info time{font-family:var(--mono)}.chin .info[data-role="after"] b{color:var(--pop)}
 .term{width:min(100%,56rem);max-height:100%;overflow:auto;background:var(--term);color:var(--term-text);border-radius:16px;box-shadow:0 0 0 1px oklch(from var(--black) l c h / .6),0 16px 40px oklch(from var(--shade) l c h / .22);scrollbar-color:var(--term-line) transparent}
 .term-cmd{padding:1.5rem 1.5rem 1rem;font-size:14px;color:var(--term-text)}.prompt{color:var(--faint);margin-right:.6em;user-select:none}.term .prompt,.lb-term .prompt{color:var(--orange)}
-.term .stream{margin:0 1.5rem 1rem}.term .quiet,.term-note{margin:0 1.5rem 1.5rem;font-size:12px;color:var(--term-dim)}
+.term .stream,.lb-term .stream{margin:0 1.5rem 1rem}.term .quiet,.lb-term .quiet,.term-note{margin:0 1.5rem 1.5rem;font-size:12px;color:var(--term-dim)}
 .term .stream .label,.lb-term .stream .label{color:var(--term-dim)}.term .stream pre,.lb-term .stream pre{background:oklch(from var(--term-bar) l c h / .7);border-color:var(--term-line);color:var(--term-text)}
 .stream .label{display:block;margin-bottom:.25rem}.stream pre,.plain,.command{background:var(--paper);border:var(--rule);border-radius:12px;padding:.75rem .9rem;max-height:14rem;overflow:auto;color:var(--text)}
 .panel{grid-area:panel;min-height:0;display:grid;grid-template-rows:minmax(0,1fr);background:var(--s1);border-left:var(--rule)}

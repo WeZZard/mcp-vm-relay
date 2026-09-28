@@ -205,7 +205,7 @@ test("review page orders steps by time and reads commands, exit status, output s
   assert.match(html, /aria-label="Previous: Step 02 · Before, [^"]+"><span class="dir" aria-hidden="true">‹<\/span><span class="role">Step <span class="d">02<\/span> · Before<\/span><\/button>/);
   // A command has a lightbox too, where it reads in larger text.
   assert.match(diagnostic, /<button type="button" class="enlarge" popovertarget="lightbox-diagnostic-early--command" title="Enlarge the command">/);
-  assert.match(html, /id="lightbox-diagnostic-early--command" data-step="step-diagnostic-early--command" popover><div class="lb-body"><div class="lb-term"><pre class="lb-cmd">/);
+  assert.match(html, /id="lightbox-diagnostic-early--command" data-step="step-diagnostic-early--command" popover><div class="lb-body"><div class="lb-term"><pre class="term-cmd">/);
   assert.match(html, /<button type="button" class="lb-nav next" popovertarget="lightbox-step-0--before" aria-label="Next: Step 02 · Before, /);
   // The title is the relay's. The statistics say when the run started in UTC (the Overview adds the year),
   // and, filled in by the page's script, in the reader's time zone.
