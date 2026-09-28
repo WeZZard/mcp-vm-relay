@@ -22,7 +22,7 @@ export function bind(doc: Document = document) {
   const sourceOf = (box: HTMLElement) => {
     for (const o of doc.querySelectorAll(".zoom,.enlarge,.gthumb")) {
       if (o.getAttribute("popovertarget") !== box.id) continue;
-      const s = o.classList.contains("enlarge") ? o.closest<HTMLElement>(".term") : o.querySelector("img");
+      const s = o.classList.contains("enlarge") ? o.closest(".monitor")?.querySelector<HTMLElement>(".term") ?? null : o.querySelector("img");
       if (s && s.getBoundingClientRect().width) return s;
     }
     return null;
