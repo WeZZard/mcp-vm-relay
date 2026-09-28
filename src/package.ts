@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { lstat, readFile, readdir, mkdir, writeFile, rm } from "node:fs/promises";
 import { dirname, join, resolve, parse } from "node:path";
-import { buildManifest, buildTrajectory, verifyPackage, type PackageManifest, type ReviewStep, type SnapshotArtifact } from "@wezzard/relay-driver-host-sdk";
+import { buildManifest, verifyPackage, type PackageManifest, type ReviewStep, type SnapshotArtifact } from "@wezzard/relay-driver-host-sdk";
 import { type CommandOutput, type Reason, type ReviewData, type StepDetail } from "./review-page.js";
 
 export interface DeliverPackageOptions {
@@ -29,13 +29,15 @@ type Analysis = {
   // Page-only evidence, kept out of trajectory.json so its schema is unchanged.
   details: Map<string, StepDetail>;
   outputs: { path: string; bytes: number }[];
-  /** Why snapshots are not complete and execution has not passed, in plain words, with the steps concerned. */
-  reasons: { snapshots: Reason[]; execution: Reason[] };
+  /** Why snapshots are not complete and execution has not passed, and the relay's own defects, in plain words, with the steps concerned and what the reader can do. */
+  reasons: { snapshots: Reason[]; execution: Reason[]; defects: Reason[] };
 };
-const generated = new Set(["manifest.json", "summary.json", "trajectory.json", "OPENING.txt", "journal/session-events.jsonl"]);
-// Packages built before the trajectory rename wrote `walkthrough.json` instead of `trajectory.json`.
-// Accept that legacy name when verifying so older delivered evidence packages still validate.
-const legacyTrajectoryFile = "walkthrough.json";
+// Delivery seals the raw evidence and writes nothing derived from it: the steps,
+// verdicts and reasons are derived when the package is reviewed (docs/design.md,
+// "Derive at review"). Earlier packages also carry derived files (summary.json,
+// trajectory.json or walkthrough.json, index.html, a journal copy); they remain
+// sealed records, and nothing compares them with today's derivation.
+const generated = ["OPENING.txt", "manifest.json"];
 const hash = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
 const json = (value: unknown) => JSON.stringify(value, null, 2) + "\n";
 function object(value: unknown, label: string): Obj {
@@ -297,8 +299,9 @@ async function analyze(root: string, options: DeliverPackageOptions, files: stri
       observed,
       ...(typeof because === "string" ? { because } : {}), ...(pair.length ? { snapshots: { before: before?.path, after: after?.path, groupId, declaredAfterIntervalMs: after?.declaredAfterIntervalMs } } : {}) });
   }
-  // Diagnostic execution is command evidence, not visual evidence. Include it
-  // explicitly rather than hiding setup/repair merely because it has no action pair.
+  // Diagnostic execution is command evidence, not visual evidence: it takes no
+  // screenshots and runs outside the guest receiver, by design, so neither is a
+  // gap. Include it explicitly rather than hiding setup/repair merely because it has no action pair.
   const diagnostics = new Map<string, Obj>();
   for (const receipt of receipts.filter(r => r.evidenceMode === 'diagnostic')) diagnostics.set(text(receipt.executionId, 'diagnostic execution id'), receipt);
   for (const [executionId, receipt] of diagnostics) {
@@ -306,7 +309,6 @@ async function analyze(root: string, options: DeliverPackageOptions, files: stri
     const stepId = `diagnostic-${executionId}`;
     if (used.has(stepId)) throw new Error(`duplicate diagnostic review step: ${stepId}`);
     used.add(stepId);
-    findings.push(`diagnostic ${executionId} has command evidence only; screenshots were not requested`);
     details.set(stepId, { at: typeof request?.at === "string" ? request.at : undefined,
       ...(Array.isArray(request?.argv) && request.argv.every((w: unknown) => typeof w === "string") ? { argv: request.argv } : {}),
       output: commandOutput(receipt) });
@@ -318,56 +320,64 @@ async function analyze(root: string, options: DeliverPackageOptions, files: stri
   }
   if (events.some(e => ["evidence-failure", "capture-status", "resource-stop"].includes(e.kind) && ["incomplete", "uncertain"].includes(e.state))) findings.push("journal records incomplete evidence or a resource stop");
   if (files.some(p => p.startsWith("state/snapshots/") && p.endsWith(".part"))) findings.push("unfinished snapshot originals retained");
-  for (const request of hostRecords.filter(h => typeof h.because === "string" && typeof h.executionId === "string")) {
+  for (const request of hostRecords.filter(h => typeof h.because === "string" && typeof h.executionId === "string" && !diagnostics.has(h.executionId))) {
     if (![...starts.values()].some(s => s.executionId === request.executionId) && !events.some(e => e.kind === "execution-completion" && e.executionId === request.executionId) && !receipts.some(r => r.executionId === request.executionId && r.outcome?.kind === "refused")) {
       findings.push(`request ${request.executionId} has no retained guest execution`);
     }
   }
-  const completeness = findings.length ? "incomplete" : "complete";
-  const snapshotReasons = findings.map(finding => explainFinding(finding, steps, stepsByExecution));
+  // Each finding bears on one verdict, or is a defect of the relay's own records
+  // that no verdict depends on (docs/design.md, "Actionable verdicts").
+  const bearing = (finding: string) => /^action \S+ (has no retained start or refusal|is missing reverse snapshot reference |has no materialized action record|lacks durable reverse snapshot references)/.test(finding) ? "defects"
+    : /^request \S+ has no retained guest execution$/.test(finding) ? "execution" : "snapshots";
+  const explained = (key: string) => findings.filter(f => bearing(f) === key).map(finding => explainFinding(finding, steps, stepsByExecution));
+  const snapshotReasons = explained("snapshots"), unexecuted = explained("execution"), defectReasons = explained("defects");
+  const completeness = snapshotReasons.length ? "incomplete" : "complete";
   const receiptFailed = receipts.some(r => ["refused", "failed"].includes(receiptOutcome(r)));
   const receiptUncertain = receipts.some(r => receiptOutcome(r) === "uncertain");
-  const execution = receiptFailed || steps.some(s => s.execution === "failed" || s.execution === "refused") ? "failed" : receiptUncertain || !steps.length || completeness === "incomplete" || steps.some(s => s.execution !== "completed") ? "uncertain" : "passed";
+  // A step without its snapshots is already uncertain itself, so incomplete
+  // snapshots do not make the whole run uncertain.
+  const execution = receiptFailed || steps.some(s => s.execution === "failed" || s.execution === "refused") ? "failed" : receiptUncertain || !steps.length || unexecuted.length || steps.some(s => s.execution !== "completed") ? "uncertain" : "passed";
   if (receiptFailed) findings.push("retained execution receipt reports refusal or failure");
   if (receiptUncertain) findings.push("retained execution receipt reports uncertainty");
   const failedSteps = steps.filter(s => s.execution === "failed" || s.execution === "refused").map(s => s.id);
   const unsettled = steps.filter(s => !["completed", "failed", "refused"].includes(s.execution)).map(s => s.id);
   const receiptSteps = (outcomes: string[]) => [...new Set(receipts.filter(r => outcomes.includes(receiptOutcome(r)))
     .flatMap(r => [...(stepsByExecution.get(r.executionId) ?? []), ...steps.filter(s => s.actionId === r.actionId).map(s => s.id)]))];
+  const rerun = "Look for its effect in the next step's before snapshot, or run the task again.";
   // The same conditions, in the same order, as the execution verdict above.
   const executionReasons: Reason[] = execution === "passed" ? [] : [
-    ...(failedSteps.length ? [{ text: "The guest refused or failed these steps.", stepIds: failedSteps }] : []),
-    ...(receiptFailed ? [{ text: "A retained receipt reports that the guest refused or failed an execution.", stepIds: receiptSteps(["refused", "failed"]) }] : []),
-    ...(execution === "uncertain" && receiptUncertain ? [{ text: "A retained receipt cannot confirm whether the guest ran an execution, for example because the connection was lost.", stepIds: receiptSteps(["uncertain"]) }] : []),
-    ...(execution === "uncertain" && !steps.length ? [{ text: "The package holds no steps, so there is nothing whose execution could be confirmed.", stepIds: [] }] : []),
-    ...(execution === "uncertain" && completeness === "incomplete" ? [{ text: "Snapshot evidence is incomplete, so the relay does not confirm the run as a whole, even when every step reports completed. See why snapshots are incomplete.", stepIds: [] }] : []),
-    ...(execution === "uncertain" && unsettled.length ? [{ text: "These steps did not report a final execution outcome.", stepIds: unsettled }] : []),
+    ...(failedSteps.length ? [{ text: "The guest refused or failed these steps.", stepIds: failedSteps, action: "Open each step to read what the guest reported, correct the cause, and run the task again." }] : []),
+    ...(receiptFailed ? [{ text: "A retained receipt reports that the guest refused or failed an execution.", stepIds: receiptSteps(["refused", "failed"]), action: "Open the step to read the receipt, correct the cause, and run the task again." }] : []),
+    ...(execution === "uncertain" && receiptUncertain ? [{ text: "A retained receipt cannot confirm whether the guest ran an execution, for example because the connection was lost.", stepIds: receiptSteps(["uncertain"]), action: rerun }] : []),
+    ...(execution === "uncertain" && !steps.length ? [{ text: "The package holds no steps, so there is nothing whose execution could be confirmed.", stepIds: [], action: "Run the task again; this run recorded nothing." }] : []),
+    ...(execution === "uncertain" ? unexecuted : []),
+    ...(execution === "uncertain" && unsettled.length ? [{ text: "The relay cannot confirm these steps' outcomes: they reported none, or they lack the snapshots that would show it.", stepIds: unsettled, action: "Look for each step's effect in the next step's before snapshot, or run the task again." }] : []),
   ];
   const outputs: Analysis["outputs"] = [];
   for (const path of files.filter(p => p.startsWith("extractions/")).sort()) outputs.push({ path, bytes: (await lstat(join(root, path))).size });
-  return { snapshots, steps, incompleteGroups, findings, completeness, execution, details, outputs, reasons: { snapshots: snapshotReasons, execution: executionReasons } };
+  return { snapshots, steps, incompleteGroups, findings, completeness, execution, details, outputs, reasons: { snapshots: snapshotReasons, execution: executionReasons, defects: defectReasons } };
 }
 
-// Each finding in plain words, with the steps it concerns. A finding the page
-// cannot explain is shown as recorded.
+// Each finding in plain words, with the steps it concerns and what the reader
+// can do about it. A finding the page cannot explain is shown as recorded.
 function explainFinding(finding: string, steps: Step[], byExecution: Map<string, string[]>): Reason {
   const ofAction = (id: string) => steps.filter(s => s.actionId === id).map(s => s.id);
   const ofExecution = (id: string) => byExecution.get(id) ?? [];
-  const execution = (ids: string[]) => steps.find(s => s.id === ids[0])?.execution ?? "unknown";
+  const checkStep = "Check the step another way, by its output or the next step's before snapshot, or run the task again.";
+  const checkRun = "Check the steps around it by their output, or run the task again.";
+  const report = "Nothing in this review depends on it. Report it as an mcp-vm-relay issue, with this package.";
   const rules: [RegExp, (m: RegExpExecArray) => Reason][] = [
-    [/^diagnostic (\S+) has command evidence only; screenshots were not requested$/, m => ({ stepIds: ofExecution(m[1]!),
-      text: "This diagnostic command ran without screenshots, as diagnostics do. The relay still counts every step without screenshots as missing snapshot evidence." })],
     [/^request (\S+) has no retained guest execution$/, m => ({ stepIds: ofExecution(m[1]!),
-      text: `The relay asked the guest to run this step, but the guest's event journal holds no record that it started or finished. Only its receipt, which reads "${execution(ofExecution(m[1]!))}", shows that it ran.` })],
-    [/^action (\S+) has no retained start or refusal$/, m => ({ stepIds: ofAction(m[1]!), text: "The package holds this action's record, but no record that the guest started or refused it." })],
-    [/^action (\S+) is missing reverse snapshot reference (.+)$/, m => ({ stepIds: ofAction(m[1]!), text: `The snapshot ${m[2]} was taken for this action, but the action's record does not refer back to it.` })],
-    [/^action (\S+) lacks its declared causal pair$/, m => ({ stepIds: ofAction(m[1]!), text: "This action's before or after snapshot is missing." })],
-    [/^action (\S+) has no materialized action record$/, m => ({ stepIds: ofAction(m[1]!), text: "This action started, but its action record was never written." })],
-    [/^action (\S+) lacks durable reverse snapshot references$/, m => ({ stepIds: ofAction(m[1]!), text: "This action's snapshots exist, but the guest's event journal does not tie them to it." })],
+      text: "The relay sent a request that the guest's event journal never recorded starting or finishing, so whether it ran is unknown.", action: "Look for its effect in the next step's before snapshot, or run the task again." })],
+    [/^action (\S+) lacks its declared causal pair$/, m => ({ stepIds: ofAction(m[1]!), text: "This action's before or after snapshot is missing.", action: checkStep })],
     [/^coalescing group (\S+) lacks a complete consecutive first\/member\/last causal pair$/, m => ({ stepIds: steps.filter(s => s.snapshots?.groupId === m[1]).map(s => s.id),
-      text: "These steps share one before and after pair of snapshots, and that pair is incomplete." })],
-    [/^journal records incomplete evidence or a resource stop$/, () => ({ stepIds: [], text: "The guest's event journal records that evidence capture was incomplete, or that a resource limit stopped it." })],
-    [/^unfinished snapshot originals retained$/, () => ({ stepIds: [], text: "Some snapshots were still being written when the package was assembled." })],
+      text: "These steps share one before and after pair of snapshots, and that pair is incomplete.", action: checkStep })],
+    [/^journal records incomplete evidence or a resource stop$/, () => ({ stepIds: [], text: "The guest's event journal records that evidence capture was incomplete, or that a resource limit stopped it.", action: checkRun })],
+    [/^unfinished snapshot originals retained$/, () => ({ stepIds: [], text: "Some snapshots were still being written when the package was assembled.", action: checkRun })],
+    [/^action (\S+) has no retained start or refusal$/, m => ({ stepIds: ofAction(m[1]!), text: "The package holds this action's record, but no record that the guest started or refused it.", action: report })],
+    [/^action (\S+) is missing reverse snapshot reference (.+)$/, m => ({ stepIds: ofAction(m[1]!), text: `The snapshot ${m[2]} was taken for this action, but the action's record does not refer back to it.`, action: report })],
+    [/^action (\S+) has no materialized action record$/, m => ({ stepIds: ofAction(m[1]!), text: "This action started, but its action record was never written.", action: report })],
+    [/^action (\S+) lacks durable reverse snapshot references$/, m => ({ stepIds: ofAction(m[1]!), text: "This action's snapshots exist, but the guest's event journal does not tie them to it.", action: report })],
   ];
   for (const [pattern, explain] of rules) {
     const m = pattern.exec(finding);
@@ -376,22 +386,8 @@ function explainFinding(finding: string, steps: Step[], byExecution: Map<string,
   return { stepIds: [], text: finding.replace(/^./, c => c.toUpperCase()) };
 }
 
-function summary(options: DeliverPackageOptions, a: Analysis) {
-  return { formatVersion: 1, ...options, snapshots: a.completeness, execution: a.execution, findings: a.findings };
-}
-// Packages delivered before 2026-09-28 also carry a fixed "humanReview": "pending".
-// The relay performs no review, so it no longer writes one, but those packages still verify.
-function legacySummary(options: DeliverPackageOptions, a: Analysis) {
-  return { formatVersion: 1, ...options, snapshots: a.completeness, execution: a.execution, humanReview: "pending", findings: a.findings };
-}
 function result(root: string, a: Analysis): DeliveryResult {
   return { manifestPath: join(root, "manifest.json"), deliveryVerified: true, snapshots: a.completeness, execution: a.execution, findings: a.findings };
-}
-async function buildReview(root: string, a: Analysis) {
-  // SDK appends refusal-only steps even when explicit steps were provided.
-  // Pass a copy, then retain our complete, unique action/refusal step list.
-  const trajectory = await buildTrajectory(root, { steps: [...a.steps], execution: a.execution });
-  return { ...trajectory, steps: a.steps, outcomes: { ...trajectory.outcomes, recording: a.completeness } };
 }
 /** When an already delivered package's run started: its earliest step, or the package's creation without timed steps. Development use only. */
 export async function deliveredPackageRun(rootDir: string): Promise<{ taskId: string; startedAt: string }> {
@@ -401,8 +397,8 @@ export async function deliveredPackageRun(rootDir: string): Promise<{ taskId: st
   return { taskId: options.taskId, startedAt: times.length ? new Date(Math.min(...times)).toISOString() : text(m.createdAt, "creation time") };
 }
 
-/** The package's own files the review page lists. */
-const listedFiles = ["manifest.json", "summary.json", "trajectory.json"];
+/** The package's own files the review page lists: its seal, its opening note, and an earlier relay's derived files. */
+const listedFiles = ["manifest.json", "OPENING.txt", "summary.json", "trajectory.json", "walkthrough.json"];
 /** The review data of a verified package: the model the review app renders its page from. It writes nothing. */
 export async function reviewData(rootDir: string): Promise<ReviewData> {
   const root = await rootPath(rootDir), m = await readJson(root, "manifest.json"), files = await filesUnder(root);
@@ -422,7 +418,7 @@ export async function deliverPackage(rootDir: string, options: DeliverPackageOpt
     if (existing.packageId !== options.packageId || existing.sessionId !== options.sessionId || existing.taskId !== options.taskId) throw new Error("existing package identity mismatch");
     return verifyDeliveredPackage(root);
   }
-  for (const path of files) if (generated.has(path)) throw new Error(`reserved package output already exists: ${path}`);
+  for (const path of files) if (generated.includes(path)) throw new Error(`reserved package output already exists: ${path}`);
   const a = await analyze(root, options, files);
   const created: string[] = [];
   const save = async (path: string, contents: string | Buffer) => {
@@ -431,30 +427,22 @@ export async function deliverPackage(rootDir: string, options: DeliverPackageOpt
     created.push(path);
   };
   try {
-  // buildTrajectory's SDK layout requires this journal path. Keep its original too.
-  await save("journal/session-events.jsonl", await readFile(join(root, "state/journal/events.jsonl")));
-  const build = async () => {
-    const all = await filesUnder(root), snapshotPaths = new Set(a.snapshots.map(s => s.path));
-    return buildManifest({ ...options, rootDir: root, media: [], segments: [], attempts: [],
+    await save("OPENING.txt", "Review this package with the relay's trajectory review command: /mcp-vm-relay:trajectory <this directory> in Claude Code, /mcp-vm-relay-trajectory <this directory> in pi, or the relay_trajectory tool. It verifies the package and opens the review app on it in the browser; the steps and verdicts are derived from the evidence when you review it. Snapshot completeness and execution are separate verdicts, and the page says why each one is not complete or passed and what you can do. Originals are under state/, host metadata under host/, and declared extractions under extractions/. manifest.json checksums every artifact except itself.\n");
+    const snapshotPaths = new Set(a.snapshots.map(s => s.path)), all = await filesUnder(root);
+    await save("manifest.json", json(await buildManifest({ ...options, rootDir: root, media: [], segments: [], attempts: [],
       snapshots: a.snapshots.map(s => ({ ...s, absolutePath: join(root, s.path), packagePath: s.path })),
       attachments: all.filter(p => p.startsWith("extractions/")).map(p => ({ absolutePath: join(root, p), packagePath: p, declaredType: "declared-extraction" })),
-      records: all.filter(p => p !== "manifest.json" && !snapshotPaths.has(p) && !p.startsWith("extractions/")).map(p => ({ absolutePath: join(root, p), packagePath: p })) });
-  };
-  await save("summary.json", json(summary(options, a)));
-  await save("OPENING.txt", "Review this package with the relay's trajectory review command: /mcp-vm-relay:trajectory <this directory> in Claude Code, /mcp-vm-relay-trajectory <this directory> in pi, or the relay_trajectory tool. It verifies the package and opens the review app on it in the browser. Snapshot completeness and execution are separate verdicts, and the page explains each one that is not complete or passed. Originals are under state/, host metadata under host/, and declared extractions under extractions/. manifest.json checksums every artifact except itself.\n");
-  await save("manifest.json", json(await build()));
-  await save("trajectory.json", json(await buildReview(root, a)));
-  await writeFile(join(root, "manifest.json"), json(await build()));
-  return await verifyDeliveredPackage(root);
+      records: all.filter(p => p !== "manifest.json" && !snapshotPaths.has(p) && !p.startsWith("extractions/")).map(p => ({ absolutePath: join(root, p), packagePath: p })) })));
+    return await verifyDeliveredPackage(root);
   } catch (error) {
-    // Remove only derived files this attempt created, never guest originals.
+    // Remove only the files this attempt created, never guest originals.
     // A corrected finish attempt can rebuild after a transient delivery failure.
     for (const path of created.reverse()) await rm(join(root, path), { force: true });
     throw error;
   }
 }
 
-/** Revalidate paths BEFORE the SDK verifier opens files; then rederive causal semantics. Throws on corruption. */
+/** Revalidate paths BEFORE the SDK verifier opens files; then check the raw evidence is consistent. Throws on corruption. */
 export async function verifyDeliveredPackage(rootDir: string): Promise<DeliveryResult> {
   const root = await rootPath(rootDir), files = await filesUnder(root);
   const m = await readJson(root, "manifest.json");
@@ -472,11 +460,7 @@ export async function verifyDeliveredPackage(rootDir: string): Promise<DeliveryR
     if (bytes.length !== artifact.bytes || hash(bytes) !== artifact.sha256) throw new Error(`artifact integrity mismatch: ${path}`);
   }
   for (const path of files) if (path !== "manifest.json" && !seen.has(path)) throw new Error(`unmanifested artifact: ${path}`);
-  for (const required of generated) {
-    if (required === "manifest.json") continue;
-    // A legacy package (pre-trajectory rename) satisfies this requirement with walkthrough.json instead.
-    if (required === "trajectory.json" ? !seen.has(required) && !seen.has(legacyTrajectoryFile) : !seen.has(required)) throw new Error(`missing required package output: ${required}`);
-  }
+  if (!seen.has("OPENING.txt")) throw new Error("missing required package output: OPENING.txt");
   const options = { packageId: manifest.packageId, sessionId: manifest.sessionId, taskId: manifest.taskId };
   const a = await analyze(root, options, files);
   const expectedAttachments = files.filter(p => p.startsWith("extractions/")).sort();
@@ -487,12 +471,6 @@ export async function verifyDeliveredPackage(rootDir: string): Promise<DeliveryR
     const actual = actualSnapshots.find(s => s.path === sn.path);
     if (!actual || actual.actionId !== sn.actionId || actual.groupId !== sn.groupId || actual.provenance !== "dispatch-captured" || !sameRef(actual, sn)) throw new Error(`snapshot provenance mismatch: ${sn.path}`);
   }
-  if (!(await readFile(join(root, "state/journal/events.jsonl"))).equals(await readFile(join(root, "journal/session-events.jsonl")))) throw new Error("trajectory journal differs from original");
-  const summaryText = await readFile(join(root, "summary.json"), "utf8");
-  if (summaryText !== json(summary(options, a)) && summaryText !== json(legacySummary(options, a))) throw new Error("summary disagrees with original evidence");
-  // A legacy package (pre-trajectory rename) still carries walkthrough.json; read whichever this package actually has.
-  const trajectoryFile = !files.includes("trajectory.json") && files.includes(legacyTrajectoryFile) ? legacyTrajectoryFile : "trajectory.json";
-  if (await readFile(join(root, trajectoryFile), "utf8") !== json(await buildReview(root, a))) throw new Error("trajectory disagrees with original evidence");
   const acceptance = await verifyPackage(manifest, root);
   // SDK rejects half group pairs categorically. Preserve them as captured snapshots,
   // accepting only this precisely identified incompleteness (never an integrity error).

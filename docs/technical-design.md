@@ -59,7 +59,7 @@ flowchart TB
 |---|---|
 | Pi extension (`src/index.ts`, `src/schema.ts`, `src/tool.ts`) | Registration, model guidance, validation, bounded rendering and action dispatch |
 | `RelayManager` | Durable ownership, same-session operation ordering, lease heartbeat, staging, delivery and cleanup |
-| Review server and app (`src/review-server.ts`, `src/review-app/`, `src/review-page.ts`) | On `relay_trajectory`, serves one static review app, a verified package's review data and its files on 127.0.0.1 for the life of the relay process; the page renders in the browser from the data. Delivery writes no page. |
+| Review server and app (`src/review-server.ts`, `src/review-app/`, `src/review-page.ts`) | On `relay_trajectory`, serves one static review app, a verified package's review data and its files on 127.0.0.1 for the life of the relay process; the review data is derived from the raw evidence when it is served, and the page renders in the browser from it. Delivery writes no page and no derived data. |
 | vm-service | Disposable leases, guest command/transfer API, guest sharing, service-host viewer management, access revocation and verified destruction. |
 | relay-driver | Recorded/admitted submissions, journal, durable receipts, snapshots and evidence-package substrate |
 | Image/backend layer (planned integration) | Authoritative published-image application inventory and search/catalog API |
@@ -553,13 +553,33 @@ session. Video belongs to application-level Walkthrough code, not this extension
 
 ### 6.2 Package construction and review
 
-Use explicit `buildManifest` / `buildTrajectory` / `verifyPackage` construction.
+Use explicit `buildManifest` / `verifyPackage` construction.
 The SDK's older automatic `finish()` packaging did not classify snapshots in its
 manifest/attachments, so it is not the chosen path. The proven example is
 `packages/host-sdk/examples/snap-deliver.ts`; [src/package.ts](../src/package.ts) imports
 these APIs, classifies artifacts,
 validates original hashes/references and reconciles authoritative per-step receipts.
 No substrate rewrite is needed.
+
+Delivery seals the raw evidence and writes nothing derived from it (owner
+decision "Derive at review"): the package is `state/`, `host/`, `extractions/`,
+`OPENING.txt` and `manifest.json`. The steps, verdicts and reasons are derived
+from the raw evidence each time it is needed, by the running relay: `finish`
+derives them for its result, and the review server derives them for the page.
+A corrected rule therefore applies to every package, old or new. Verification
+checks the manifest's integrity and the raw evidence's consistency, and never
+compares derived bytes; `summary.json`, `trajectory.json`, `walkthrough.json`,
+`index.html` and `journal/session-events.jsonl` in earlier packages are sealed
+records only.
+
+Each finding bears on one verdict or is a relay defect (owner decision
+"Actionable verdicts"). Missing or unfinished snapshots and capture failures make
+snapshots incomplete; a request the guest never recorded, and steps without a
+final outcome, make execution uncertain; inconsistencies in the relay's own
+records (missing back-references, missing action records) are relay defects and
+change no verdict. Diagnostics take no screenshots and run outside the guest
+receiver by design, and neither is a finding. Each reason carries what the
+reader can do.
 
 Preserve distinct delivery, snapshot and execution outcomes.
 Success cannot upgrade absent or failed evidence. Preserve historical sealed

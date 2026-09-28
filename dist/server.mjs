@@ -18460,8 +18460,8 @@ var StdioServerTransport = class {
 
 // src/manager.ts
 import { randomUUID as randomUUID7 } from "node:crypto";
-import { mkdir as mkdir10, readFile as readFile11, cp, access } from "node:fs/promises";
-import { dirname as dirname9, join as join15, resolve as resolve9 } from "node:path";
+import { mkdir as mkdir10, readFile as readFile10, cp, access } from "node:fs/promises";
+import { dirname as dirname9, join as join14, resolve as resolve9 } from "node:path";
 
 // src/config.ts
 import { homedir as homedir2 } from "node:os";
@@ -18853,8 +18853,8 @@ var Session = class {
    */
   async runScript(localPath, remotePath, language2, options2 = {}) {
     const { createHash: createHash7 } = await import("node:crypto");
-    const { readFile: readFile13 } = await import("node:fs/promises");
-    const bytes = await readFile13(localPath);
+    const { readFile: readFile12 } = await import("node:fs/promises");
+    const bytes = await readFile12(localPath);
     const scriptSha256 = createHash7("sha256").update(bytes).digest("hex");
     const upload = await this.transport.upload(localPath, { remotePath });
     const executionId = formatId(allocateId("execution"));
@@ -18989,112 +18989,6 @@ var Session = class {
 
 // node_modules/@wezzard/relay-driver-host-sdk/dist/src/index.js
 init_evidence_package();
-
-// node_modules/@wezzard/relay-driver-host-sdk/dist/src/trajectory.js
-import { readFile as readFile3, readdir as readdir2 } from "node:fs/promises";
-import { join as join5 } from "node:path";
-async function buildTrajectory(packageDir, options2 = {}) {
-  const manifest = JSON.parse(await readFile3(join5(packageDir, "manifest.json"), "utf8"));
-  const journalLines = (await readFile3(join5(packageDir, "journal", "session-events.jsonl"), "utf8")).split("\n").filter(Boolean).map((l) => JSON.parse(l));
-  const completionByAction = /* @__PURE__ */ new Map();
-  for (const rec of journalLines) {
-    if (rec.kind === "action-completion")
-      completionByAction.set(rec.actionId ?? "", rec);
-  }
-  const refusals = new Set(journalLines.filter((r) => r.kind === "action-refusal").map((r) => r.actionId ?? ""));
-  const segments = manifest.segments.map((s) => ({
-    segmentId: s.segmentId,
-    attemptId: s.attemptId,
-    artifactPath: s.artifactPath
-  }));
-  const segmentByAttempt = new Map(segments.map((s) => [s.attemptId, s]));
-  const usedIds = /* @__PURE__ */ new Set();
-  const snapshotsByAction = /* @__PURE__ */ new Map();
-  for (const sn of manifest.snapshots ?? []) {
-    const entry = snapshotsByAction.get(sn.actionId) ?? {};
-    if (sn.role === "before")
-      entry.before = sn.path;
-    else
-      entry.after = sn.path;
-    if (sn.groupId)
-      entry.groupId = sn.groupId;
-    if (sn.declaredAfterIntervalMs !== void 0)
-      entry.declaredAfterIntervalMs = sn.declaredAfterIntervalMs;
-    snapshotsByAction.set(sn.actionId, entry);
-  }
-  const snapshotRefs = (actionId, groupId) => {
-    const own2 = actionId !== void 0 ? snapshotsByAction.get(actionId) : void 0;
-    const groupPair = groupId ? (() => {
-      const before = (manifest.snapshots ?? []).find((sn) => sn.groupId === groupId && sn.role === "before");
-      const after = (manifest.snapshots ?? []).find((sn) => sn.groupId === groupId && sn.role === "after");
-      return before || after ? {
-        before: before?.path,
-        after: after?.path,
-        groupId,
-        declaredAfterIntervalMs: after?.declaredAfterIntervalMs
-      } : void 0;
-    })() : void 0;
-    if (own2 && groupPair)
-      return { ...groupPair, ...own2, groupId: own2.groupId ?? groupPair.groupId };
-    return own2 ?? groupPair;
-  };
-  const steps = options2.steps ?? journalLines.filter((r) => r.kind === "action-start").map((start, i) => {
-    const actionKey = start.actionId ?? `action-${i}`;
-    const completion = completionByAction.get(actionKey);
-    const outcome = completion?.toolOutcome;
-    const seg = segmentByAttempt.get(start.attemptId ?? "");
-    const plan = start.snapshotPlan;
-    const stepSnapshots = snapshotRefs(actionKey, plan?.group?.groupId);
-    const execution = refusals.has(actionKey) ? "refused" : completion ? outcome?.kind === "success" ? "completed" : "failed" : "incomplete";
-    const rawId = start.stepId ?? actionKey;
-    const id2 = usedIds.has(rawId) ? `${rawId}@${start.attemptId ?? "a"}` : rawId;
-    usedIds.add(id2);
-    return {
-      id: id2,
-      attemptId: start.attemptId ?? "unknown-attempt",
-      title: start.title ?? `action ${i}`,
-      execution,
-      state: completion ? "recorded" : "admitted",
-      snapshots: stepSnapshots,
-      observed: outcome?.kind === "success" && typeof outcome.value === "object" ? JSON.stringify(outcome.value).slice(0, 200) : void 0,
-      reviewPoint: seg ? {
-        segmentId: seg.segmentId,
-        // The driver's t_ms_from_session_start anchors media time
-        // (TIME-01 mapping); action-start records carry writtenAt only, so
-        // the review point defaults to the retained start moment.
-        timeSeconds: 0
-      } : void 0
-    };
-  });
-  const refusalOnly = journalLines.filter((r) => r.kind === "action-refusal" && !journalLines.some((s) => s.kind === "action-start" && s.actionId === r.actionId));
-  for (const [i, refusal] of refusalOnly.entries()) {
-    const rawId = refusal.actionId ?? `refusal-${i}`;
-    const id2 = usedIds.has(rawId) ? `${rawId}@${refusal.attemptId ?? "a"}` : rawId;
-    usedIds.add(id2);
-    steps.push({
-      id: id2,
-      attemptId: refusal.attemptId ?? "unknown-attempt",
-      title: refusal.title ?? `refused: ${refusal.diagnostic ?? "admission denied"}`,
-      execution: "refused",
-      state: "refused",
-      observed: typeof refusal.diagnostic === "string" ? refusal.diagnostic : void 0
-    });
-  }
-  const damaged = manifest.media.filter((m) => m.decode !== "playable");
-  return {
-    formatVersion: "draft",
-    packageId: options2.packageId ?? manifest.packageId,
-    sessionId: manifest.sessionId,
-    media: manifest.media,
-    segments,
-    steps,
-    outcomes: {
-      recording: damaged.length === 0 ? "complete" : "incomplete",
-      execution: options2.execution ?? (steps.some((s) => s.execution === "failed") ? "failed" : steps.some((s) => s.execution === "incomplete") ? "uncertain" : "passed"),
-      humanReview: "pending"
-    }
-  };
-}
 
 // src/vm-service.ts
 import { isIP as isIP2 } from "node:net";
@@ -19282,11 +19176,11 @@ import { homedir as homedir4 } from "node:os";
 
 // src/registry.ts
 import { randomUUID } from "node:crypto";
-import { link, lstat, mkdir as mkdir2, open as open2, readFile as readFile4, realpath, rename as rename2, unlink } from "node:fs/promises";
+import { link, lstat, mkdir as mkdir2, open as open2, readFile as readFile3, realpath, rename as rename2, unlink } from "node:fs/promises";
 import { readFileSync as readFileSync2, statSync as statSync2 } from "node:fs";
 import { homedir as homedir3 } from "node:os";
 import { spawn as spawn2 } from "node:child_process";
-import { dirname as dirname3, join as join6, resolve as resolve3 } from "node:path";
+import { dirname as dirname3, join as join5, resolve as resolve3 } from "node:path";
 var RegistryError = class extends Error {
   constructor(message2, options2) {
     super(message2, options2);
@@ -19344,7 +19238,7 @@ function table(text4) {
 function resolveRegistry(options2 = {}) {
   const env = options2.env ?? process.env;
   const root = options2.managedRoot ?? selectedEnvironment(env, options2.home)?.profile.relayStateDir;
-  if (root !== void 0 && options2.path === void 0) return { path: join6(absolute(root, "managed registry root"), "registry.md"), managed: true };
+  if (root !== void 0 && options2.path === void 0) return { path: join5(absolute(root, "managed registry root"), "registry.md"), managed: true };
   const explicit = options2.path ?? env.MCP_VM_RELAY_REGISTRY;
   const validate2 = (path) => {
     if (!statSync2(path).isFile()) throw new RegistryError("Registry target must be a regular file");
@@ -19355,14 +19249,14 @@ function resolveRegistry(options2 = {}) {
     validate2(path);
     return { path, managed: false };
   }
-  const legacy = join6(options2.home ?? env.HOME ?? homedir3(), "AGENTS.md");
+  const legacy = join5(options2.home ?? env.HOME ?? homedir3(), "AGENTS.md");
   try {
     validate2(legacy);
     return { path: resolve3(legacy), managed: false };
   } catch (error2) {
     if (!(error2 instanceof RegistryError) && !errno(error2, "ENOENT") && !errno(error2, "ENOTDIR")) throw error2;
   }
-  return { path: join6(relayStateRoot(options2), "registry.md"), managed: true };
+  return { path: join5(relayStateRoot(options2), "registry.md"), managed: true };
 }
 var MANAGED_REGISTRY = `# mcp-vm-relay task registry
 
@@ -19450,7 +19344,7 @@ var Registry = class {
       if (!parent.isDirectory()) throw new RegistryError("Managed registry parent must be a directory, not a symlink");
       if ((parent.mode & 63) !== 0) throw new RegistryError("Managed registry parent must be private (0700); choose a private state directory. Existing directory permissions are not changed automatically.");
     }
-    const target2 = this.managed ? join6(await realpath(dirname3(this.path)), "registry.md") : await realpath(this.path);
+    const target2 = this.managed ? join5(await realpath(dirname3(this.path)), "registry.md") : await realpath(this.path);
     const lock = await this.lock(`${target2}.mcp-vm-relay.lock`, signal);
     const token2 = randomUUID();
     let temporary;
@@ -19459,10 +19353,10 @@ var Registry = class {
       if (this.managed) await this.initialize(target2, lock.check);
       const before = await lstat(target2);
       if (!before.isFile()) throw new RegistryError("Registry target must be a regular file");
-      const original = await readFile4(target2, "utf8");
+      const original = await readFile3(target2, "utf8");
       const updated = transform2(original);
       if (original === updated) return false;
-      temporary = join6(dirname3(target2), `.${target2.split("/").at(-1)}.${token2}.tmp`);
+      temporary = join5(dirname3(target2), `.${target2.split("/").at(-1)}.${token2}.tmp`);
       const handle = await open2(temporary, "wx", before.mode & 511);
       try {
         await handle.chmod(before.mode & 511);
@@ -19473,7 +19367,7 @@ var Registry = class {
       }
       signal?.throwIfAborted();
       const current = await lstat(target2);
-      if (current.ino !== before.ino || current.mtimeMs !== before.mtimeMs || await readFile4(target2, "utf8") !== original) {
+      if (current.ino !== before.ino || current.mtimeMs !== before.mtimeMs || await readFile3(target2, "utf8") !== original) {
         throw new RegistryError("Registry changed outside its lock; retry without overwriting those changes");
       }
       lock.check();
@@ -19505,7 +19399,7 @@ var Registry = class {
     } catch (error2) {
       if (!errno(error2, "ENOENT")) throw error2;
     }
-    const temporary = join6(dirname3(target2), `.registry.${randomUUID()}.tmp`);
+    const temporary = join5(dirname3(target2), `.registry.${randomUUID()}.tmp`);
     const handle = await open2(temporary, "wx", 384);
     try {
       try {
@@ -19596,17 +19490,17 @@ var Registry = class {
 };
 
 // src/transfer.ts
-import { mkdir as mkdir4, readFile as readFile6, lstat as lstat3, mkdtemp, rm, open as open4 } from "node:fs/promises";
+import { mkdir as mkdir4, readFile as readFile5, lstat as lstat3, mkdtemp, rm, open as open4 } from "node:fs/promises";
 import { constants as constants2, linkSync } from "node:fs";
-import { dirname as dirname5, join as join8, resolve as resolve5, relative as relative4, isAbsolute as isAbsolute4 } from "node:path";
+import { dirname as dirname5, join as join7, resolve as resolve5, relative as relative4, isAbsolute as isAbsolute4 } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID as randomUUID3 } from "node:crypto";
 
 // src/util.ts
 import { spawn as spawn3 } from "node:child_process";
 import { createHash as createHash3, randomUUID as randomUUID2 } from "node:crypto";
-import { mkdir as mkdir3, readFile as readFile5, rename as rename3, lstat as lstat2, readdir as readdir3, open as open3 } from "node:fs/promises";
-import { dirname as dirname4, join as join7, resolve as resolve4, relative as relative3, isAbsolute as isAbsolute3 } from "node:path";
+import { mkdir as mkdir3, readFile as readFile4, rename as rename3, lstat as lstat2, readdir as readdir2, open as open3 } from "node:fs/promises";
+import { dirname as dirname4, join as join6, resolve as resolve4, relative as relative3, isAbsolute as isAbsolute3 } from "node:path";
 var hash = (bytes) => createHash3("sha256").update(bytes).digest("hex");
 async function jsonFile(path, value) {
   await mkdir3(dirname4(path), { recursive: true, mode: 448 });
@@ -19639,9 +19533,9 @@ async function inventory(root) {
     const info = await lstat2(path);
     if (info.isSymbolicLink()) throw new Error(`Symlinks are not transferable: ${path}`);
     if (info.isDirectory()) {
-      for (const name of (await readdir3(path)).sort()) await walk(join7(path, name));
+      for (const name of (await readdir2(path)).sort()) await walk(join6(path, name));
     } else if (info.isFile()) {
-      const bytes = await readFile5(path);
+      const bytes = await readFile4(path);
       result2.push({ path: relative3(root, path), sha256: hash(bytes), bytes: bytes.length });
     } else throw new Error(`Not a regular file: ${path}`);
   }
@@ -19722,7 +19616,7 @@ async function assertHostPath(root, target2, allowMissing = false) {
   if (rel === ".." || rel.startsWith("../") || isAbsolute4(rel)) throw new Error(`Path must be inside ${root}: ${target2}`);
   let path = root;
   for (const part of ["", ...rel ? rel.split("/") : []]) {
-    if (part) path = join8(path, part);
+    if (part) path = join7(path, part);
     try {
       if ((await lstat3(path)).isSymbolicLink()) throw new Error(`symlink ancestor: ${path}`);
     } catch (error2) {
@@ -19802,7 +19696,7 @@ var Transfer = class {
     const info = await lstat3(local);
     if (!info.isFile()) throw new Error(`Expected regular file: ${local}`);
     if (info.size > MAX_BYTES) throw new Error("Staging exceeds 512 MiB");
-    const bytes = await readFile6(local), before = hash(bytes);
+    const bytes = await readFile5(local), before = hash(bytes);
     const guestRoot = this.options.guestRoot ?? dirname5(remote);
     await this.checked([this.node, "-e", PREPARE, guestRoot, remote]);
     await this.copy("push", () => this.vm.push(this.name, resolve5(local), remote), async () => {
@@ -19810,7 +19704,7 @@ var Transfer = class {
       await this.checked([this.node, "-e", PREPARE, guestRoot, remote]);
     });
     await assertHostPath(approvedLocalRoot, local);
-    const after = await readFile6(local);
+    const after = await readFile5(local);
     if (hash(after) !== before || after.length !== bytes.length) throw new Error(`Staging source changed: ${local}`);
     const facts = await this.scan(remote, guestRoot);
     if (facts.length !== 1 || facts[0].sha256 !== before || facts[0].bytes !== bytes.length) throw new Error(`Staging checksum mismatch: ${local}`);
@@ -19856,7 +19750,7 @@ var Transfer = class {
     const info = await lstat3(local);
     if (!info.isFile()) throw new Error("Invalid local frame file");
     if (info.size !== before.bytes) throw new Error(`Extraction checksum mismatch: ${remote}`);
-    const bytes = await readFile6(local);
+    const bytes = await readFile5(local);
     if (bytes.length !== before.bytes || hash(bytes) !== before.sha256) throw new Error(`Extraction checksum mismatch: ${remote}`);
     if (JSON.stringify(await this.fileFact(remote, approvedRoot)) !== JSON.stringify(before)) throw new Error(`Source changed during extraction: ${remote}`);
     return bytes;
@@ -20027,8 +19921,8 @@ var Transfer = class {
         guard2();
         await unchanged();
         await hostPath2(local, true);
-        const staging = await mkdtemp(join8(dirname5(local), ".relay-image-"));
-        const staged = join8(staging, "original");
+        const staging = await mkdtemp(join7(dirname5(local), ".relay-image-"));
+        const staged = join7(staging, "original");
         let pending;
         const clean = async () => {
           try {
@@ -20089,16 +19983,16 @@ var Transfer = class {
   }
   async scan(remote, approvedRoot = remote) {
     const guestRoot = this.options.guestRoot ?? dirname5(remote);
-    const frame = join8(guestRoot, `.inventory-${randomUUID3()}.json`);
+    const frame = join7(guestRoot, `.inventory-${randomUUID3()}.json`);
     const tempRoot = this.options.hostTempRoot ?? tmpdir();
     await assertHostPath(tempRoot, tempRoot, true);
     await mkdir4(tempRoot, { recursive: true, mode: 448 });
     await assertHostPath(tempRoot, tempRoot);
-    const hostDirectory = await mkdtemp(join8(tempRoot, "relay-inventory-"));
+    const hostDirectory = await mkdtemp(join7(tempRoot, "relay-inventory-"));
     try {
       const fact = JSON.parse(await this.checked([this.node, "-e", SCAN, remote, approvedRoot, frame, guestRoot], 12e4));
       if (!validFact(fact) || fact.path !== frame) throw new Error("Invalid remote inventory frame");
-      const result2 = JSON.parse((await this.pullFrame(frame, join8(hostDirectory, "inventory.json"), guestRoot, tempRoot, fact)).toString("utf8"));
+      const result2 = JSON.parse((await this.pullFrame(frame, join7(hostDirectory, "inventory.json"), guestRoot, tempRoot, fact)).toString("utf8"));
       if (!Array.isArray(result2) || result2.length > 1e4) throw new Error("Invalid remote inventory");
       let total = 0;
       const paths2 = /* @__PURE__ */ new Set();
@@ -20135,7 +20029,7 @@ var Transfer = class {
       await this.guestPath(approvedRoot, remote);
       await assertHostPath(localRoot, local);
       if (!(await lstat3(local)).isFile()) throw new Error("Invalid extraction file");
-      const bytes = await readFile6(local);
+      const bytes = await readFile5(local);
       if (hash(bytes) !== before[0].sha256 || bytes.length !== before[0].bytes) throw new Error(`Extraction checksum mismatch: ${remote}`);
     } else {
       await mkdir4(local, { recursive: true, mode: 448 });
@@ -20163,7 +20057,7 @@ var Transfer = class {
 };
 
 // src/transport.ts
-import { join as join9 } from "node:path";
+import { join as join8 } from "node:path";
 var INVOKE = `const {spawnSync}=require('child_process');const [receiver,request]=process.argv.slice(1);const result=spawnSync(process.execPath,[receiver,request],{stdio:['ignore','ignore','inherit']});if(result.error)throw result.error;if(result.status!==0)process.exit(result.status??1);console.log('{"receiverExited":true}');`;
 function validateResponse(data, executionId) {
   if (!data || typeof data !== "object" || data.executionId !== executionId || !["completed", "refused", "uncertain"].includes(data.outcome?.kind)) throw new Error("Malformed receiver response / identity mismatch");
@@ -20188,8 +20082,8 @@ var VmTransport = class {
     if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,159}$/.test(request.executionId)) throw new Error("Invalid execution identity");
     this.response = void 0;
     const payload = { ...request, because: this.because, timeoutMs: this.timeoutMs, ...this.diagnostic ? { diagnostic: true } : {} };
-    const local = join9(this.hostRoot, "requests", `${request.executionId}.json`);
-    const remote = join9(this.guestRoot, "requests", `${request.executionId}.json`);
+    const local = join8(this.hostRoot, "requests", `${request.executionId}.json`);
+    const remote = join8(this.guestRoot, "requests", `${request.executionId}.json`);
     await assertHostPath(this.hostRoot, local, true);
     await jsonFile(local, payload);
     await this.transfer.pushFile(local, remote, this.hostRoot);
@@ -20200,16 +20094,16 @@ var VmTransport = class {
         "/usr/bin/env",
         `RELAY_RUNTIME_ROOT=${this.guestRoot}`,
         `RELAY_CUA_DRIVER=${this.cuaDriver}`,
-        `RELAY_MCP_HOST=${join9(this.guestRoot, "mcp-host.mjs")}`,
+        `RELAY_MCP_HOST=${join8(this.guestRoot, "mcp-host.mjs")}`,
         this.transfer.node,
         "-e",
         INVOKE,
-        join9(this.guestRoot, "receiver.mjs"),
+        join8(this.guestRoot, "receiver.mjs"),
         remote
       ], this.timeoutMs + 18e4 + wait);
       if (result2.code !== 0) throw new Error(`Receiver exit ${result2.code}: ${result2.stderr.slice(0, 1e3)}`);
-      const guestReceipt = join9(this.guestRoot, "state", "receiver", "receipts", `${request.executionId}.json`);
-      const originalReceipt = join9(this.hostRoot, "receiver-receipts", `${request.executionId}.json`);
+      const guestReceipt = join8(this.guestRoot, "state", "receiver", "receipts", `${request.executionId}.json`);
+      const originalReceipt = join8(this.hostRoot, "receiver-receipts", `${request.executionId}.json`);
       const bytes = await this.transfer.pullFrame(guestReceipt, originalReceipt, this.guestRoot, this.hostRoot);
       const data = JSON.parse(bytes.toString("utf8"));
       validateResponse(data, request.executionId);
@@ -20217,7 +20111,7 @@ var VmTransport = class {
     } catch (error2) {
       response = { executionId: request.executionId, outcome: { kind: "uncertain", diagnostic: String(error2) } };
     }
-    const receipt = join9(this.hostRoot, "receipts", `${request.executionId}.json`);
+    const receipt = join8(this.hostRoot, "receipts", `${request.executionId}.json`);
     await assertHostPath(this.hostRoot, receipt, true);
     await jsonFile(receipt, response);
     await assertHostPath(this.hostRoot, receipt);
@@ -20237,10 +20131,9 @@ var VmTransport = class {
 
 // src/package.ts
 import { createHash as createHash4 } from "node:crypto";
-import { lstat as lstat4, readFile as readFile7, readdir as readdir4, mkdir as mkdir5, writeFile as writeFile3, rm as rm2 } from "node:fs/promises";
-import { dirname as dirname6, join as join10, resolve as resolve6, parse as parse4 } from "node:path";
-var generated = /* @__PURE__ */ new Set(["manifest.json", "summary.json", "trajectory.json", "OPENING.txt", "journal/session-events.jsonl"]);
-var legacyTrajectoryFile = "walkthrough.json";
+import { lstat as lstat4, readFile as readFile6, readdir as readdir3, mkdir as mkdir5, writeFile as writeFile3, rm as rm2 } from "node:fs/promises";
+import { dirname as dirname6, join as join9, resolve as resolve6, parse as parse4 } from "node:path";
+var generated = ["OPENING.txt", "manifest.json"];
 var hash2 = (bytes) => createHash4("sha256").update(bytes).digest("hex");
 var json = (value) => JSON.stringify(value, null, 2) + "\n";
 function object3(value, label) {
@@ -20262,7 +20155,7 @@ async function rootPath(rootDir) {
   const root = resolve6(rootDir);
   let current = parse4(root).root;
   for (const part of root.slice(current.length).split("/").filter(Boolean)) {
-    current = join10(current, part);
+    current = join9(current, part);
     const info = await lstat4(current);
     if (info.isSymbolicLink() || !info.isDirectory()) throw new Error(`unsafe package directory: ${current}`);
   }
@@ -20270,9 +20163,9 @@ async function rootPath(rootDir) {
 }
 async function filesUnder(root, prefix = "") {
   const result2 = [];
-  for (const entry of await readdir4(join10(root, prefix), { withFileTypes: true })) {
+  for (const entry of await readdir3(join9(root, prefix), { withFileTypes: true })) {
     const path = relativePath(prefix ? `${prefix}/${entry.name}` : entry.name);
-    const info = await lstat4(join10(root, path));
+    const info = await lstat4(join9(root, path));
     if (info.isSymbolicLink()) throw new Error(`symlink in package: ${path}`);
     if (info.isDirectory()) result2.push(...await filesUnder(root, path));
     else if (info.isFile() && info.nlink === 1) result2.push(path);
@@ -20281,7 +20174,7 @@ async function filesUnder(root, prefix = "") {
   return result2.sort();
 }
 async function readJson(root, path) {
-  return object3(JSON.parse(await readFile7(join10(root, relativePath(path)), "utf8")), path);
+  return object3(JSON.parse(await readFile6(join9(root, relativePath(path)), "utf8")), path);
 }
 function snapshotPath(sessionId, sn) {
   const name = relativePath(sn.fileName);
@@ -20329,7 +20222,7 @@ async function analyze(root, options2, files) {
   relativePath(options2.sessionId);
   const journalPath = "state/journal/events.jsonl";
   if (!files.includes(journalPath)) throw new Error("missing original state/journal/events.jsonl");
-  const events = (await readFile7(join10(root, journalPath), "utf8")).split("\n").filter((l) => l.trim()).map((l, i) => object3(JSON.parse(l), `journal line ${i + 1}`));
+  const events = (await readFile6(join9(root, journalPath), "utf8")).split("\n").filter((l) => l.trim()).map((l, i) => object3(JSON.parse(l), `journal line ${i + 1}`));
   const starts = /* @__PURE__ */ new Map(), completions = /* @__PURE__ */ new Map(), refusals = /* @__PURE__ */ new Map();
   const actionRecords = /* @__PURE__ */ new Map();
   const findings = [];
@@ -20368,7 +20261,7 @@ async function analyze(root, options2, files) {
     if (event.attemptId !== start.attemptId) throw new Error(`snapshot attempt mismatch: ${id2}`);
     if (sn.role === "before" && !plan.capturesBefore || sn.role === "after" && (!plan.capturesAfter || plan.capturesAfter.afterIntervalMs !== sn.declaredAfterIntervalMs)) throw new Error(`snapshot contradicts declared plan: ${id2}`);
     if (!files.includes(path)) throw new Error(`missing captured original: ${path}`);
-    const bytes = await readFile7(join10(root, path));
+    const bytes = await readFile6(join9(root, path));
     if (bytes.length !== sn.bytes || hash2(bytes) !== sn.sha256) throw new Error(`capture integrity mismatch: ${path}`);
     const artifact = {
       path,
@@ -20423,7 +20316,7 @@ async function analyze(root, options2, files) {
   }
   const hostRecords = events.filter((e) => e.kind === "annotation" && e.annotationType === "routing-decision");
   for (const path of files.filter((p) => p.startsWith("host/") && /\.jsonl?$/.test(p))) {
-    const raw = await readFile7(join10(root, path), "utf8");
+    const raw = await readFile6(join9(root, path), "utf8");
     for (const value of path.endsWith(".jsonl") ? raw.split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l)) : [JSON.parse(raw)]) {
       if (value && typeof value === "object") hostRecords.push(value);
     }
@@ -20516,7 +20409,6 @@ Original subprocess/action evidence (not an authoritative input-success verdict)
     const stepId = `diagnostic-${executionId}`;
     if (used.has(stepId)) throw new Error(`duplicate diagnostic review step: ${stepId}`);
     used.add(stepId);
-    findings.push(`diagnostic ${executionId} has command evidence only; screenshots were not requested`);
     details.set(stepId, {
       at: typeof request?.at === "string" ? request.at : void 0,
       ...Array.isArray(request?.argv) && request.argv.every((w) => typeof w === "string") ? { argv: request.argv } : {},
@@ -20538,57 +20430,60 @@ Original subprocess/action evidence (not an authoritative input-success verdict)
   }
   if (events.some((e) => ["evidence-failure", "capture-status", "resource-stop"].includes(e.kind) && ["incomplete", "uncertain"].includes(e.state))) findings.push("journal records incomplete evidence or a resource stop");
   if (files.some((p) => p.startsWith("state/snapshots/") && p.endsWith(".part"))) findings.push("unfinished snapshot originals retained");
-  for (const request of hostRecords.filter((h) => typeof h.because === "string" && typeof h.executionId === "string")) {
+  for (const request of hostRecords.filter((h) => typeof h.because === "string" && typeof h.executionId === "string" && !diagnostics.has(h.executionId))) {
     if (![...starts.values()].some((s) => s.executionId === request.executionId) && !events.some((e) => e.kind === "execution-completion" && e.executionId === request.executionId) && !receipts.some((r) => r.executionId === request.executionId && r.outcome?.kind === "refused")) {
       findings.push(`request ${request.executionId} has no retained guest execution`);
     }
   }
-  const completeness = findings.length ? "incomplete" : "complete";
-  const snapshotReasons = findings.map((finding) => explainFinding(finding, steps, stepsByExecution));
+  const bearing = (finding) => /^action \S+ (has no retained start or refusal|is missing reverse snapshot reference |has no materialized action record|lacks durable reverse snapshot references)/.test(finding) ? "defects" : /^request \S+ has no retained guest execution$/.test(finding) ? "execution" : "snapshots";
+  const explained = (key) => findings.filter((f) => bearing(f) === key).map((finding) => explainFinding(finding, steps, stepsByExecution));
+  const snapshotReasons = explained("snapshots"), unexecuted = explained("execution"), defectReasons = explained("defects");
+  const completeness = snapshotReasons.length ? "incomplete" : "complete";
   const receiptFailed = receipts.some((r) => ["refused", "failed"].includes(receiptOutcome(r)));
   const receiptUncertain = receipts.some((r) => receiptOutcome(r) === "uncertain");
-  const execution = receiptFailed || steps.some((s) => s.execution === "failed" || s.execution === "refused") ? "failed" : receiptUncertain || !steps.length || completeness === "incomplete" || steps.some((s) => s.execution !== "completed") ? "uncertain" : "passed";
+  const execution = receiptFailed || steps.some((s) => s.execution === "failed" || s.execution === "refused") ? "failed" : receiptUncertain || !steps.length || unexecuted.length || steps.some((s) => s.execution !== "completed") ? "uncertain" : "passed";
   if (receiptFailed) findings.push("retained execution receipt reports refusal or failure");
   if (receiptUncertain) findings.push("retained execution receipt reports uncertainty");
   const failedSteps = steps.filter((s) => s.execution === "failed" || s.execution === "refused").map((s) => s.id);
   const unsettled = steps.filter((s) => !["completed", "failed", "refused"].includes(s.execution)).map((s) => s.id);
   const receiptSteps = (outcomes) => [...new Set(receipts.filter((r) => outcomes.includes(receiptOutcome(r))).flatMap((r) => [...stepsByExecution.get(r.executionId) ?? [], ...steps.filter((s) => s.actionId === r.actionId).map((s) => s.id)]))];
+  const rerun = "Look for its effect in the next step's before snapshot, or run the task again.";
   const executionReasons = execution === "passed" ? [] : [
-    ...failedSteps.length ? [{ text: "The guest refused or failed these steps.", stepIds: failedSteps }] : [],
-    ...receiptFailed ? [{ text: "A retained receipt reports that the guest refused or failed an execution.", stepIds: receiptSteps(["refused", "failed"]) }] : [],
-    ...execution === "uncertain" && receiptUncertain ? [{ text: "A retained receipt cannot confirm whether the guest ran an execution, for example because the connection was lost.", stepIds: receiptSteps(["uncertain"]) }] : [],
-    ...execution === "uncertain" && !steps.length ? [{ text: "The package holds no steps, so there is nothing whose execution could be confirmed.", stepIds: [] }] : [],
-    ...execution === "uncertain" && completeness === "incomplete" ? [{ text: "Snapshot evidence is incomplete, so the relay does not confirm the run as a whole, even when every step reports completed. See why snapshots are incomplete.", stepIds: [] }] : [],
-    ...execution === "uncertain" && unsettled.length ? [{ text: "These steps did not report a final execution outcome.", stepIds: unsettled }] : []
+    ...failedSteps.length ? [{ text: "The guest refused or failed these steps.", stepIds: failedSteps, action: "Open each step to read what the guest reported, correct the cause, and run the task again." }] : [],
+    ...receiptFailed ? [{ text: "A retained receipt reports that the guest refused or failed an execution.", stepIds: receiptSteps(["refused", "failed"]), action: "Open the step to read the receipt, correct the cause, and run the task again." }] : [],
+    ...execution === "uncertain" && receiptUncertain ? [{ text: "A retained receipt cannot confirm whether the guest ran an execution, for example because the connection was lost.", stepIds: receiptSteps(["uncertain"]), action: rerun }] : [],
+    ...execution === "uncertain" && !steps.length ? [{ text: "The package holds no steps, so there is nothing whose execution could be confirmed.", stepIds: [], action: "Run the task again; this run recorded nothing." }] : [],
+    ...execution === "uncertain" ? unexecuted : [],
+    ...execution === "uncertain" && unsettled.length ? [{ text: "The relay cannot confirm these steps' outcomes: they reported none, or they lack the snapshots that would show it.", stepIds: unsettled, action: "Look for each step's effect in the next step's before snapshot, or run the task again." }] : []
   ];
   const outputs = [];
-  for (const path of files.filter((p) => p.startsWith("extractions/")).sort()) outputs.push({ path, bytes: (await lstat4(join10(root, path))).size });
-  return { snapshots: snapshots2, steps, incompleteGroups, findings, completeness, execution, details, outputs, reasons: { snapshots: snapshotReasons, execution: executionReasons } };
+  for (const path of files.filter((p) => p.startsWith("extractions/")).sort()) outputs.push({ path, bytes: (await lstat4(join9(root, path))).size });
+  return { snapshots: snapshots2, steps, incompleteGroups, findings, completeness, execution, details, outputs, reasons: { snapshots: snapshotReasons, execution: executionReasons, defects: defectReasons } };
 }
 function explainFinding(finding, steps, byExecution) {
   const ofAction = (id2) => steps.filter((s) => s.actionId === id2).map((s) => s.id);
   const ofExecution = (id2) => byExecution.get(id2) ?? [];
-  const execution = (ids) => steps.find((s) => s.id === ids[0])?.execution ?? "unknown";
+  const checkStep = "Check the step another way, by its output or the next step's before snapshot, or run the task again.";
+  const checkRun = "Check the steps around it by their output, or run the task again.";
+  const report = "Nothing in this review depends on it. Report it as an mcp-vm-relay issue, with this package.";
   const rules = [
-    [/^diagnostic (\S+) has command evidence only; screenshots were not requested$/, (m) => ({
-      stepIds: ofExecution(m[1]),
-      text: "This diagnostic command ran without screenshots, as diagnostics do. The relay still counts every step without screenshots as missing snapshot evidence."
-    })],
     [/^request (\S+) has no retained guest execution$/, (m) => ({
       stepIds: ofExecution(m[1]),
-      text: `The relay asked the guest to run this step, but the guest's event journal holds no record that it started or finished. Only its receipt, which reads "${execution(ofExecution(m[1]))}", shows that it ran.`
+      text: "The relay sent a request that the guest's event journal never recorded starting or finishing, so whether it ran is unknown.",
+      action: "Look for its effect in the next step's before snapshot, or run the task again."
     })],
-    [/^action (\S+) has no retained start or refusal$/, (m) => ({ stepIds: ofAction(m[1]), text: "The package holds this action's record, but no record that the guest started or refused it." })],
-    [/^action (\S+) is missing reverse snapshot reference (.+)$/, (m) => ({ stepIds: ofAction(m[1]), text: `The snapshot ${m[2]} was taken for this action, but the action's record does not refer back to it.` })],
-    [/^action (\S+) lacks its declared causal pair$/, (m) => ({ stepIds: ofAction(m[1]), text: "This action's before or after snapshot is missing." })],
-    [/^action (\S+) has no materialized action record$/, (m) => ({ stepIds: ofAction(m[1]), text: "This action started, but its action record was never written." })],
-    [/^action (\S+) lacks durable reverse snapshot references$/, (m) => ({ stepIds: ofAction(m[1]), text: "This action's snapshots exist, but the guest's event journal does not tie them to it." })],
+    [/^action (\S+) lacks its declared causal pair$/, (m) => ({ stepIds: ofAction(m[1]), text: "This action's before or after snapshot is missing.", action: checkStep })],
     [/^coalescing group (\S+) lacks a complete consecutive first\/member\/last causal pair$/, (m) => ({
       stepIds: steps.filter((s) => s.snapshots?.groupId === m[1]).map((s) => s.id),
-      text: "These steps share one before and after pair of snapshots, and that pair is incomplete."
+      text: "These steps share one before and after pair of snapshots, and that pair is incomplete.",
+      action: checkStep
     })],
-    [/^journal records incomplete evidence or a resource stop$/, () => ({ stepIds: [], text: "The guest's event journal records that evidence capture was incomplete, or that a resource limit stopped it." })],
-    [/^unfinished snapshot originals retained$/, () => ({ stepIds: [], text: "Some snapshots were still being written when the package was assembled." })]
+    [/^journal records incomplete evidence or a resource stop$/, () => ({ stepIds: [], text: "The guest's event journal records that evidence capture was incomplete, or that a resource limit stopped it.", action: checkRun })],
+    [/^unfinished snapshot originals retained$/, () => ({ stepIds: [], text: "Some snapshots were still being written when the package was assembled.", action: checkRun })],
+    [/^action (\S+) has no retained start or refusal$/, (m) => ({ stepIds: ofAction(m[1]), text: "The package holds this action's record, but no record that the guest started or refused it.", action: report })],
+    [/^action (\S+) is missing reverse snapshot reference (.+)$/, (m) => ({ stepIds: ofAction(m[1]), text: `The snapshot ${m[2]} was taken for this action, but the action's record does not refer back to it.`, action: report })],
+    [/^action (\S+) has no materialized action record$/, (m) => ({ stepIds: ofAction(m[1]), text: "This action started, but its action record was never written.", action: report })],
+    [/^action (\S+) lacks durable reverse snapshot references$/, (m) => ({ stepIds: ofAction(m[1]), text: "This action's snapshots exist, but the guest's event journal does not tie them to it.", action: report })]
   ];
   for (const [pattern, explain] of rules) {
     const m = pattern.exec(finding);
@@ -20596,18 +20491,8 @@ function explainFinding(finding, steps, byExecution) {
   }
   return { stepIds: [], text: finding.replace(/^./, (c) => c.toUpperCase()) };
 }
-function summary(options2, a) {
-  return { formatVersion: 1, ...options2, snapshots: a.completeness, execution: a.execution, findings: a.findings };
-}
-function legacySummary(options2, a) {
-  return { formatVersion: 1, ...options2, snapshots: a.completeness, execution: a.execution, humanReview: "pending", findings: a.findings };
-}
 function result(root, a) {
-  return { manifestPath: join10(root, "manifest.json"), deliveryVerified: true, snapshots: a.completeness, execution: a.execution, findings: a.findings };
-}
-async function buildReview(root, a) {
-  const trajectory = await buildTrajectory(root, { steps: [...a.steps], execution: a.execution });
-  return { ...trajectory, steps: a.steps, outcomes: { ...trajectory.outcomes, recording: a.completeness } };
+  return { manifestPath: join9(root, "manifest.json"), deliveryVerified: true, snapshots: a.completeness, execution: a.execution, findings: a.findings };
 }
 async function deliveredPackageRun(rootDir) {
   const root = await rootPath(rootDir), m = await readJson(root, "manifest.json");
@@ -20615,13 +20500,13 @@ async function deliveredPackageRun(rootDir) {
   const times = [...(await analyze(root, options2, await filesUnder(root))).details.values()].map((d) => Date.parse(d.at ?? "")).filter(Number.isFinite);
   return { taskId: options2.taskId, startedAt: times.length ? new Date(Math.min(...times)).toISOString() : text(m.createdAt, "creation time") };
 }
-var listedFiles = ["manifest.json", "summary.json", "trajectory.json"];
+var listedFiles = ["manifest.json", "OPENING.txt", "summary.json", "trajectory.json", "walkthrough.json"];
 async function reviewData(rootDir) {
   const root = await rootPath(rootDir), m = await readJson(root, "manifest.json"), files = await filesUnder(root);
   const options2 = { packageId: text(m.packageId, "package id"), sessionId: text(m.sessionId, "session id"), taskId: text(m.taskId, "task id") };
   const a = await analyze(root, options2, files);
   const listed = [];
-  for (const path of listedFiles.filter((p) => files.includes(p))) listed.push({ path, bytes: (await lstat4(join10(root, path))).size });
+  for (const path of listedFiles.filter((p) => files.includes(p))) listed.push({ path, bytes: (await lstat4(join9(root, path))).size });
   return {
     ...options2,
     completeness: a.completeness,
@@ -20641,37 +20526,30 @@ async function deliverPackage(rootDir, options2) {
     if (existing.packageId !== options2.packageId || existing.sessionId !== options2.sessionId || existing.taskId !== options2.taskId) throw new Error("existing package identity mismatch");
     return verifyDeliveredPackage(root);
   }
-  for (const path of files) if (generated.has(path)) throw new Error(`reserved package output already exists: ${path}`);
+  for (const path of files) if (generated.includes(path)) throw new Error(`reserved package output already exists: ${path}`);
   const a = await analyze(root, options2, files);
   const created = [];
   const save = async (path, contents) => {
-    await mkdir5(dirname6(join10(root, path)), { recursive: true });
-    await writeFile3(join10(root, path), contents, { flag: "wx" });
+    await mkdir5(dirname6(join9(root, path)), { recursive: true });
+    await writeFile3(join9(root, path), contents, { flag: "wx" });
     created.push(path);
   };
   try {
-    await save("journal/session-events.jsonl", await readFile7(join10(root, "state/journal/events.jsonl")));
-    const build = async () => {
-      const all = await filesUnder(root), snapshotPaths = new Set(a.snapshots.map((s) => s.path));
-      return buildManifest({
-        ...options2,
-        rootDir: root,
-        media: [],
-        segments: [],
-        attempts: [],
-        snapshots: a.snapshots.map((s) => ({ ...s, absolutePath: join10(root, s.path), packagePath: s.path })),
-        attachments: all.filter((p) => p.startsWith("extractions/")).map((p) => ({ absolutePath: join10(root, p), packagePath: p, declaredType: "declared-extraction" })),
-        records: all.filter((p) => p !== "manifest.json" && !snapshotPaths.has(p) && !p.startsWith("extractions/")).map((p) => ({ absolutePath: join10(root, p), packagePath: p }))
-      });
-    };
-    await save("summary.json", json(summary(options2, a)));
-    await save("OPENING.txt", "Review this package with the relay's trajectory review command: /mcp-vm-relay:trajectory <this directory> in Claude Code, /mcp-vm-relay-trajectory <this directory> in pi, or the relay_trajectory tool. It verifies the package and opens the review app on it in the browser. Snapshot completeness and execution are separate verdicts, and the page explains each one that is not complete or passed. Originals are under state/, host metadata under host/, and declared extractions under extractions/. manifest.json checksums every artifact except itself.\n");
-    await save("manifest.json", json(await build()));
-    await save("trajectory.json", json(await buildReview(root, a)));
-    await writeFile3(join10(root, "manifest.json"), json(await build()));
+    await save("OPENING.txt", "Review this package with the relay's trajectory review command: /mcp-vm-relay:trajectory <this directory> in Claude Code, /mcp-vm-relay-trajectory <this directory> in pi, or the relay_trajectory tool. It verifies the package and opens the review app on it in the browser; the steps and verdicts are derived from the evidence when you review it. Snapshot completeness and execution are separate verdicts, and the page says why each one is not complete or passed and what you can do. Originals are under state/, host metadata under host/, and declared extractions under extractions/. manifest.json checksums every artifact except itself.\n");
+    const snapshotPaths = new Set(a.snapshots.map((s) => s.path)), all = await filesUnder(root);
+    await save("manifest.json", json(await buildManifest({
+      ...options2,
+      rootDir: root,
+      media: [],
+      segments: [],
+      attempts: [],
+      snapshots: a.snapshots.map((s) => ({ ...s, absolutePath: join9(root, s.path), packagePath: s.path })),
+      attachments: all.filter((p) => p.startsWith("extractions/")).map((p) => ({ absolutePath: join9(root, p), packagePath: p, declaredType: "declared-extraction" })),
+      records: all.filter((p) => p !== "manifest.json" && !snapshotPaths.has(p) && !p.startsWith("extractions/")).map((p) => ({ absolutePath: join9(root, p), packagePath: p }))
+    })));
     return await verifyDeliveredPackage(root);
   } catch (error2) {
-    for (const path of created.reverse()) await rm2(join10(root, path), { force: true });
+    for (const path of created.reverse()) await rm2(join9(root, path), { force: true });
     throw error2;
   }
 }
@@ -20688,14 +20566,11 @@ async function verifyDeliveredPackage(rootDir) {
     seen.add(path);
     if (!files.includes(path)) throw new Error(`missing artifact: ${path}`);
     if (!Number.isSafeInteger(artifact.bytes) || artifact.bytes < 0 || typeof artifact.sha256 !== "string" || !/^[a-f0-9]{64}$/.test(artifact.sha256)) throw new Error(`invalid manifest integrity metadata: ${path}`);
-    const bytes = await readFile7(join10(root, path));
+    const bytes = await readFile6(join9(root, path));
     if (bytes.length !== artifact.bytes || hash2(bytes) !== artifact.sha256) throw new Error(`artifact integrity mismatch: ${path}`);
   }
   for (const path of files) if (path !== "manifest.json" && !seen.has(path)) throw new Error(`unmanifested artifact: ${path}`);
-  for (const required2 of generated) {
-    if (required2 === "manifest.json") continue;
-    if (required2 === "trajectory.json" ? !seen.has(required2) && !seen.has(legacyTrajectoryFile) : !seen.has(required2)) throw new Error(`missing required package output: ${required2}`);
-  }
+  if (!seen.has("OPENING.txt")) throw new Error("missing required package output: OPENING.txt");
   const options2 = { packageId: manifest.packageId, sessionId: manifest.sessionId, taskId: manifest.taskId };
   const a = await analyze(root, options2, files);
   const expectedAttachments = files.filter((p) => p.startsWith("extractions/")).sort();
@@ -20706,11 +20581,6 @@ async function verifyDeliveredPackage(rootDir) {
     const actual = actualSnapshots.find((s) => s.path === sn.path);
     if (!actual || actual.actionId !== sn.actionId || actual.groupId !== sn.groupId || actual.provenance !== "dispatch-captured" || !sameRef(actual, sn)) throw new Error(`snapshot provenance mismatch: ${sn.path}`);
   }
-  if (!(await readFile7(join10(root, "state/journal/events.jsonl"))).equals(await readFile7(join10(root, "journal/session-events.jsonl")))) throw new Error("trajectory journal differs from original");
-  const summaryText = await readFile7(join10(root, "summary.json"), "utf8");
-  if (summaryText !== json(summary(options2, a)) && summaryText !== json(legacySummary(options2, a))) throw new Error("summary disagrees with original evidence");
-  const trajectoryFile = !files.includes("trajectory.json") && files.includes(legacyTrajectoryFile) ? legacyTrajectoryFile : "trajectory.json";
-  if (await readFile7(join10(root, trajectoryFile), "utf8") !== json(await buildReview(root, a))) throw new Error("trajectory disagrees with original evidence");
   const acceptance = await verifyPackage(manifest, root);
   const errors = acceptance.findings.filter((f) => f.code !== "ok" && !(f.code === "state-inconsistent" && [...a.incompleteGroups].some((g) => f.detail === `group ${g} does not carry exactly one before/after pair`)));
   if (errors.length) throw new Error(`package verification failed: ${errors.map((e) => e.detail).join("; ")}`);
@@ -28554,8 +28424,8 @@ function searchCatalog(value, query) {
 
 // src/search-diagnostics.ts
 import { randomUUID as randomUUID4 } from "node:crypto";
-import { lstat as lstat5, mkdir as mkdir6, readdir as readdir5, readFile as readFile8, unlink as unlink2 } from "node:fs/promises";
-import { join as join11, resolve as resolve7, parse as parse5 } from "node:path";
+import { lstat as lstat5, mkdir as mkdir6, readdir as readdir4, readFile as readFile7, unlink as unlink2 } from "node:fs/promises";
+import { join as join10, resolve as resolve7, parse as parse5 } from "node:path";
 var common = {
   schemaVersion: typebox_exports.Literal(1),
   id: typebox_exports.String({ pattern: "^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$" }),
@@ -28586,7 +28456,7 @@ async function privateDirectory(path) {
   const absolute2 = resolve7(path);
   let current = parse5(absolute2).root;
   for (const part of absolute2.slice(current.length).split("/").filter(Boolean)) {
-    current = join11(current, part);
+    current = join10(current, part);
     try {
       await mkdir6(current, { mode: 448 });
     } catch (e) {
@@ -28599,7 +28469,7 @@ async function privateDirectory(path) {
   if ((info.mode & 63) !== 0 || process.getuid && info.uid !== process.getuid()) throw new Error("Search diagnostic directory must be private and owned by this user");
 }
 async function recordSearch(root, query, outcome, options2 = {}) {
-  const directory2 = join11(root, "search-diagnostics");
+  const directory2 = join10(root, "search-diagnostics");
   await privateDirectory(root);
   await privateDirectory(directory2);
   const now = options2.now ?? /* @__PURE__ */ new Date();
@@ -28625,13 +28495,13 @@ async function recordSearch(root, query, outcome, options2 = {}) {
   } else Object.assign(record3, { status: "error", error: "Application discovery failed; inspect the tool failure for details." });
   if (!validDiagnostic(record3)) throw new Error("Invalid search diagnostic record");
   if (Buffer.byteLength(JSON.stringify(record3, null, 2)) > 16384) throw new Error("Search diagnostic exceeds record limit");
-  const entries = await readdir5(directory2);
+  const entries = await readdir4(directory2);
   const existing = [];
   for (const name of entries) {
     if (!RECORD.test(name)) throw new Error("Unrecognized search diagnostic entry");
-    const path2 = join11(directory2, name), info = await lstat5(path2);
+    const path2 = join10(directory2, name), info = await lstat5(path2);
     if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1 || info.size > 16384 || (info.mode & 63) !== 0 || process.getuid && info.uid !== process.getuid()) throw new Error("Unsafe search diagnostic record");
-    const previous = JSON.parse(await readFile8(path2, "utf8"));
+    const previous = JSON.parse(await readFile7(path2, "utf8"));
     const at = Date.parse(previous.at);
     if (!validDiagnostic(previous) || !Number.isFinite(at) || new Date(at).toISOString() !== previous.at || previous.query.name !== normalizeSearchName(previous.query.name) || name !== `${previous.at.replace(/:/g, "-")}-${previous.id}.json`) throw new Error("Invalid search diagnostic record");
     existing.push({ name, at });
@@ -28639,9 +28509,9 @@ async function recordSearch(root, query, outcome, options2 = {}) {
   existing.sort((a, b) => a.at - b.at || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   const cutoff = now.getTime() - 30 * 864e5;
   while (existing.length && (existing.length >= 256 || existing[0].at < cutoff)) {
-    await unlink2(join11(directory2, existing.shift().name));
+    await unlink2(join10(directory2, existing.shift().name));
   }
-  const path = join11(directory2, `${now.toISOString().replace(/:/g, "-")}-${id2}.json`);
+  const path = join10(directory2, `${now.toISOString().replace(/:/g, "-")}-${id2}.json`);
   await jsonFile(path, record3);
   return { path, id: id2 };
 }
@@ -28699,9 +28569,9 @@ function acquisitionCapabilities(value) {
 }
 
 // src/images.ts
-import { mkdir as mkdir7, lstat as lstat6, open as open6, readdir as readdir6, rm as rm3 } from "node:fs/promises";
+import { mkdir as mkdir7, lstat as lstat6, open as open6, readdir as readdir5, rm as rm3 } from "node:fs/promises";
 import { constants as constants4, linkSync as linkSync2 } from "node:fs";
-import { join as join12, dirname as dirname7, extname } from "node:path";
+import { join as join11, dirname as dirname7, extname } from "node:path";
 import { randomUUID as randomUUID5 } from "node:crypto";
 
 // src/image-presentation.ts
@@ -29254,7 +29124,7 @@ async function publish(root, path, bytes, signal) {
   await mkdir7(dirname7(path), { recursive: true, mode: 448 });
   await hostPath(root, path, true);
   guard(signal);
-  const temporary = join12(dirname7(path), `.image-${randomUUID5()}.tmp`);
+  const temporary = join11(dirname7(path), `.image-${randomUUID5()}.tmp`);
   const fd = await open6(temporary, "wx", 384);
   try {
     try {
@@ -29297,14 +29167,14 @@ var ImageStore = class {
   }
   get recordings() {
     const o = this.options;
-    return [...o.previousEvidence ?? [], ...o.sessionId ? [{ path: o.hostRoot, sessionId: o.sessionId, guestState: join12(o.guestRoot, "state") }] : []];
+    return [...o.previousEvidence ?? [], ...o.sessionId ? [{ path: o.hostRoot, sessionId: o.sessionId, guestState: join11(o.guestRoot, "state") }] : []];
   }
   identity(descriptor, fileName) {
     return `image-${hash(canonical([this.binding, descriptor, fileName ?? null]))}`;
   }
   async load(id2, signal) {
     if (!/^image-[a-f0-9]{64}$/.test(id2)) fail("unauthorized-reference", "Image reference is not authorized for this enclosure.");
-    const record3 = await optional2(() => readMetadata(this.options.catalogRoot, join12(this.options.catalogRoot, `${id2}.json`), signal));
+    const record3 = await optional2(() => readMetadata(this.options.catalogRoot, join11(this.options.catalogRoot, `${id2}.json`), signal));
     if (!record3 || record3.binding !== this.binding || record3.descriptor?.imageId !== id2 || record3.descriptor?.enclosure !== this.options.enclosure) fail("unauthorized-reference", "Image reference is not authorized for this enclosure.");
     if (Object.keys(record3).some((k) => !["binding", "descriptor", "fileName", "recording", "remote", "approvedRoot", "local"].includes(k))) fail("integrity-failed", "Invalid image catalogue schema.");
     const d = record3.descriptor;
@@ -29313,43 +29183,43 @@ var ImageStore = class {
     const { imageId: _id, ...descriptor } = d;
     if (this.identity(descriptor, record3.fileName) !== id2) fail("integrity-failed", "Image catalogue identity has changed.");
     const root = [this.options.hostRoot, ...this.recordings.map((r) => r.path)].find((p) => p === record3.recording);
-    if (!root || record3.local !== join12(root, "host", "images", id2, `original${extension(d.mimeType)}`)) fail("integrity-failed", "Stored image association is invalid.");
+    if (!root || record3.local !== join11(root, "host", "images", id2, `original${extension(d.mimeType)}`)) fail("integrity-failed", "Stored image association is invalid.");
     if (d.source === "application") {
       if (record3.fileName !== void 0 || typeof d.name !== "string" || d.path !== void 0 && typeof d.path !== "string") fail("integrity-failed", "Stored application identity is invalid.");
       const declaration = this.options.declarations.find((item) => item.name === d.name);
       if (!declaration) fail("unauthorized-reference", "Application image declaration is unavailable.");
       let remote;
       try {
-        const declared = within(join12(this.options.guestRoot, "workspace"), declaration.path);
+        const declared = within(join11(this.options.guestRoot, "workspace"), declaration.path);
         remote = d.path === void 0 ? declared : within(declared, d.path);
       } catch {
         fail("integrity-failed", "Stored application selection is invalid.");
       }
-      if (record3.remote !== remote || record3.approvedRoot !== join12(this.options.guestRoot, "workspace")) fail("integrity-failed", "Stored application selection is invalid.");
+      if (record3.remote !== remote || record3.approvedRoot !== join11(this.options.guestRoot, "workspace")) fail("integrity-failed", "Stored application selection is invalid.");
     } else if (d.source === "display") {
       const recording = this.recordings.find((r) => r.sessionId === d.sessionId && r.path === root);
       if (!recording || !safeId2(d.sessionId) || !safeId2(d.executionId) || !safeId2(d.actionId) || d.stepId !== void 0 && !safeId2(d.stepId) || d.groupId !== void 0 && !safeId2(d.groupId) || !["before", "after"].includes(d.phase) || typeof d.capturedAt !== "string" || !Number.isFinite(Date.parse(d.capturedAt)) || d.mimeType !== "image/png" || !safeCapture(record3.fileName)) fail("integrity-failed", "Stored display identity is invalid.");
-      const originalState = join12(this.options.guestRoot, "state");
-      if (![originalState, recording.guestState].filter(Boolean).includes(record3.approvedRoot) || record3.remote !== join12(record3.approvedRoot, "snapshots", recording.sessionId, record3.fileName)) fail("integrity-failed", "Stored display path is invalid.");
+      const originalState = join11(this.options.guestRoot, "state");
+      if (![originalState, recording.guestState].filter(Boolean).includes(record3.approvedRoot) || record3.remote !== join11(record3.approvedRoot, "snapshots", recording.sessionId, record3.fileName)) fail("integrity-failed", "Stored display path is invalid.");
       if (recording.guestState) {
         record3.approvedRoot = recording.guestState;
-        record3.remote = join12(recording.guestState, "snapshots", recording.sessionId, record3.fileName);
+        record3.remote = join11(recording.guestState, "snapshots", recording.sessionId, record3.fileName);
       }
     } else fail("integrity-failed", "Unknown image source.");
     return record3;
   }
   async register(descriptor, recording, remote, approvedRoot, options2, fileName) {
     const imageId = this.identity(descriptor, fileName);
-    const existing = await optional2(() => readBounded(this.options.catalogRoot, join12(this.options.catalogRoot, `${imageId}.json`), MAX_METADATA, options2.signal));
+    const existing = await optional2(() => readBounded(this.options.catalogRoot, join11(this.options.catalogRoot, `${imageId}.json`), MAX_METADATA, options2.signal));
     if (existing) return this.load(imageId, options2.signal);
-    const record3 = { descriptor: { ...descriptor, imageId }, ...fileName ? { fileName } : {}, recording, remote, approvedRoot, local: join12(recording, "host", "images", imageId, `original${extension(descriptor.mimeType)}`) };
-    await publish(this.options.catalogRoot, join12(this.options.catalogRoot, `${imageId}.json`), Buffer.from(canonical({ ...record3, binding: this.binding })), options2.signal);
+    const record3 = { descriptor: { ...descriptor, imageId }, ...fileName ? { fileName } : {}, recording, remote, approvedRoot, local: join11(recording, "host", "images", imageId, `original${extension(descriptor.mimeType)}`) };
+    await publish(this.options.catalogRoot, join11(this.options.catalogRoot, `${imageId}.json`), Buffer.from(canonical({ ...record3, binding: this.binding })), options2.signal);
     return record3;
   }
   async metadata(relative6, recording, options2, extraPaths = []) {
-    const cached2 = join12(recording.path, "host", "image-evidence", relative6);
+    const cached2 = join11(recording.path, "host", "image-evidence", relative6);
     let local;
-    for (const path2 of [...extraPaths, join12(recording.path, "state", relative6), cached2]) {
+    for (const path2 of [...extraPaths, join11(recording.path, "state", relative6), cached2]) {
       const value2 = await optional2(() => readMetadata(recording.path, path2, options2.signal));
       if (value2 !== void 0) {
         if (local !== void 0 && canonical(local) !== canonical(value2)) fail("integrity-failed", "Retained image metadata conflicts.");
@@ -29360,8 +29230,8 @@ var ImageStore = class {
     if (!recording.guestState) fail("capture-unknown", "This recording has no available retained metadata or supported guest evidence location.");
     await this.options.ensureGuest(options2.signal, options2.deadline);
     guard(options2.signal);
-    const path = join12(recording.path, "host", "image-metadata", randomUUID5(), "metadata.json");
-    const bytes = await this.options.transfer.pullImageMetadata(join12(recording.guestState, relative6), path, recording.guestState, recording.path, options2);
+    const path = join11(recording.path, "host", "image-metadata", randomUUID5(), "metadata.json");
+    const bytes = await this.options.transfer.pullImageMetadata(join11(recording.guestState, relative6), path, recording.guestState, recording.path, options2);
     guard(options2.signal);
     if (bytes.length > MAX_METADATA) fail("integrity-failed", "Image metadata exceeds its bound.");
     const value = parseMetadata(bytes);
@@ -29389,9 +29259,9 @@ var ImageStore = class {
     return true;
   }
   async corroborateJournal(recording, request, sn, options2) {
-    const cached2 = join12(recording.path, "host", "image-evidence", "journals", `${sn.actionId}.jsonl`);
+    const cached2 = join11(recording.path, "host", "image-evidence", "journals", `${sn.actionId}.jsonl`);
     let corroborated = false;
-    for (const path of [join12(recording.path, "state", "journal", "events.jsonl"), cached2]) {
+    for (const path of [join11(recording.path, "state", "journal", "events.jsonl"), cached2]) {
       const bytes2 = await optional2(() => readBounded(recording.path, path, MAX_METADATA, options2.signal));
       if (bytes2 && this.journalCorroborates(bytes2, request, sn)) corroborated = true;
     }
@@ -29399,10 +29269,10 @@ var ImageStore = class {
     if (!recording.guestState) fail("integrity-failed", "Missing reverse references have no available corroborating capture journal.");
     await this.options.ensureGuest(options2.signal, options2.deadline);
     guard(options2.signal);
-    const local = join12(recording.path, "host", "image-metadata", randomUUID5(), "journal.jsonl");
+    const local = join11(recording.path, "host", "image-metadata", randomUUID5(), "journal.jsonl");
     let bytes;
     try {
-      bytes = await this.options.transfer.pullImageMetadata(join12(recording.guestState, "journal", "events.jsonl"), local, recording.guestState, recording.path, { ...options2, metadataFormat: "jsonl" });
+      bytes = await this.options.transfer.pullImageMetadata(join11(recording.guestState, "journal", "events.jsonl"), local, recording.guestState, recording.path, { ...options2, metadataFormat: "jsonl" });
     } catch (error2) {
       if (error2.code === "image-missing") fail("integrity-failed", "Missing reverse references have no authoritative capture journal.");
       throw error2;
@@ -29422,13 +29292,13 @@ var ImageStore = class {
     if (!safeId2(target2.sessionId) || !safeId2(target2.executionId) || !["before", "after"].includes(target2.phase)) fail("unauthorized-reference", "Invalid display identity.");
     const recording = this.recordings.find((r) => r.sessionId === target2.sessionId);
     if (!recording) fail("unauthorized-reference", "Recording does not belong to this enclosure.");
-    const request = await optional2(() => readMetadata(recording.path, join12(recording.path, "host", "requests", `${target2.executionId}.json`), options2.signal));
+    const request = await optional2(() => readMetadata(recording.path, join11(recording.path, "host", "requests", `${target2.executionId}.json`), options2.signal));
     if (!request) fail("unauthorized-reference", "Execution does not belong to this enclosure.");
     if (request.sessionId !== target2.sessionId || request.executionId !== target2.executionId) fail("integrity-failed", "Execution identity does not match its recording.");
     const group = request.snapshots?.group;
     const requested = !request.diagnostic && (target2.phase === "before" ? !group || group.phase === "first" : !group || group.phase === "last");
     if (!requested) return { status: "not-requested", diagnostic: "The declared snapshot plan does not capture this phase." };
-    const receipt = await this.metadata(join12("receiver", "receipts", `${target2.executionId}.json`), recording, options2, [join12(recording.path, "host", "receiver-receipts", `${target2.executionId}.json`)]);
+    const receipt = await this.metadata(join11("receiver", "receipts", `${target2.executionId}.json`), recording, options2, [join11(recording.path, "host", "receiver-receipts", `${target2.executionId}.json`)]);
     if (receipt?.executionId !== request.executionId) fail("integrity-failed", "Receipt execution identity mismatch.");
     const evidence = receipt.imageEvidence;
     if (!evidence) return { status: "capture-unknown", diagnostic: "Recording predates saved-image descriptors; no input was replayed." };
@@ -29442,7 +29312,7 @@ var ImageStore = class {
     const sn = matches[0];
     let action;
     try {
-      action = await this.metadata(join12("records", "action", `${sn.actionId}.json`), recording, options2);
+      action = await this.metadata(join11("records", "action", `${sn.actionId}.json`), recording, options2);
     } catch (error2) {
       if (error2.code === "image-missing") fail("integrity-failed", "Receipt cites a missing authoritative action.");
       throw error2;
@@ -29450,13 +29320,13 @@ var ImageStore = class {
     if (!action || action.actionId !== sn.actionId || action.sessionId !== request.sessionId || action.executionId !== request.executionId || action.attemptId !== request.attemptId || action.groupId !== group?.groupId || action.stepId !== request.step?.id || action.snapshotRole !== void 0 && action.snapshotRole !== (group?.phase ?? "single")) fail("integrity-failed", "Saved action identity does not corroborate the image.");
     if (!this.checkReferences(action.snapshots, sn)) await this.corroborateJournal(recording, request, sn, options2);
     const descriptor = { source: "display", enclosure: this.options.enclosure, sessionId: sn.sessionId, executionId: sn.executionId, actionId: sn.actionId, ...sn.stepId ? { stepId: sn.stepId } : {}, phase: sn.phase, capturedAt: sn.capturedAt, ...sn.groupId ? { groupId: sn.groupId } : {}, sha256: sn.sha256, bytes: sn.bytes, mimeType: sn.mimeType };
-    const state = recording.guestState ?? join12(this.options.guestRoot, "state");
-    return this.register(descriptor, recording.path, join12(state, "snapshots", recording.sessionId, sn.fileName), state, options2, sn.fileName);
+    const state = recording.guestState ?? join11(this.options.guestRoot, "state");
+    return this.register(descriptor, recording.path, join11(state, "snapshots", recording.sessionId, sn.fileName), state, options2, sn.fileName);
   }
   async application(target2, options2) {
     const declaration = this.options.declarations.find((d) => d.name === target2.name);
     if (!declaration) fail("unauthorized-reference", "Application image is not declared.");
-    const root = join12(this.options.guestRoot, "workspace");
+    const root = join11(this.options.guestRoot, "workspace");
     let remote;
     try {
       const declared = within(root, declaration.path);
@@ -29477,7 +29347,7 @@ var ImageStore = class {
       return bytes;
     }
     if (record3.descriptor.source === "display") {
-      const path = join12(record3.recording, "state", "snapshots", record3.descriptor.sessionId, record3.fileName);
+      const path = join11(record3.recording, "state", "snapshots", record3.descriptor.sessionId, record3.fileName);
       bytes = await optional2(() => readBounded(record3.recording, path, MAX_IMAGE, options2.signal));
       if (bytes) {
         verifyOriginal(bytes, record3.descriptor);
@@ -29508,7 +29378,7 @@ var ImageStore = class {
         const presentation = await bounded2(() => prepareImage(bytes, record3.descriptor.mimeType), boundedSignal);
         const image = { ...record3.descriptor, originalPath: record3.local, ...record3.descriptor.source === "application" ? { retrievedAt: (/* @__PURE__ */ new Date()).toISOString() } : {} };
         const receipt = { image, presentation: presentation.presentation, at: (/* @__PURE__ */ new Date()).toISOString(), status: "attached" };
-        await publish(record3.recording, join12(record3.recording, "host", "images", record3.descriptor.imageId, `delivery-${randomUUID5()}.json`), Buffer.from(canonical(receipt)), boundedSignal);
+        await publish(record3.recording, join11(record3.recording, "host", "images", record3.descriptor.imageId, `delivery-${randomUUID5()}.json`), Buffer.from(canonical(receipt)), boundedSignal);
         guard(boundedSignal);
         return { status: "attached", image, ...presentation };
       }, boundedSignal);
@@ -29520,7 +29390,7 @@ var ImageStore = class {
   async materializeDisplayOriginals(recordingRoot) {
     if (!this.recordings.some((r) => r.path === recordingRoot)) fail("unauthorized-reference", "Recording does not belong to this enclosure.");
     await hostPath(this.options.catalogRoot, this.options.catalogRoot, true);
-    const names = await optional2(() => readdir6(this.options.catalogRoot)) ?? [];
+    const names = await optional2(() => readdir5(this.options.catalogRoot)) ?? [];
     const pending = [];
     for (const name of names.filter((n) => n.endsWith(".json"))) {
       const record3 = await this.load(name.slice(0, -5));
@@ -29528,7 +29398,7 @@ var ImageStore = class {
       const bytes = await optional2(() => readBounded(record3.recording, record3.local, MAX_IMAGE));
       if (!bytes) continue;
       verifyOriginal(bytes, record3.descriptor);
-      const path = join12(recordingRoot, "state", "snapshots", record3.descriptor.sessionId, record3.fileName);
+      const path = join11(recordingRoot, "state", "snapshots", record3.descriptor.sessionId, record3.fileName);
       const existing = await optional2(() => readBounded(recordingRoot, path, MAX_IMAGE));
       if (existing && !existing.equals(bytes)) fail("integrity-failed", "Canonical snapshot conflicts with the delivered original.");
       if (!existing) pending.push({ path, record: record3 });
@@ -29554,8 +29424,8 @@ function mime(path) {
 
 // src/evidence-merge.ts
 import { constants as constants5 } from "node:fs";
-import { copyFile, lstat as lstat7, mkdir as mkdir8, mkdtemp as mkdtemp2, readFile as readFile9, readdir as readdir7, rename as rename4 } from "node:fs/promises";
-import { dirname as dirname8, isAbsolute as isAbsolute5, join as join13, parse as parse6, relative as relative5, resolve as resolve8 } from "node:path";
+import { copyFile, lstat as lstat7, mkdir as mkdir8, mkdtemp as mkdtemp2, readFile as readFile8, readdir as readdir6, rename as rename4 } from "node:fs/promises";
+import { dirname as dirname8, isAbsolute as isAbsolute5, join as join12, parse as parse6, relative as relative5, resolve as resolve8 } from "node:path";
 function safePath(value) {
   if (!value || /[\\\x00-\x1f\x7f:#?]/.test(value) || value.split("/").some((p) => p === "." || p === "..")) {
     throw new Error(`unsafe evidence path: ${value}`);
@@ -29573,7 +29443,7 @@ async function statIfPresent(path) {
 async function directory(path, create = false) {
   let current = parse6(path).root;
   for (const part of path.slice(current.length).split("/").filter(Boolean)) {
-    current = join13(current, part);
+    current = join12(current, part);
     let info = await statIfPresent(current);
     if (!info && create) {
       await mkdir8(current);
@@ -29588,10 +29458,10 @@ async function inventory2(root) {
   const entries = /* @__PURE__ */ new Map();
   if (!await directory(root)) return entries;
   const walk = async (prefix) => {
-    for (const name of await readdir7(join13(root, prefix))) {
+    for (const name of await readdir6(join12(root, prefix))) {
       if (!name || /[\\\x00-\x1f\x7f:#?]/.test(name) || name === "." || name === "..") throw new Error(`unsafe evidence path: ${name}`);
       const path = prefix ? `${prefix}/${name}` : name;
-      const info = await lstat7(join13(root, path));
+      const info = await lstat7(join12(root, path));
       if (info.isSymbolicLink()) throw new Error(`symlink in evidence: ${path}`);
       if (info.isDirectory()) {
         entries.set(path, "directory");
@@ -29618,14 +29488,14 @@ async function refreshEvidenceState(incoming, destination, archiveRoot) {
   if (!await directory(incoming)) throw new Error("missing incoming evidence state");
   const existing = await directory(destination);
   await directory(archiveRoot);
-  if (await statIfPresent(join13(dirname8(destination), "manifest.json"))) throw new Error("cannot refresh sealed evidence package");
+  if (await statIfPresent(join12(dirname8(destination), "manifest.json"))) throw new Error("cannot refresh sealed evidence package");
   const fresh = await inventory2(incoming), prior = await inventory2(destination);
   const retained = /* @__PURE__ */ new Map();
   for (const [path, kind] of prior) {
     if (path !== "snapshots" && !path.startsWith("snapshots/")) continue;
     const replacement = fresh.get(path);
     if (replacement && replacement !== kind) throw new Error(`snapshot conflict: ${path}`);
-    if (replacement === "file" && !(await readFile9(join13(destination, path))).equals(await readFile9(join13(incoming, path)))) {
+    if (replacement === "file" && !(await readFile8(join12(destination, path))).equals(await readFile8(join12(incoming, path)))) {
       throw new Error(`snapshot conflict: ${path}`);
     }
     if (!replacement) retained.set(path, kind);
@@ -29633,19 +29503,19 @@ async function refreshEvidenceState(incoming, destination, archiveRoot) {
   let archived;
   if (existing) {
     await directory(archiveRoot, true);
-    const attempt = await mkdtemp2(join13(archiveRoot, "attempt-"));
-    archived = join13(attempt, "state");
+    const attempt = await mkdtemp2(join12(archiveRoot, "attempt-"));
+    archived = join12(attempt, "state");
     await rename4(destination, archived);
   }
   await directory(dirname8(destination), true);
   await mkdir8(destination);
   const copy = async (source, tree) => {
     for (const [path, kind] of tree) {
-      const target2 = join13(destination, path);
+      const target2 = join12(destination, path);
       if (kind === "directory") await directory(target2, true);
       else {
         await directory(dirname8(target2), true);
-        await copyFile(join13(source, path), target2, constants5.COPYFILE_EXCL);
+        await copyFile(join12(source, path), target2, constants5.COPYFILE_EXCL);
       }
     }
   };
@@ -29655,8 +29525,8 @@ async function refreshEvidenceState(incoming, destination, archiveRoot) {
 
 // src/targets.ts
 import { createHash as createHash6 } from "node:crypto";
-import { mkdir as mkdir9, readFile as readFile10, rename as rename5, writeFile as writeFile4 } from "node:fs/promises";
-import { join as join14 } from "node:path";
+import { mkdir as mkdir9, readFile as readFile9, rename as rename5, writeFile as writeFile4 } from "node:fs/promises";
+import { join as join13 } from "node:path";
 import { randomUUID as randomUUID6 } from "node:crypto";
 var TARGETS = ["cua", "playwright", "chrome-devtools"];
 var TARGET_PACKAGES = {
@@ -29677,7 +29547,7 @@ var TARGET_PACKAGES = {
 };
 var DEFAULT_AFTER_INTERVAL_MS = { cua: 500, playwright: 300, "chrome-devtools": 300, command: 500 };
 function targetLaunches(context) {
-  const entry = (target2) => join14(context.packagesRoot, "node_modules", TARGET_PACKAGES[target2].entry);
+  const entry = (target2) => join13(context.packagesRoot, "node_modules", TARGET_PACKAGES[target2].entry);
   const executable = context.browserExecutable;
   return {
     // On X11 cua-driver's cursor overlay serves screen reads from saved-under
@@ -29686,7 +29556,7 @@ function targetLaunches(context) {
     cua: { command: context.cuaDriver, args: ["mcp"], cwd: context.workspace, platformArgs: { linux: ["--no-overlay"] } },
     playwright: {
       command: context.node,
-      args: [entry("playwright"), "--isolated", "--output-dir", join14(context.outputDir, "playwright", "files"), ...executable ? ["--executable-path", executable] : []],
+      args: [entry("playwright"), "--isolated", "--output-dir", join13(context.outputDir, "playwright", "files"), ...executable ? ["--executable-path", executable] : []],
       cwd: context.workspace,
       platformArgs: { linux: ["--no-sandbox"] }
     },
@@ -29715,9 +29585,9 @@ var registrySource = async (pin, signal) => {
   return Buffer.from(await response.arrayBuffer());
 };
 async function cachedTarball(cacheRoot, pin, source = registrySource, signal) {
-  const path = join14(cacheRoot, tarballName(pin));
+  const path = join13(cacheRoot, tarballName(pin));
   try {
-    const bytes2 = await readFile10(path);
+    const bytes2 = await readFile9(path);
     if (integrityMatches(bytes2, pin.integrity)) return { path, sha256: createHash6("sha256").update(bytes2).digest("hex") };
   } catch (error2) {
     if (error2.code !== "ENOENT") throw error2;
@@ -29792,12 +29662,12 @@ var RelayManager = class {
   constructor(options2) {
     this.options = options2;
     this.environment = options2.environment ?? selectedEnvironment();
-    this.tartHome = this.environment?.profile.tartHome ?? canonicalPath(options2.tartHome ?? process.env.TART_HOME ?? join15(process.env.HOME ?? homedir4(), ".tart"));
+    this.tartHome = this.environment?.profile.tartHome ?? canonicalPath(options2.tartHome ?? process.env.TART_HOME ?? join14(process.env.HOME ?? homedir4(), ".tart"));
     this.tartPath = this.environment?.profile.tartPath ?? options2.tartPath ?? process.env.TART ?? "tart";
     if (this.environment && (options2.stateRoot && canonicalPath(options2.stateRoot) !== this.environment.profile.relayStateDir || options2.tartHome && canonicalPath(options2.tartHome) !== this.tartHome || options2.tartPath && canonicalPath(options2.tartPath) !== this.tartPath)) throw new Error("Injected paths conflict with the selected environment");
     this.vm = options2.vm ?? new VmService({ baseUrl: this.environment?.profile.vmServiceUrl ?? process.env.MCP_VM_RELAY_URL, environment: this.environment });
     this.registry = options2.registry ?? new Registry(this.environment ? { managedRoot: this.environment.profile.relayStateDir } : {});
-    this.root = join15(this.environment?.profile.relayStateDir ?? options2.stateRoot ?? relayStateRoot(), hash(options2.sessionId).slice(0, 32));
+    this.root = join14(this.environment?.profile.relayStateDir ?? options2.stateRoot ?? relayStateRoot(), hash(options2.sessionId).slice(0, 32));
     this.channel = {
       exec: async (name, argv2, timeoutMs2 = 18e4, options3) => {
         const result2 = await this.vm.exec(name, { argv: argv2, timeout: Math.ceil(timeoutMs2 / 1e3) }, { timeoutMs: options3?.timeoutMs ?? timeoutMs2 + 3e4, signal: options3?.signal });
@@ -29836,9 +29706,9 @@ var RelayManager = class {
     if (this.initialized) return;
     await mkdir10(this.root, { recursive: true, mode: 448 });
     if (!this.ownerLock) {
-      this.ownerLock = await acquireOwnerLock(join15(this.root, "owner.lock"));
+      this.ownerLock = await acquireOwnerLock(join14(this.root, "owner.lock"));
       try {
-        this.enclosure = JSON.parse(await readFile11(join15(this.root, "lease.json"), "utf8"));
+        this.enclosure = JSON.parse(await readFile10(join14(this.root, "lease.json"), "utf8"));
       } catch (e) {
         if (e.code !== "ENOENT") {
           await this.unlock();
@@ -29873,7 +29743,7 @@ var RelayManager = class {
       const expected = this.binding();
       return Object.keys(e.backend).length === Object.keys(expected).length && Object.entries(expected).every(([key, value]) => e.backend[key] === value);
     }
-    return !this.environment && new URL(this.vm.baseUrl).origin === "http://localhost:6240" && this.tartHome === canonicalPath(join15(process.env.HOME ?? homedir4(), ".tart"));
+    return !this.environment && new URL(this.vm.baseUrl).origin === "http://localhost:6240" && this.tartHome === canonicalPath(join14(process.env.HOME ?? homedir4(), ".tart"));
   }
   assertBinding() {
     if (this.enclosure && !this.bindingMatches(this.enclosure)) throw new Error("Owned lease belongs to a different or unknown VM environment; select its original environment before operating on it");
@@ -29885,7 +29755,7 @@ var RelayManager = class {
     if (!health.ok || !matchesEnvironment(health.environment, this.environment)) throw new Error("VM service environment identity mismatch; no lease operation was performed");
   }
   async save() {
-    await jsonFile(join15(this.root, "lease.json"), this.enclosure ?? null);
+    await jsonFile(join14(this.root, "lease.json"), this.enclosure ?? null);
   }
   async unlock() {
     if (this.ownerLock) {
@@ -29941,8 +29811,8 @@ var RelayManager = class {
   async attach() {
     const e = this.current();
     if (!e.sessionId || !e.node) throw new Error("Persisted staged session lacks runtime identity");
-    const relay = Relay.open(join15(e.hostRoot, "host", "submissions"));
-    this.transport = new VmTransport(this.transfer(), e.guestRoot, join15(e.hostRoot, "host"), e.cuaDriver);
+    const relay = Relay.open(join14(e.hostRoot, "host", "submissions"));
+    this.transport = new VmTransport(this.transfer(), e.guestRoot, join14(e.hostRoot, "host"), e.cuaDriver);
     this.session = await relay.attach(e.sessionId, this.transport);
   }
   search(query, signal, toolCallId) {
@@ -29989,7 +29859,7 @@ var RelayManager = class {
         relay = { reachable: false, diagnostic: String(error2) };
       }
       const facts = { scope: "host", local, relay, environment: this.environment?.identity, owned: this.status(), capabilities: { image: imageCapability } };
-      await jsonFile(join15(this.root, "probes", `${Date.now()}-${randomUUID7()}.json`), facts);
+      await jsonFile(join14(this.root, "probes", `${Date.now()}-${randomUUID7()}.json`), facts);
       await this.log("probe", void 0, facts);
       return facts;
     });
@@ -30097,12 +29967,12 @@ var RelayManager = class {
   transfer() {
     const e = this.current();
     if (!e.node) throw new Error("Stage runtime first");
-    return new Transfer(this.channel, e.lease.vm, e.node, { guestRoot: e.guestRoot, hostTempRoot: join15(this.root, "transfer-tmp"), onRetry: (event) => this.log("transfer-retry", void 0, event) });
+    return new Transfer(this.channel, e.lease.vm, e.node, { guestRoot: e.guestRoot, hostTempRoot: join14(this.root, "transfer-tmp"), onRetry: (event) => this.log("transfer-retry", void 0, event) });
   }
   async log(kind, because, details = {}) {
     if (because !== void 0) this.reason(because);
     const e = this.enclosure;
-    if (e) await jsonFile(e.delivered ? join15(`${e.hostRoot}.lifecycle-events`, `${Date.now()}-${randomUUID7()}.json`) : join15(e.hostRoot, "host", "events", `${Date.now()}-${randomUUID7()}.json`), { kind, because, at: (/* @__PURE__ */ new Date()).toISOString(), details });
+    if (e) await jsonFile(e.delivered ? join14(`${e.hostRoot}.lifecycle-events`, `${Date.now()}-${randomUUID7()}.json`) : join14(e.hostRoot, "host", "events", `${Date.now()}-${randomUUID7()}.json`), { kind, because, at: (/* @__PURE__ */ new Date()).toISOString(), details });
   }
   acquire(input, signal) {
     return this.serialized(async () => {
@@ -30133,7 +30003,7 @@ var RelayManager = class {
       const purpose = `relay-${input.task}-${randomUUID7().slice(0, 8)}`;
       const startedAt = (/* @__PURE__ */ new Date()).toISOString();
       const stamp = startedAt.slice(0, 19).replace(/[T:]/g, "-") + "-Z";
-      const hostRoot = join15(this.options.outputRoot ?? resolve9(this.options.project, "relay-evidence"), purpose);
+      const hostRoot = join14(this.options.outputRoot ?? resolve9(this.options.project, "relay-evidence"), purpose);
       const row = { machine: this.environment ? `${this.environment.profile.vmServiceUrl} (${this.environment.profile.id}; ${purpose})` : `127.0.0.1 (vm-service ${purpose})`, os: input.image, taskName: purpose, agent: `mcp-vm-relay ${this.options.sessionId}`, project: resolve9(this.options.project), startDate: stamp };
       this.enclosure = { backend: this.binding(), purpose, task: input.task, image: input.image, project: this.options.project, startedAt, guestRoot: `/var/tmp/${stamp}-mcp-vm-relay-${purpose}`, hostRoot, ttlHours, extractions: input.extractions, fullWorkspace: input.fullWorkspace ?? false, row, staged: false };
       await this.save();
@@ -30141,7 +30011,7 @@ var RelayManager = class {
         await this.registry.add(row);
         await this.log("acquire-intent", void 0, input);
         try {
-          await cp(join15(this.root, "probes"), join15(hostRoot, "host", "probes"), { recursive: true, errorOnExist: true, force: false });
+          await cp(join14(this.root, "probes"), join14(hostRoot, "host", "probes"), { recursive: true, errorOnExist: true, force: false });
         } catch (error2) {
           if (error2.code !== "ENOENT") throw error2;
         }
@@ -30165,7 +30035,7 @@ var RelayManager = class {
         this.enclosure.expiresAt = this.enclosure.lease.ttl_expires_at;
         this.startHeartbeat();
         await this.save();
-        return { ...this.status(), guestRoot: this.enclosure.guestRoot, workspace: join15(this.enclosure.guestRoot, "workspace"), declarations: input.extractions };
+        return { ...this.status(), guestRoot: this.enclosure.guestRoot, workspace: join14(this.enclosure.guestRoot, "workspace"), declarations: input.extractions };
       } catch (error2) {
         await this.fail(error2);
         throw error2;
@@ -30240,7 +30110,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
       const bundle = this.options.runtimeBundle ?? fileURLToPath(new URL("../dist/receiver.mjs", import.meta.url));
       await access(bundle);
       const node2 = input.nodePath ?? e.node ?? "node";
-      const transfer = new Transfer(this.channel, e.lease.vm, node2, { guestRoot: e.guestRoot, hostTempRoot: join15(this.root, "transfer-tmp"), onRetry: (event) => this.log("transfer-retry", void 0, event) });
+      const transfer = new Transfer(this.channel, e.lease.vm, node2, { guestRoot: e.guestRoot, hostTempRoot: join14(this.root, "transfer-tmp"), onRetry: (event) => this.log("transfer-retry", void 0, event) });
       await transfer.checked([node2, "--version"]);
       const launchChanged = e.mcpHost && (input.nodePath !== void 0 && input.nodePath !== e.node || input.cuaDriver !== void 0 && input.cuaDriver !== e.cuaDriver || input.browserExecutable !== void 0 && input.browserExecutable !== e.browserExecutable);
       e.node = node2;
@@ -30251,21 +30121,21 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
       if (e.staged) {
         await this.session?.close();
         await this.attach();
-        return { staged: true, workspace: join15(e.guestRoot, "workspace"), owned: this.status(), files: [], extractions: e.extractions };
+        return { staged: true, workspace: join14(e.guestRoot, "workspace"), owned: this.status(), files: [], extractions: e.extractions };
       }
-      await transfer.checked(["/bin/mkdir", "-p", join15(e.guestRoot, "workspace"), join15(e.guestRoot, "state")]);
-      const staged = [await transfer.pushFile(bundle, join15(e.guestRoot, "receiver.mjs"))];
-      for (const file of input.files ?? []) staged.push(await transfer.pushFile(resolve9(this.options.project, file.local), within(join15(e.guestRoot, "support"), file.path), file.local.startsWith("/") ? dirname9(resolve9(file.local)) : resolve9(this.options.project)));
-      if (input.workspace) staged.push(...await transfer.pushTree(resolve9(this.options.project, input.workspace), join15(e.guestRoot, "workspace"), input.workspace.startsWith("/") ? resolve9(input.workspace) : resolve9(this.options.project)));
+      await transfer.checked(["/bin/mkdir", "-p", join14(e.guestRoot, "workspace"), join14(e.guestRoot, "state")]);
+      const staged = [await transfer.pushFile(bundle, join14(e.guestRoot, "receiver.mjs"))];
+      for (const file of input.files ?? []) staged.push(await transfer.pushFile(resolve9(this.options.project, file.local), within(join14(e.guestRoot, "support"), file.path), file.local.startsWith("/") ? dirname9(resolve9(file.local)) : resolve9(this.options.project)));
+      if (input.workspace) staged.push(...await transfer.pushTree(resolve9(this.options.project, input.workspace), join14(e.guestRoot, "workspace"), input.workspace.startsWith("/") ? resolve9(input.workspace) : resolve9(this.options.project)));
       await this.log("stage", void 0, { files: staged, extractions: e.extractions });
-      const relay = Relay.open(join15(e.hostRoot, "host", "submissions"));
-      this.transport = new VmTransport(transfer, e.guestRoot, join15(e.hostRoot, "host"), e.cuaDriver);
+      const relay = Relay.open(join14(e.hostRoot, "host", "submissions"));
+      this.transport = new VmTransport(transfer, e.guestRoot, join14(e.hostRoot, "host"), e.cuaDriver);
       relay.useTransport(() => this.transport);
       this.session = await relay.start({ taskId: e.purpose, target: `vm-service:${e.lease.vm}` });
       e.sessionId = this.session.sessionId;
       e.staged = true;
       await this.save();
-      return { staged: true, workspace: join15(e.guestRoot, "workspace"), files: staged, extractions: e.extractions, capabilities: { image: imageCapability } };
+      return { staged: true, workspace: join14(e.guestRoot, "workspace"), files: staged, extractions: e.extractions, capabilities: { image: imageCapability } };
     }));
   }
   run(input, signal) {
@@ -30286,14 +30156,14 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
           const refusal = await this.prepareMcp(e, input.target, input.tool, input.args ?? {}, signal);
           if (refusal) return { ...refusal, timeoutMs: timeoutMs2, evidencePath: e.hostRoot, leaseReleased: false, imageDelivery: { status: "not-requested", diagnostic: "Nothing was sent, so no snapshot was taken." } };
           callTimeoutMs = Math.min(timeoutMs2, 36e5 - MCP_START_ALLOWANCE_MS - 15e3);
-          argv2 = [e.node, join15(e.guestRoot, "mcp-host.mjs"), "call", join15(e.guestRoot, "mcp"), input.target, input.tool, JSON.stringify(input.args ?? {}), String(callTimeoutMs), String(MCP_START_ALLOWANCE_MS)];
+          argv2 = [e.node, join14(e.guestRoot, "mcp-host.mjs"), "call", join14(e.guestRoot, "mcp"), input.target, input.tool, JSON.stringify(input.args ?? {}), String(callTimeoutMs), String(MCP_START_ALLOWANCE_MS)];
         }
         const record3 = this.derive(e, input);
         await this.save();
         this.transport.because = record3.because;
         this.transport.timeoutMs = input.kind === "mcp" ? callTimeoutMs + MCP_START_ALLOWANCE_MS + 15e3 : timeoutMs2;
         this.transport.diagnostic = false;
-        const options2 = { step: record3.step, snapshots: record3.snapshots, cwd: join15(e.guestRoot, "workspace") };
+        const options2 = { step: record3.step, snapshots: record3.snapshots, cwd: join14(e.guestRoot, "workspace") };
         let result2;
         if (input.kind === "exec" || input.kind === "mcp") {
           argv2 ??= input.argv;
@@ -30302,7 +30172,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
         } else if (input.kind === "script") {
           if (!input.localPath || !input.language) throw new Error("script requires localPath and language");
           await assertHostPath(input.localPath.startsWith("/") ? dirname9(input.localPath) : resolve9(this.options.project), resolve9(this.options.project, input.localPath));
-          result2 = await this.session.runScript(resolve9(this.options.project, input.localPath), join15(e.guestRoot, "scripts", `${randomUUID7()}.${input.language === "python" ? "py" : input.language === "typescript" ? "ts" : "js"}`), input.language, options2);
+          result2 = await this.session.runScript(resolve9(this.options.project, input.localPath), join14(e.guestRoot, "scripts", `${randomUUID7()}.${input.language === "python" ? "py" : input.language === "typescript" ? "ts" : "js"}`), input.language, options2);
         } else if (input.kind === "code") {
           if (typeof input.code !== "string" || !input.language) throw new Error("code requires code and language");
           result2 = await this.session.runCode(input.code, input.language, options2);
@@ -30367,13 +30237,13 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
   /** Map the guest MCP host's answer to the run result: the target's own text and images pass through, bounded; the full result stays in the workspace. */
   async mcpResult(e, target2, tool, outcome, signal) {
     const response = this.transport?.response;
-    let summary2;
+    let summary;
     try {
       const parsed = JSON.parse(String(response?.stdout ?? "").trim().split("\n").at(-1) ?? "");
-      if (parsed?.relayRun === 1) summary2 = parsed;
+      if (parsed?.relayRun === 1) summary = parsed;
     } catch {
     }
-    if (summary2?.hostUnavailable) {
+    if (summary?.hostUnavailable) {
       e.mcpHost = false;
       this.toolLists.clear();
       await this.save();
@@ -30383,8 +30253,8 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
     const toolImages = [];
     const content = [];
     let lines = 0;
-    const resultFile = summary2?.resultFile ? `workspace/${RELAY_RUN_OUTPUTS}/${summary2.resultFile}` : void 0;
-    for (const block of summary2?.content ?? []) {
+    const resultFile = summary?.resultFile ? `workspace/${RELAY_RUN_OUTPUTS}/${summary.resultFile}` : void 0;
+    for (const block of summary?.content ?? []) {
       if (typeof block.text === "string") {
         const kept = block.text.split("\n").slice(0, Math.max(0, 2e3 - lines));
         lines += kept.length;
@@ -30407,7 +30277,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
       relayOutcome,
       target: target2,
       tool,
-      ...summary2 ? { toolOutcome: summary2.outcome, sent: summary2.sent, ...summary2.diagnostic ? { toolDiagnostic: summary2.diagnostic } : {}, ...summary2.errors ? { errors: summary2.errors } : {}, content, ...summary2.structuredContent !== void 0 ? { structuredContent: summary2.structuredContent } : {}, ...summary2.structuredContentOmitted ? { structuredContentOmitted: true } : {}, ...resultFile ? { resultFile } : {}, toolImages } : { toolOutcome: "unknown", stdout: response?.stdout, stderr: response?.stderr },
+      ...summary ? { toolOutcome: summary.outcome, sent: summary.sent, ...summary.diagnostic ? { toolDiagnostic: summary.diagnostic } : {}, ...summary.errors ? { errors: summary.errors } : {}, content, ...summary.structuredContent !== void 0 ? { structuredContent: summary.structuredContent } : {}, ...summary.structuredContentOmitted ? { structuredContentOmitted: true } : {}, ...resultFile ? { resultFile } : {}, toolImages } : { toolOutcome: "unknown", stdout: response?.stdout, stderr: response?.stderr },
       ...response?.stderr ? { stderr: response.stderr } : {},
       ...response?.terminationConfirmed !== void 0 ? { terminationConfirmed: response.terminationConfirmed } : {},
       passthrough
@@ -30418,9 +30288,9 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
   async toolList(e, target2, transfer) {
     const cached2 = this.toolLists.get(target2);
     if (cached2) return cached2;
-    const stateDir = join15(e.guestRoot, "mcp");
-    await transfer.checked([e.node, join15(e.guestRoot, "mcp-host.mjs"), "tools", stateDir, target2], MCP_START_ALLOWANCE_MS * 2 + 2e4);
-    const bytes = await transfer.pullFrame(join15(stateDir, "tools", `${target2}.json`), join15(e.hostRoot, "host", "mcp-tools", `${target2}-${Date.now()}-${randomUUID7().slice(0, 8)}.json`), e.guestRoot, e.hostRoot);
+    const stateDir = join14(e.guestRoot, "mcp");
+    await transfer.checked([e.node, join14(e.guestRoot, "mcp-host.mjs"), "tools", stateDir, target2], MCP_START_ALLOWANCE_MS * 2 + 2e4);
+    const bytes = await transfer.pullFrame(join14(stateDir, "tools", `${target2}.json`), join14(e.hostRoot, "host", "mcp-tools", `${target2}-${Date.now()}-${randomUUID7().slice(0, 8)}.json`), e.guestRoot, e.hostRoot);
     const parsed = JSON.parse(bytes.toString("utf8"));
     if (parsed?.target !== target2 || !Array.isArray(parsed.tools)) throw new Error(`Malformed tool list from ${target2}`);
     const tools = parsed.tools.filter((item) => typeof item?.name === "string" && item.inputSchema && typeof item.inputSchema === "object").map((item) => ({ name: item.name, ...typeof item.description === "string" ? { description: item.description } : {}, inputSchema: item.inputSchema }));
@@ -30435,14 +30305,14 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
     }
     if (e.mcpHost) return;
     const bundle = this.options.mcpHostBundle ?? fileURLToPath(new URL("../dist/mcp-host.mjs", import.meta.url));
-    const entry = join15(e.guestRoot, "mcp-host.mjs");
+    const entry = join14(e.guestRoot, "mcp-host.mjs");
     const staged = await transfer.pushFile(bundle, entry);
-    const context = { node: e.node, cuaDriver: e.cuaDriver, packagesRoot: join15(e.guestRoot, "mcp", "packages"), workspace: join15(e.guestRoot, "workspace"), outputDir: join15(e.guestRoot, "workspace", RELAY_RUN_OUTPUTS), ...e.browserExecutable ? { browserExecutable: e.browserExecutable } : {} };
-    const config2 = { stateDir: join15(e.guestRoot, "mcp"), outputDir: context.outputDir, targets: (this.options.targetLaunches ?? targetLaunches)(context), startTimeoutMs: MCP_START_ALLOWANCE_MS };
-    const local = join15(e.hostRoot, "host", "mcp-host-config.json");
+    const context = { node: e.node, cuaDriver: e.cuaDriver, packagesRoot: join14(e.guestRoot, "mcp", "packages"), workspace: join14(e.guestRoot, "workspace"), outputDir: join14(e.guestRoot, "workspace", RELAY_RUN_OUTPUTS), ...e.browserExecutable ? { browserExecutable: e.browserExecutable } : {} };
+    const config2 = { stateDir: join14(e.guestRoot, "mcp"), outputDir: context.outputDir, targets: (this.options.targetLaunches ?? targetLaunches)(context), startTimeoutMs: MCP_START_ALLOWANCE_MS };
+    const local = join14(e.hostRoot, "host", "mcp-host-config.json");
     await jsonFile(local, config2);
-    await transfer.pushFile(local, join15(e.guestRoot, "mcp-host-config.json"), e.hostRoot);
-    const answer = await transfer.checked([e.node, entry, "start", join15(e.guestRoot, "mcp-host-config.json")], 6e4);
+    await transfer.pushFile(local, join14(e.guestRoot, "mcp-host-config.json"), e.hostRoot);
+    const answer = await transfer.checked([e.node, entry, "start", join14(e.guestRoot, "mcp-host-config.json")], 6e4);
     e.mcpHost = true;
     this.toolLists.clear();
     await this.save();
@@ -30452,15 +30322,15 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
   async ensureTargetPackages(e, target2, transfer, signal) {
     if (target2 === "cua" || e.mcpPackages?.includes(target2)) return;
     const closure = this.options.targetPackages?.[target2] ?? TARGET_PACKAGES[target2];
-    const cache = this.options.packageCache ?? join15(dirname9(this.root), "mcp-packages");
+    const cache = this.options.packageCache ?? join14(dirname9(this.root), "mcp-packages");
     const specs = [], staged = [];
     for (const pin of closure.packages) {
       const local = await cachedTarball(cache, pin, this.options.tarballSource, signal);
-      const remote = join15(e.guestRoot, "mcp", "tarballs", tarballName(pin));
+      const remote = join14(e.guestRoot, "mcp", "tarballs", tarballName(pin));
       staged.push({ ...pin, ...await transfer.pushFile(local.path, remote, cache) });
       specs.push(`${pin.name}=${remote}=${local.sha256}`);
     }
-    if (specs.length) await transfer.checked([e.node, join15(e.guestRoot, "mcp-host.mjs"), "install", join15(e.guestRoot, "mcp", "packages", "node_modules"), ...specs], 18e4);
+    if (specs.length) await transfer.checked([e.node, join14(e.guestRoot, "mcp-host.mjs"), "install", join14(e.guestRoot, "mcp", "packages", "node_modules"), ...specs], 18e4);
     e.mcpPackages = [...e.mcpPackages ?? [], target2];
     await this.save();
     await this.log("mcp-target-staged", void 0, { target: target2, packages: staged });
@@ -30470,7 +30340,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
     const e = this.enclosure;
     if (!e?.mcpHost || !e.node || !e.lease) return;
     try {
-      const result2 = await this.channel.exec(e.lease.vm, [e.node, join15(e.guestRoot, "mcp-host.mjs"), "stop", join15(e.guestRoot, "mcp")], 3e4);
+      const result2 = await this.channel.exec(e.lease.vm, [e.node, join14(e.guestRoot, "mcp-host.mjs"), "stop", join14(e.guestRoot, "mcp")], 3e4);
       await this.log("mcp-host-stop", void 0, { reason: reason2, code: result2.code, output: result2.stdout.slice(0, 2e3) });
     } catch (error2) {
       await this.log("mcp-host-stop-failed", void 0, { reason: reason2, error: String(error2) }).catch(() => {
@@ -30513,7 +30383,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
     let servers = {};
     if (e.mcpHost && node2) {
       try {
-        const r = await this.channel.exec(e.lease.vm, [e.node ?? "node", join15(e.guestRoot, "mcp-host.mjs"), "status", join15(e.guestRoot, "mcp")], 1e4);
+        const r = await this.channel.exec(e.lease.vm, [e.node ?? "node", join14(e.guestRoot, "mcp-host.mjs"), "status", join14(e.guestRoot, "mcp")], 1e4);
         servers = JSON.parse(r.stdout.trim().split("\n").at(-1) ?? "{}").targets ?? {};
       } catch (error2) {
         servers = { diagnostic: String(error2) };
@@ -30541,7 +30411,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
       owner: this.options.sessionId,
       enclosure: e.purpose,
       backend: e.backend,
-      catalogRoot: join15(this.root, "image-catalog", e.purpose),
+      catalogRoot: join14(this.root, "image-catalog", e.purpose),
       hostRoot: e.hostRoot,
       guestRoot: e.guestRoot,
       sessionId: e.sessionId,
@@ -30586,13 +30456,13 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
     }
     const reset = e.pendingReset;
     const transfer = this.transfer();
-    const archive = join15(e.guestRoot, "recordings", reset.id);
+    const archive = join14(e.guestRoot, "recordings", reset.id);
     const marker = await transfer.checked([e.node, "-e", 'const fs=require("fs"),p=require("path");console.log(fs.existsSync(p.join(process.argv[1],"recordings",process.argv[2]))?"archived":"current");', e.guestRoot, reset.id]);
     const attempts = `${reset.from}.reset-attempts`;
-    const incoming = join15(attempts, randomUUID7(), "state");
-    await transfer.pullVerified(marker.trim() === "archived" ? archive : join15(e.guestRoot, "state"), incoming, e.guestRoot, attempts);
+    const incoming = join14(attempts, randomUUID7(), "state");
+    await transfer.pullVerified(marker.trim() === "archived" ? archive : join14(e.guestRoot, "state"), incoming, e.guestRoot, attempts);
     await this.imageStore().materializeDisplayOriginals(reset.from);
-    await refreshEvidenceState(incoming, join15(reset.from, "state"), join15(attempts, "previous"));
+    await refreshEvidenceState(incoming, join14(reset.from, "state"), join14(attempts, "previous"));
     await this.log("recording-reset-intent", void 0, reset);
     await transfer.checked([e.node, "-e", `const fs=require('fs'),p=require('path');const [root,id]=process.argv.slice(1);if(fs.existsSync(p.join(root,'.receiver-lock')))throw Error('Receiver lock exists; diagnose active execution before recording reset');const state=p.join(root,'state'),archive=p.join(root,'recordings',id),marker=p.join(root,'.recording-reset-'+id+'.json');if(!fs.existsSync(marker)){fs.mkdirSync(p.dirname(archive),{recursive:true});if(!fs.existsSync(archive))fs.renameSync(state,archive);else if(fs.existsSync(state)&&fs.readdirSync(state).length)throw Error('Reset destination is not empty');fs.mkdirSync(state,{recursive:true});fs.writeFileSync(marker,JSON.stringify({id,archive}),{flag:'wx'});}console.log('recording archived');`, e.guestRoot, reset.id]);
     await this.session?.close();
@@ -30612,11 +30482,11 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
     for (const name of names) {
       const declaration = e.extractions.find((item) => item.name === name);
       if (!declaration) throw new Error(`Undeclared extraction: ${name}`);
-      const destination = join15(e.hostRoot, "extractions", name, randomUUID7());
-      const facts = await transfer.pullVerified(within(join15(e.guestRoot, "workspace"), declaration.path), destination, join15(e.guestRoot, "workspace"), e.hostRoot);
+      const destination = join14(e.hostRoot, "extractions", name, randomUUID7());
+      const facts = await transfer.pullVerified(within(join14(e.guestRoot, "workspace"), declaration.path), destination, join14(e.guestRoot, "workspace"), e.hostRoot);
       results.push({ ...declaration, destination, facts });
     }
-    await jsonFile(join15(e.hostRoot, "host", "extractions", `${randomUUID7()}.json`), { extractions: results });
+    await jsonFile(join14(e.hostRoot, "host", "extractions", `${randomUUID7()}.json`), { extractions: results });
     return results;
   }
   extract(names, signal) {
@@ -30638,7 +30508,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
     }
     if (e.fullWorkspace) {
       try {
-        await this.transfer().pullVerified(join15(e.guestRoot, "workspace"), join15(e.hostRoot, "extractions", "full-workspace", randomUUID7()), e.guestRoot, e.hostRoot);
+        await this.transfer().pullVerified(join14(e.guestRoot, "workspace"), join14(e.hostRoot, "extractions", "full-workspace", randomUUID7()), e.guestRoot, e.hostRoot);
       } catch (error2) {
         await this.log("workspace-incomplete", void 0, { error: String(error2) }).catch(() => {
         });
@@ -30649,10 +30519,10 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
     const e = this.current();
     if (!e.staged || !e.sessionId) throw new Error("No staged session to package");
     const attempts = `${e.hostRoot}.finalization-attempts`;
-    const incoming = join15(attempts, randomUUID7(), "state");
-    await this.transfer().pullVerified(join15(e.guestRoot, "state"), incoming, e.guestRoot, attempts);
+    const incoming = join14(attempts, randomUUID7(), "state");
+    await this.transfer().pullVerified(join14(e.guestRoot, "state"), incoming, e.guestRoot, attempts);
     await this.imageStore().materializeDisplayOriginals(e.hostRoot);
-    await refreshEvidenceState(incoming, join15(e.hostRoot, "state"), join15(attempts, "previous"));
+    await refreshEvidenceState(incoming, join14(e.hostRoot, "state"), join14(attempts, "previous"));
     const result2 = await deliverPackage(e.hostRoot, { packageId: `pkg-${e.purpose}`, sessionId: e.sessionId, taskId: e.purpose });
     e.delivered = result2;
     await this.save();
@@ -30665,7 +30535,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
       if (!e.delivered) {
         await this.stopMcpHost("finish");
         await this.extractInternal(e.extractions.map((item) => item.name));
-        if (e.fullWorkspace) await this.transfer().pullVerified(join15(e.guestRoot, "workspace"), join15(e.hostRoot, "extractions", "full-workspace", randomUUID7()), e.guestRoot, e.hostRoot);
+        if (e.fullWorkspace) await this.transfer().pullVerified(join14(e.guestRoot, "workspace"), join14(e.hostRoot, "extractions", "full-workspace", randomUUID7()), e.guestRoot, e.hostRoot);
       }
       const result2 = e.delivered ?? await this.packageInternal();
       await this.releaseInternal("finished");
@@ -30684,17 +30554,17 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
     if (!input.argv?.length || input.snapshots?.group) throw new Error("Diagnostic exec requires argv and cannot join a snapshot group");
     const executionId = `diagnostic-${randomUUID7()}`;
     const request = { executionId, at: (/* @__PURE__ */ new Date()).toISOString(), evidenceMode: "diagnostic", timeoutMs: timeoutMs2, ...input };
-    await jsonFile(join15(e.hostRoot, "host", "diagnostics", `${executionId}.request.json`), request);
+    await jsonFile(join14(e.hostRoot, "host", "diagnostics", `${executionId}.request.json`), request);
     let result2;
     try {
-      const argv2 = e.staged ? ["/bin/sh", "-c", 'cd "$1" || exit; shift; exec "$@"', "relay-diagnostic", join15(e.guestRoot, "workspace"), ...input.argv] : input.argv;
+      const argv2 = e.staged ? ["/bin/sh", "-c", 'cd "$1" || exit; shift; exec "$@"', "relay-diagnostic", join14(e.guestRoot, "workspace"), ...input.argv] : input.argv;
       const r = await this.channel.exec(e.lease.vm, argv2, timeoutMs2);
       result2 = { executionId, outcome: { kind: "completed", exitStatus: { code: r.code, signal: null } }, output: r.stdout, outputStreams: "stdout and stderr combined" };
     } catch (error2) {
       result2 = { executionId, outcome: { kind: "uncertain", diagnostic: String(error2) }, output: "", outputStreams: "stdout and stderr combined" };
     }
     const response = { ...result2, timeoutMs: timeoutMs2, evidenceMode: "diagnostic", screenshotEvidence: false, imageDelivery: { status: "not-requested", diagnostic: "Diagnostic execution has no screenshot evidence." }, evidencePath: e.hostRoot, leaseReleased: false, owned: this.status() };
-    await jsonFile(join15(e.hostRoot, "host", "diagnostics", `${executionId}.receipt.json`), response);
+    await jsonFile(join14(e.hostRoot, "host", "diagnostics", `${executionId}.receipt.json`), response);
     if (result2.outcome.kind !== "completed" || result2.outcome.exitStatus.code !== 0) await this.fail(new Error(JSON.stringify(result2.outcome)));
     return response;
   }
@@ -30917,7 +30787,7 @@ function validateRelayInput(value) {
 
 // src/surface.ts
 import { mkdir as mkdir11, writeFile as writeFile6 } from "node:fs/promises";
-import { join as join16 } from "node:path";
+import { join as join15 } from "node:path";
 import { tmpdir as tmpdir2 } from "node:os";
 import { randomUUID as randomUUID8 } from "node:crypto";
 var readOnly = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
@@ -31057,12 +30927,12 @@ function relayToolInput(name, args) {
   return { action: tool.action, ...tool.kind ? { kind: tool.kind } : {}, ...args };
 }
 var relayResultKind = "relay-image-result-v1";
-async function renderRelayResult(value, resultRoot = join16(tmpdir2(), "mcp-vm-relay-results"), indent = 2) {
+async function renderRelayResult(value, resultRoot = join15(tmpdir2(), "mcp-vm-relay-results"), indent = 2) {
   const full = JSON.stringify(value, null, indent);
   const text4 = new TextDecoder().decode(Buffer.from(full.split("\n").slice(0, 2e3).join("\n")).subarray(0, 50 * 1024), { stream: true });
   if (text4 !== full) {
     await mkdir11(resultRoot, { recursive: true, mode: 448 });
-    const path = join16(resultRoot, `${randomUUID8()}.json`);
+    const path = join15(resultRoot, `${randomUUID8()}.json`);
     await writeFile6(path, full, { mode: 384 });
     return { text: `${text4}
 [Truncated. Full result: ${path}]`, details: { resultPath: path }, resultPath: path };
@@ -31149,7 +31019,7 @@ async function relayCall(host, raw, options2 = {}) {
 // src/review-server.ts
 import { execFile } from "node:child_process";
 import { createServer } from "node:http";
-import { readFile as readFile12, realpath as realpath2 } from "node:fs/promises";
+import { readFile as readFile11, realpath as realpath2 } from "node:fs/promises";
 import { basename, dirname as dirname10, extname as extname2, resolve as resolve10, sep } from "node:path";
 import { promisify } from "node:util";
 
@@ -31192,6 +31062,7 @@ h1{display:flex;align-items:baseline;gap:.6rem;font:700 1.45rem/1.05 var(--sans)
 .why{white-space:normal;text-align:left;font:400 14px/1.57 var(--sans);position:fixed;inset:auto;top:4.75rem;right:1.5rem;margin:0;width:min(26rem,calc(100vw - 2rem));max-height:calc(100vh - 6rem);overflow:auto;padding:0 1.25rem 1.25rem;border:var(--edge);background:var(--bg);color:var(--text);box-shadow:3px 3px 0 rgba(0,0,0,.25)}
 .why h3{margin:0 -1.25rem 1rem;padding:.45rem 1.25rem;background:var(--tab);border-bottom:var(--edge);font:700 14px/1.3 var(--sans)}
 .reasons{list-style:none;margin:0;padding:0;display:grid;gap:.75rem}.reasons li{display:grid;gap:.35rem}.reasons p{margin:0;color:var(--dim);font-size:13.5px;line-height:1.55}
+.reasons p.do,.concern p.do{color:var(--text)}.do b{font-weight:700}
 .reasons .steps{display:flex;flex-wrap:wrap;gap:.75rem}.reasons .steps a{font:700 12px var(--sans)}
 .concern{margin-top:1.5rem;padding:1rem 1rem 1.1rem;background:#fff4c7;border:var(--edge);border-left:6px solid var(--tab)}.concern h3{margin:0 0 .75rem}
 .concern ul{list-style:none;margin:0;padding:0;display:grid;gap:.75rem}.concern li{display:grid;gap:.15rem}.concern p{margin:0;color:var(--text);font-size:14px;line-height:1.55}
@@ -31452,7 +31323,7 @@ var ReviewServer = class {
       if (!file) return send(200, html, shell);
       const target2 = await realpath2(resolve10(root, file)).catch(() => void 0);
       if (!target2 || !target2.startsWith(root + sep)) return send(404, plain, "not in the package");
-      return send(200, types[extname2(target2).toLowerCase()] ?? "application/octet-stream", await readFile12(target2));
+      return send(200, types[extname2(target2).toLowerCase()] ?? "application/octet-stream", await readFile11(target2));
     } catch (error2) {
       return send(500, plain, error2 instanceof Error ? error2.message : String(error2));
     }
@@ -31498,7 +31369,7 @@ function allToolDefinitions() {
     trajectoryToolDefinition
   ];
 }
-var reviewApp = true ? async () => 'var X=e=>({...e,details:new Map(Object.entries(e.details))}),ie=/\\.(json|jsonl|ndjson|log|txt|md|csv|tsv|ya?ml|xml|toml)$/i,l=e=>String(e??"").replace(/[&<>"\']/g,t=>({"&":"&amp;","<":"&lt;",">":"&gt;",\'"\':"&quot;","\'":"&#39;"})[t]),j=e=>l(e.split("/").map(encodeURIComponent).join("/")),Z=e=>`#step-${encodeURIComponent(e.id)}`,O=e=>e&&Number.isFinite(Date.parse(e))?new Date(e).toISOString().slice(11,19):void 0,Q=e=>e&&Number.isFinite(Date.parse(e))?new Date(e).toISOString().slice(11,23):void 0,ee=e=>e<6e4?`${(e/1e3).toFixed(1)} s`:`${Math.floor(e/6e4)} min ${Math.round(e%6e4/1e3)} s`,oe=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],_=(e,t=!1)=>{let i=new Date(e),a=o=>String(o).padStart(2,"0");return`${oe[i.getUTCMonth()]} ${i.getUTCDate()}, ${t?`${i.getUTCFullYear()}, `:""}${a(i.getUTCHours())}:${a(i.getUTCMinutes())} UTC`},se=\'<svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true"><rect x="3.5" y="4.5" width="11.5" height="9" fill="#336698" stroke="#000" stroke-width="1.2"/><rect x="9" y="10.5" width="11.5" height="9" fill="#fff" stroke="#000" stroke-width="1.2"/><path d="M12 15h5M15.2 13.2l1.8 1.8-1.8 1.8" fill="none" stroke="#cc1b1b" stroke-width="1.8" stroke-linecap="square"/></svg>\',A=e=>e>=1e6?`${(e/1e6).toFixed(1)} MB`:e>=1e3?`${(e/1e3).toFixed(1)} kB`:`${e} B`,P=(e,t)=>e===1?t:`${t}s`,le=(e,t)=>`${e} ${P(e,t)}`,H=e=>D(e.execution)!=="ok",D=e=>["passed","complete","completed"].includes(e)?"ok":["failed","refused"].includes(e)?"bad":"warn",q=e=>`<span class="verdict ${D(e)}"><i aria-hidden="true"></i>${l(e)}</span>`,de=e=>/^[\\w@%+=:,./-]+$/.test(e)?e:`\'${e.replace(/\'/g,"\'\\\\\'\'")}\'`;function ce(e){let t=i=>Date.parse(e.details.get(i.id)?.at??"");return e.steps.map((i,a)=>({step:i,index:a})).sort((i,a)=>(Number.isFinite(t(i.step))?t(i.step):1/0)-(Number.isFinite(t(a.step))?t(a.step):1/0)||i.index-a.index).map(({step:i})=>i)}function pe(e){let t=new Map;for(let a of e){let o=/^(diagnostic|request|action) (\\S+) (.*)$/.exec(a),g=o?`${o[1]} ${o[3]}`:a,m=t.get(g)??{sentence:a,ids:[]};o&&m.ids.push(o[2]),t.set(g,m)}let i=a=>a.replace(/^./,o=>o.toUpperCase());return[...t.entries()].map(([a,o])=>{if(o.ids.length<2)return{text:i(o.sentence),ids:[]};let[g,...m]=a.split(" "),u=m.join(" ").replace(/^has /,"have ").replace(/^is /,"are ").replace(/^lacks /,"lack ");return{text:`${o.ids.length} ${g}s ${u}`,ids:o.ids}})}function V(e,t){let i=t?.argv?.length?t.argv.map(de).join(" "):void 0,a=!!i&&(e.title==="Diagnostic command"||e.title.startsWith("exec ")),o=a&&e.because?e.because:e.title,g=o.split(`\n`)[0].trimEnd(),m=g.length>140?`${g.slice(0,139).trimEnd()}\\u2026`:g===o?o:`${g} \\u2026`,u=e.inputMode==="diagnostic"?"Diagnostic":i&&!e.snapshots?"Command":"Action";return{headline:m,command:i??(m===o?void 0:o),reasonShown:!(a&&e.because),kind:u}}function me(e){let t=/^Authoritative receipt outcomes: (\\[.*\\])$/m.exec(e??"");if(t)try{let i=new Set;return JSON.parse(t[1]).filter(a=>{let o=JSON.stringify(a);return i.has(o)?!1:(i.add(o),!0)})}catch{return}}var K=(e,t)=>`<span class="exit ${e.code===0&&!t?"ok":"bad"}">exit ${l(e.code??"none")}${e.signal?` \\xB7 ${l(e.signal)}`:""}${t?" \\xB7 timed out":""}</span>`;function ge(e,t,i=!0){let a=l(e.observed??"No confirmed result"),o=`<details class="raw"><summary>Receipt as recorded</summary><pre>${a}</pre></details>`;if(t){let m=t.exit===void 0?"":K({code:t.exit,signal:t.signal},t.timedOut),u=i?J(t):"";return`${m}${u||(i?\'<p class="quiet">No output.</p>\':"")}${o}`}let g=me(e.observed);return g?.length?`<ul class="receipts">${g.map(m=>`<li>${q(m.execution??m.outcome?.kind??"unknown")}${m.outcome?.exitStatus?K(m.outcome.exitStatus):""}${m.outcome?.diagnostic?`<span class="diag">${l(m.outcome.diagnostic)}</span>`:""}</li>`).join("")}</ul>${o}`:`<pre class="plain">${a}</pre>`}var J=e=>["stdout","stderr"].filter(t=>e[t]?.trim()).map(t=>`<div class="stream"><span class="label">${t}</span><pre>${l(e[t].trimEnd())}</pre></div>`).join("");function F(e){let t=Date.parse(e?.afterAt??"")-Date.parse(e?.beforeAt??"");return Number.isFinite(t)&&t>=0?ee(t):void 0}var U=(e,t)=>`lightbox-${e.id}--${t}`,Y=e=>l(e).replace(/^Step (\\d+)/,\'Step <span class="d">$1</span>\'),fe=\'<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M9.5 2.5h4v4M6.5 13.5h-4v-4M13.5 2.5 9 7M2.5 13.5 7 9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>\';function G(e){let t=(i,a)=>i?`<button type="button" class="lb-nav ${a}" popovertarget="${l(i.id)}" aria-label="${a==="prev"?"Previous":"Next"}: ${l(i.label)}, ${l(i.title)}"><span class="dir" aria-hidden="true">${a==="prev"?"\\u2039":"\\u203A"}</span><span class="role">${Y(i.nav??i.label)}</span></button>`:"";return e.map((i,a)=>`<div class="lightbox" id="${l(i.id)}" data-step="${l(i.step)}" popover><div class="lb-body">${i.body}</div>${t(e[a-1],"prev")}<p class="lb-cap"><span class="label">${Y(i.label)}</span>${i.caption}<button type="button" class="close" popovertarget="${l(i.id)}" popovertargetaction="hide" aria-label="Close">\\xD7</button></p>${t(e[a+1],"next")}</div>`).join(`\n`)}function he(e,t,i){return e.flatMap(a=>{let o=t.details.get(a.id),g=i.get(a.id),{headline:m,command:u}=V(a,o),v=p=>`step-${a.id}--${p}`;if(!a.snapshots){let p=O(o?.at);return[{id:U(a,"command"),step:v("command"),label:`Step ${g} \\xB7 ${a.inputMode==="diagnostic"?"Diagnostic":"Command"}`,title:m,body:`<div class="lb-term"><pre class="lb-cmd"><span class="prompt" aria-hidden="true">$</span>${l(u??m)}</pre>${o?.output?J(o.output)||\'<p class="quiet">No output.</p>\':""}</div>`,caption:p?`<time>${p} UTC</time>`:""}]}return["before","after"].filter(p=>a.snapshots?.[p]).map(p=>{let k=a.snapshots[p],b=p==="before"?"Before":"After",$=Q(p==="before"?o?.beforeAt:o?.afterAt);return{id:U(a,p),step:v(p),label:`Step ${g} \\xB7 ${b}`,title:m,body:`<img loading="lazy" alt="${b} dispatch snapshot, enlarged" src="${j(k)}">`,caption:`${$?`<time>${$}</time>`:""}<a href="${j(k)}">Open the original</a>`}})})}function ue(e){let t=[];for(let i of e)(i.snapshots?["before","after"]:["command"]).forEach((a,o)=>t.push({step:i,role:a,id:`step-${i.id}--${a}`,index:t.length,first:o===0}));return t}var te=e=>`#${encodeURIComponent(e.id)}`,L=e=>e.role==="before"?"Before":e.role==="after"?"After":e.step.inputMode==="diagnostic"?"Diagnostic":"Command";function ve(e,t,i,a){let o=e.step,{headline:g,command:m}=V(o,t),u=i.get(o.id),v=r=>i.get(r.step.id),p=(r,s,c)=>r?`<a class="arrow ${s} ${c}" href="${l(te(r))}" aria-label="${s==="prev"?"Previous":"Next"}${c==="errs"?" with errors":""}: step ${v(r)}, ${L(r).toLowerCase()}">${s==="prev"?"\\u2039":"\\u203A"}</a>`:"",k=p(a.previous,"prev","all")+p(a.next,"next","all")+p(a.previousError,"prev","errs")+p(a.nextError,"next","errs"),b=F(t),$=e.role==="command"?O(t?.at)?`${O(t?.at)} UTC`:void 0:Q(e.role==="before"?t?.beforeAt:t?.afterAt),E=`<div class="vlabel"><span class="badge" data-role="${e.role}"><span class="role">${L(e)}</span>${$?`<time>${$}</time>`:""}</span></div>`,R=`<h2 class="sname" title="${l(g)}"><span class="d">${u}</span><span class="h">${l(g)}</span>${b?`<span class="took" title="Time from the before snapshot to the after snapshot">${b}</span>`:""}</h2>`,I=`<section class="stage view${e.role==="command"?" terminal":""}${e.first?" first":""}" id="${l(e.id)}" data-v="${e.index}" aria-label="Step ${u}, ${L(e).toLowerCase()}">${k}${R}`;if(e.role==="command")return`${I}<div class="term"><div class="term-bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span>${o.inputMode==="diagnostic"?"Diagnostic command":"Command"} \\xB7 no snapshots</span><button type="button" class="enlarge" popovertarget="${l(U(o,"command"))}" title="Enlarge the command">${fe}Enlarge</button></div>\n<pre class="term-cmd"><span class="prompt" aria-hidden="true">$</span>${l(m??g)}</pre>${t?.output?J(t.output)||\'<p class="quiet">No output.</p>\':""}\n<p class="term-note">${o.inputMode==="diagnostic"?"Screenshots were not requested for this diagnostic.":"No snapshots were captured for this step."}</p></div>${E}</section>`;let T=o.snapshots?.[e.role],C=T?`<button type="button" class="zoom" popovertarget="${l(U(o,e.role))}" title="Enlarge the ${e.role} snapshot"><img alt="${L(e)} dispatch snapshot" src="${j(T)}"></button>`:`<div class="void">${L(e)}: unavailable \\u2014 incomplete evidence</div>`;return`${I}<div class="solo">${C}</div>${E}</section>`}function be(e,t,i,a,o){let{headline:g,command:m,reasonShown:u,kind:v}=V(e,t),p=e.snapshots?.declaredAfterIntervalMs,k=O(t?.at),b=($,E)=>`<div><dt>${$}</dt><dd>${E}</dd></div>`;return`<aside class="panel" aria-label="Step ${i} details"><div class="panel-scroll">\n<div class="stephead"><h2 class="stepno"><span class="n">Step <span class="d">${i}</span></span> <span class="of">of <span class="d">${String(a).padStart(2,"0")}</span></span></h2><a class="permalink" href="${l(Z(e))}" title="Stable link to this step" aria-label="Stable link to step ${i}">${xe}</a></div>\n<p class="meta"><span>${v}</span>${k?`<time>${k} UTC</time>`:""}<span class="state"><span class="sr">Execution: </span>${q(e.execution)}</span></p>\n${o.length?`<section class="concern"><h3>Why this step affects the verdicts</h3><ul>${o.map($=>`<li><span class="label">${l($.verdict)}</span><p>${l($.text)}</p></li>`).join("")}</ul></section>`:""}\n${u?`<section class="block"><h3>Reason</h3><p>${l(e.because??"Not present in retained host metadata")}</p></section>`:""}\n${m&&e.snapshots?`<section class="block"><h3>Command</h3><pre class="command">${l(m)}</pre></section>`:""}\n<section class="block"><h3>Expected</h3><p>${l(e.expected||"Not supplied")}</p></section>\n<section class="block"><h3>Observed</h3>${ge(e,t?.output,!!e.snapshots)}</section>\n<dl class="facts">${b("State",l(e.state))}${b("Input",l(e.inputMode))}${b("After interval",p===void 0?"unavailable":`${p} ms`)}${F(t)?b("Before to after",F(t)):""}${e.snapshots?.groupId?b("Group",l(e.snapshots.groupId)):""}</dl>\n</div></aside>`}var xe=\'<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M6.6 9.4l2.8-2.8M7.2 4.6l.9-.9a2.8 2.8 0 0 1 4 4l-.9.9M8.8 11.4l-.9.9a2.8 2.8 0 0 1-4-4l.9-.9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>\',we=\'<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7.2 8 10.4l3.2-3.2M3 13h10" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>\';function ye(e,t,i,a,o){let{headline:g,command:m}=V(e,t),u=F(t),v=o.map((p,k)=>{let b=p.role==="command"?void 0:e.snapshots?.[p.role],$=p.role==="command"?`<pre aria-hidden="true"><span class="prompt">$</span>${l(m??g)}</pre>`:b?`<img loading="lazy" alt="" src="${j(b)}">`:`<span class="none">No ${p.role} snapshot</span>`;return`<a data-t="${p.index}" href="${l(te(p))}" title="${l(`Step ${i} \\xB7 ${L(p)} \\xB7 ${g}`)}"><span class="face${p.role==="command"?" text":""}">${$}${p.role==="command"?"":`<span class="role">${L(p)}</span>`}${a&&k===0?\'<span class="flag" title="This step affects the verdicts">!</span>\':""}</span></a>`}).join("");return`<li class="${D(e.execution)}${e.inputMode==="diagnostic"?" diagnostic":""}${H(e)?" err":""}"><div class="faces">${v}</div><span class="cap"><span class="n">${i}</span><i class="dot" aria-hidden="true"></i><span class="t">${l(g)}</span>${u?`<span class="took">${u}</span>`:""}</span><span class="sr">${l(e.execution)}</span></li>`}var $e=(e,t,i)=>e?Array.from({length:e},(a,o)=>`.app:has(.center>.step:nth-of-type(${o+1}):target) .track li:nth-child(${o+1}),.app:has(.center>.step:nth-of-type(${o+1}) :target) .track li:nth-child(${o+1})`).join(",")+",.app:not(:has(.center :target)) .track li:first-child{background:var(--s1)}"+[...Array.from({length:i},(a,o)=>`.app:has([data-v="${o}"]:target) .track [data-t="${o}"] .face`),...t.map(a=>`.app:has(.center>.step[data-first="${a}"]:target) .track [data-t="${a}"] .face`),\'.app:not(:has(.center :target)) .track [data-t="0"] .face\'].join(",")+"{box-shadow:0 0 0 1px var(--ink),0 0 0 4px var(--tab)}":"";function ke(e,t){let i=l(t.label);return`<div class="fwin" id="${e}" data-step="overview" data-src="${t.href}" popover aria-label="${i}"><div class="fw-card"><div class="fw-bar"><span class="fw-name" title="${i}">${i}</span><span class="fw-note" title="The download is the original file" hidden>Formatted</span><span class="size">${A(t.bytes)}</span><a class="fw-dl" href="${t.href}" download="${l(t.name)}">${we}<span>Download</span></a><button type="button" class="close" popovertarget="${e}" popovertargetaction="hide" aria-label="Close">\\xD7</button></div><pre class="fw-body"><span class="quiet">Reading the file\\u2026</span></pre></div></div>`}function re(e){let t=ce(e),i=new Map(t.map((n,d)=>[n.id,String(d+1).padStart(2,"0")])),a=ue(t),o=t.map(n=>Date.parse(e.details.get(n.id)?.at??"")).filter(Number.isFinite),g=t.filter(n=>n.inputMode==="diagnostic").length,m=t.length-g,u=t.filter(H).length,v=o.length?new Date(Math.min(...o)).toISOString():void 0,p=new Map;for(let[n,d]of[["snapshots",`Snapshots ${e.completeness}`],["execution",`Execution ${e.execution}`]])for(let f of e.reasons[n])for(let M of f.stepIds)p.set(M,[...p.get(M)??[],{verdict:d,text:f.text}]);let k=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,b=new Map;for(let n of e.outputs){let[,d="",...f]=n.path.split("/");b.set(d,[...b.get(d)??[],{...n,label:f.filter(M=>!k.test(M)).join("/")||n.path.split("/").at(-1)}])}let $=[],E=[],R=(n,d)=>(E.push(ke(n,d)),`<button type="button" class="fopen" popovertarget="${n}" title="View ${l(d.name)}">${l(d.label)}</button>`),I=n=>ie.test(n.path)?R(`window-output-${E.length+1}`,{href:j(n.path),label:n.label,name:n.label.split("/").at(-1),bytes:n.bytes}):`<a href="${j(n.path)}">${l(n.label)}</a>`,T=[...b].map(([n,d])=>{let f=d.filter(y=>/\\.(png|jpe?g|webp|gif)$/i.test(y.path)),M=d.filter(y=>!f.includes(y)),ne=d.reduce((y,N)=>y+N.bytes,0);return`<details class="group"${e.outputs.length<=12?" open":""}><summary><span class="where">${l(n)}</span><span class="count">${le(d.length,"file")} \\xB7 ${A(ne)}</span></summary>${M.length?`<ul class="flist">${M.map(y=>`<li>${I(y)}<span>${A(y.bytes)}</span></li>`).join("")}</ul>`:""}${f.length?`<div class="gallery">${f.map(y=>{let N=`lightbox-output-${$.length+1}`,W=y.label.split("/").at(-1);return $.push({id:N,step:"overview",label:n,title:y.label,nav:W,body:`<img loading="lazy" alt="${l(y.label)}, enlarged" src="${j(y.path)}">`,caption:`<span class="file">${l(y.label)}</span><span class="size">${A(y.bytes)}</span><a href="${j(y.path)}">Open the original</a>`}),`<button type="button" class="gthumb" popovertarget="${N}" title="Enlarge ${l(W)}"><img loading="lazy" alt="${l(y.label)}" src="${j(y.path)}"><span>${l(W)}<small>${A(y.bytes)}</small></span></button>`}).join("")}</div>`:""}</details>`}).join(""),C={"manifest.json":"Checksums of every artifact","summary.json":"Verdicts and findings","trajectory.json":"Steps as recorded"},r=e.files.map(n=>`<li>${R(`window-${n.path.replace(/\\W+/g,"-")}`,{href:j(n.path),label:n.path,name:n.path.split("/").at(-1),bytes:n.bytes})}${C[n.path]?`<span>${C[n.path]}</span>`:""}</li>`).join(""),s=(n,d)=>`<li><b>${d}</b>${n?` <span>${n}</span>`:""}</li>`,c=n=>[...n.reduce((d,f)=>d.set(f.text,[...new Set([...d.get(f.text)??[],...f.stepIds])]),new Map)].map(([d,f])=>({text:d,stepIds:f})),h=n=>n.map(d=>`<a href="${l(`#step-${encodeURIComponent(d)}`)}">Step <span class="d">${i.get(d)??"?"}</span></a>`).join(""),x=n=>`<ul class="reasons">${c(n).map(d=>`<li><p>${l(d.text)}</p>${d.stepIds.length?`<p class="steps">${h(d.stepIds)}</p>`:""}</li>`).join("")}</ul>`,w=(n,d)=>n==="snapshots"?`Why snapshots are ${d}`:d==="failed"?"Why execution failed":`Why execution is ${d}`,S=(n,d,f)=>e.reasons[n].length?`<li class="pill ${D(f)}"><button type="button" popovertarget="why-${n}" title="${w(n,f)}"><span>${d}</span>${q(f)}<span class="q" aria-hidden="true">?</span></button><div class="why" id="why-${n}" popover><h3>${w(n,f)}</h3>${x(e.reasons[n])}</div></li>`:`<li class="pill ${D(f)}"><span>${d}</span>${q(f)}</li>`,z=(n,d,f,M)=>`<div class="vblock"><h4>${d} ${q(f)}</h4>${e.reasons[n].length?`<p class="vwhy">${w(n,f)}:</p>${x(e.reasons[n])}`:`<p class="quiet">${M}</p>`}</div>`,B=`<article class="step overview" id="overview"><section class="stage doc" aria-label="Package overview"><div class="doc-in">\n<h2>Overview</h2><p class="lede">Delivery integrity is separate from execution success. Snapshots are dispatch-time evidence, not continuous video: each shows the screen just before a step was sent and shortly after it returned.</p>\n<section class="block"><h3>Verdicts</h3>${z("snapshots","Snapshots",e.completeness,"Every snapshot the steps declared is present and tied to its step.")}${z("execution","Execution",e.execution,"Every step completed, and every retained receipt confirms it.")}</section>\n<section class="block"><h3>Findings as recorded <span class="count">${e.findings.length}</span></h3>${e.findings.length?`<ul class="findings">${pe(e.findings).map(n=>`<li>${n.ids.length?`<details><summary>${l(n.text)}</summary><code>${n.ids.map(l).join("<br>")}</code></details>`:l(n.text)}</li>`).join("")}</ul>`:\'<p class="quiet">No findings.</p>\'}</section>\n<section class="block"><h3>Declared outputs <span class="count">${e.outputs.length}</span></h3>${T?`<div class="outputs">${T}</div>`:\'<p class="quiet">No declared outputs were delivered.</p>\'}</section>\n<section class="block"><h3>Package</h3><div class="package"><dl class="ids"><div><dt>Package</dt><dd>${l(e.packageId)}</dd></div><div><dt>Task</dt><dd>${l(e.taskId)}</dd></div><div><dt>Session</dt><dd>${l(e.sessionId)}</dd></div>${v?`<div><dt>Started</dt><dd>${_(v,!0)}</dd></div>`:""}</dl>\n<ul class="files">${r}</ul></div></section></div></section></article>`;return{title:`Relay review: ${e.packageId}`,selection:$e(t.length,a.filter(n=>n.first).map(n=>n.index),a.length),html:`<div class="app">\n<header class="top"><div class="brand"><span class="mark" aria-hidden="true">${se}</span><h1 title="${l(e.packageId)}">Relay</h1>\n<ul class="stats">${s(P(t.length,"step"),String(t.length))}${s(P(m,"action"),String(m))}${s(P(g,"diagnostic"),String(g))}${v?`<li class="at"><time datetime="${v}" title="Started ${v}">${_(v)}</time><span class="local" hidden><span class="sep" aria-hidden="true">\\xB7</span><time datetime="${v}" data-local title="Started, in your time zone"></time></span></li>`:""}${o.length?s("",ee(Math.max(...o)-Math.min(...o))):""}</ul></div>\n<nav class="tabs mid" aria-label="View"><a class="t-traj" href="${t[0]?l(Z(t[0])):"#"}">Trajectory</a><a class="t-over" href="#overview">Overview<span class="${e.findings.length?"has":""}">${e.findings.length}</span></a></nav>\n<ul class="pills"><li class="keys" title="Keyboard shortcuts"><kbd aria-label="Left arrow">\\u2190</kbd><kbd aria-label="Right arrow">\\u2192</kbd><span>Steps</span><kbd>Space</kbd><span>Enlarge</span></li>${S("snapshots","Snapshots",e.completeness)}${S("execution","Execution",e.execution)}</ul></header>\n<main class="center">${u?\'<label class="focus" title="Highlight the steps with errors, and move between them with the arrows"><input type="checkbox" id="focus-errors">Focus on errors</label>\':""}${t.map(n=>{let d=a.filter(f=>f.step===n);return`<article id="step-${l(n.id)}" data-first="${d[0].index}" class="step ${D(n.execution)}${H(n)?" err":""}">${d.map(f=>ve(f,e.details.get(n.id),i,{previous:a[f.index-1],next:a[f.index+1],previousError:a.slice(0,f.index).findLast(M=>H(M.step)),nextError:a.slice(f.index+1).find(M=>H(M.step))})).join("")}${be(n,e.details.get(n.id),i.get(n.id),t.length,p.get(n.id)??[])}</article>`}).join(`\n`)}\n${B}</main>\n<footer class="track" aria-label="Steps"><ol>${t.map(n=>ye(n,e.details.get(n.id),i.get(n.id),p.has(n.id),a.filter(d=>d.step===n))).join("")}</ol></footer>\n</div>\n${G(he(t,e,i))}\n${G($)}${E.join("")}`}}function ae(e=document){let t=()=>[...e.querySelectorAll(".center .view")],i=()=>matchMedia("(prefers-reduced-motion: reduce)").matches,a=r=>r.querySelector(".lb-body>*"),o=r=>r?e.getElementById(r.getAttribute("popovertarget")??""):null,g=r=>{for(let s of e.querySelectorAll(".zoom,.enlarge,.gthumb")){if(s.getAttribute("popovertarget")!==r.id)continue;let c=s.classList.contains("enlarge")?s.closest(".term"):s.querySelector("img");if(c&&c.getBoundingClientRect().width)return c}return null},m=r=>{let s=r.getBoundingClientRect();if(!(r instanceof HTMLImageElement)||getComputedStyle(r).objectFit!=="contain"||!r.naturalWidth||!r.naturalHeight)return s;let c=Math.min(s.width/r.naturalWidth,s.height/r.naturalHeight),h=r.naturalWidth*c,x=r.naturalHeight*c;return{left:s.left+(s.width-h)/2,top:s.top+(s.height-x)/2,width:h,height:x}},u=(r,s)=>{let c=getComputedStyle(r).transform;r.style.transition="none",r.style.transform="none";let h=r.getBoundingClientRect(),x=m(s);if(r.style.transform=c==="none"?"":c,r.getBoundingClientRect(),r.style.transition="",!h.width)return"";let w=x.width/h.width;return`translate(${x.left+x.width/2-h.left-h.width*w/2}px,${x.top+x.height/2-h.top-h.height*w/2}px) scale(${w})`},v=null,p=0,k=()=>{v&&(v.style.visibility=""),v=null},b=r=>{p++,k();let s=i()?null:g(r);r.toggleAttribute("data-flip",!!s),r.showPopover();let c=a(r);if(s&&c){let h=u(c,s);c.style.transition="none",c.style.transform=h,c.getBoundingClientRect(),c.style.transition="",c.style.transform="",s.style.visibility="hidden",v=s}},$=r=>{if(r.hasAttribute("data-instant"))return;let s=a(r),c=v,h=++p;c&&s&&!i()&&c.getBoundingClientRect().width?(r.setAttribute("data-flip",""),s.style.transform=u(s,c),s.addEventListener("transitionend",()=>{h===p&&k()},{once:!0}),setTimeout(()=>{h===p&&k()},450)):(r.removeAttribute("data-flip"),k()),setTimeout(()=>{h===p&&!r.matches(":popover-open")&&s&&(s.style.transform="")},520)};e.querySelectorAll(".lightbox").forEach(r=>r.addEventListener("beforetoggle",s=>{s.newState==="closed"&&$(r)}));let E=r=>{let s=r.closest(".lightbox"),c=o(r);if(!c)return;let h=[s,c].filter(z=>!!z);h.forEach(z=>z.setAttribute("data-instant","")),p++,k(),s&&s.hidePopover();let x=c.dataset.step;x&&decodeURIComponent(location.hash.slice(1))!==x&&(location.hash=encodeURIComponent(x));let w=a(c);w&&(w.style.transform=""),c.showPopover();let S=g(c);S&&(S.style.visibility="hidden",v=S),setTimeout(()=>h.forEach(z=>z.removeAttribute("data-instant")),60)};e.querySelectorAll(".fwin").forEach(r=>r.addEventListener("beforetoggle",s=>{s.newState==="open"&&Se(r)})),e.addEventListener("click",r=>{let s=r.target instanceof Element?r.target:null,c=s?.closest(".lb-nav");if(c){r.preventDefault(),E(c);return}let h=o(s?.closest(".zoom,.enlarge,.gthumb")??null);if(h){r.preventDefault(),b(h);return}s instanceof HTMLElement&&(s.classList.contains("lightbox")||s.classList.contains("fwin"))&&s.hidePopover()});try{e.querySelectorAll("time[data-local]").forEach(r=>{let s=new Date(r.dateTime);if(isNaN(s.getTime())||!s.getTimezoneOffset())return;r.textContent=new Intl.DateTimeFormat(void 0,{...s.getFullYear()!==s.getUTCFullYear()?{year:"numeric"}:{},month:"short",day:"numeric",hour:"numeric",minute:"2-digit",timeZoneName:"short"}).format(s);let c=r.closest("[hidden]");c&&(c.hidden=!1)})}catch{}let R=()=>{let r=null;try{r=e.getElementById(decodeURIComponent(location.hash.slice(1)))}catch{}if(!r)return 0;let s=r.classList.contains("step")?r.querySelector(".view.first"):r.closest(".view");return s?t().indexOf(s):-1},I=()=>!!e.getElementById("focus-errors")?.checked,T="",C=()=>{let r=R();r<0||(T=location.hash,e.querySelector(`.track a[data-t="${r}"]`)?.scrollIntoView({block:"nearest",inline:"nearest"}))};e.addEventListener("keydown",r=>{if(r.defaultPrevented||r.altKey||r.ctrlKey||r.metaKey||r.shiftKey)return;let s=r.target;if(s instanceof HTMLElement&&(s.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(s.tagName)))return;let c=e.querySelector(".lightbox:popover-open");if(r.key===" "){if(c){r.preventDefault(),r.repeat||c.hidePopover();return}let S=s instanceof Element?s.closest(".zoom,.enlarge,.gthumb"):null;if(s instanceof Element&&!S&&(s.closest("summary")||s.closest("button"))||(r.preventDefault(),r.repeat))return;if(S?.classList.contains("gthumb")){let d=o(S);d&&b(d);return}let z=R(),B=z<0?null:t()[z],n=B&&e.getElementById(B.id.replace(/^step-/,"lightbox-"));n&&b(n);return}let h=r.key==="ArrowRight"?1:r.key==="ArrowLeft"?-1:0;if(!h)return;if(c){r.preventDefault();let S=c.querySelector(h<0?".lb-nav.prev":".lb-nav.next");S&&E(S);return}let x=t(),w=R();if(!(w<0)){do w+=h;while(w>=0&&w<x.length&&I()&&!x[w].closest(".step").classList.contains("err"));w<0||w>=x.length||(r.preventDefault(),location.hash=encodeURIComponent(x[w].id))}}),e.querySelector(".tabs .t-traj")?.addEventListener("click",r=>{T&&(r.preventDefault(),location.hash=T)}),addEventListener("hashchange",()=>{let r="";try{r=decodeURIComponent(location.hash.slice(1))}catch{}e.querySelectorAll(":popover-open").forEach(s=>{s.dataset.step!==r&&s.hidePopover()}),C()}),C()}async function Se(e){if(e.dataset.filled)return;e.dataset.filled="reading";let t=e.querySelector(".fw-body"),i=e.querySelector(".fw-note");try{let a=await fetch(e.dataset.src);if(!a.ok)throw new Error(`${a.status}`);let o=new Uint8Array(await a.arrayBuffer()),g=o.length>1e6,m=new TextDecoder().decode(g?o.subarray(0,1e6):o);if(!g&&/\\.json$/i.test(e.dataset.src))try{let u=JSON.stringify(JSON.parse(m),null,2);u!==m.trimEnd()&&(m=u,i.hidden=!1)}catch{}t.textContent=m,m||(t.innerHTML=\'<span class="quiet">Empty file.</span>\'),g&&t.insertAdjacentHTML("beforeend",`\n<span class="quiet">Showing the first megabyte; download the file for the rest.</span>`),e.dataset.filled="done"}catch{t.innerHTML=\'<span class="quiet">The file could not be read.</span>\',delete e.dataset.filled}}async function Me(){let[,e="",t=""]=location.pathname.split("/");try{let i=await fetch(`/.api/${e}/${t}.json`);if(!i.ok)throw new Error(`The review server answered ${i.status}.`);let a=re(X(await i.json()));document.title=a.title;let o=new CSSStyleSheet;o.replaceSync(a.selection),document.adoptedStyleSheets=[...document.adoptedStyleSheets,o],document.body.innerHTML=a.html}catch(i){let a=document.createElement("p");a.className="loading",a.textContent=`The trajectory could not be loaded. ${i instanceof Error?i.message:""}`,document.body.replaceChildren(a);return}location.hash&&location.replace(location.hash),ae()}Me();\n' : /* @__PURE__ */ (() => {
+var reviewApp = true ? async () => 'var Z=e=>({...e,details:new Map(Object.entries(e.details))}),se=/\\.(json|jsonl|ndjson|log|txt|md|csv|tsv|ya?ml|xml|toml)$/i,l=e=>String(e??"").replace(/[&<>"\']/g,t=>({"&":"&amp;","<":"&lt;",">":"&gt;",\'"\':"&quot;","\'":"&#39;"})[t]),j=e=>l(e.split("/").map(encodeURIComponent).join("/")),Q=e=>`#step-${encodeURIComponent(e.id)}`,F=e=>e&&Number.isFinite(Date.parse(e))?new Date(e).toISOString().slice(11,19):void 0,ee=e=>e&&Number.isFinite(Date.parse(e))?new Date(e).toISOString().slice(11,23):void 0,te=e=>e<6e4?`${(e/1e3).toFixed(1)} s`:`${Math.floor(e/6e4)} min ${Math.round(e%6e4/1e3)} s`,le=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],K=(e,t=!1)=>{let o=new Date(e),r=i=>String(i).padStart(2,"0");return`${le[o.getUTCMonth()]} ${o.getUTCDate()}, ${t?`${o.getUTCFullYear()}, `:""}${r(o.getUTCHours())}:${r(o.getUTCMinutes())} UTC`},de=\'<svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true"><rect x="3.5" y="4.5" width="11.5" height="9" fill="#336698" stroke="#000" stroke-width="1.2"/><rect x="9" y="10.5" width="11.5" height="9" fill="#fff" stroke="#000" stroke-width="1.2"/><path d="M12 15h5M15.2 13.2l1.8 1.8-1.8 1.8" fill="none" stroke="#cc1b1b" stroke-width="1.8" stroke-linecap="square"/></svg>\',H=e=>e>=1e6?`${(e/1e6).toFixed(1)} MB`:e>=1e3?`${(e/1e3).toFixed(1)} kB`:`${e} B`,O=(e,t)=>e===1?t:`${t}s`,ce=(e,t)=>`${e} ${O(e,t)}`,q=e=>D(e.execution)!=="ok",D=e=>["passed","complete","completed"].includes(e)?"ok":["failed","refused"].includes(e)?"bad":"warn",B=e=>`<span class="verdict ${D(e)}"><i aria-hidden="true"></i>${l(e)}</span>`,pe=e=>/^[\\w@%+=:,./-]+$/.test(e)?e:`\'${e.replace(/\'/g,"\'\\\\\'\'")}\'`;function me(e){let t=o=>Date.parse(e.details.get(o.id)?.at??"");return e.steps.map((o,r)=>({step:o,index:r})).sort((o,r)=>(Number.isFinite(t(o.step))?t(o.step):1/0)-(Number.isFinite(t(r.step))?t(r.step):1/0)||o.index-r.index).map(({step:o})=>o)}function ge(e){let t=new Map;for(let r of e){let i=/^(diagnostic|request|action) (\\S+) (.*)$/.exec(r),g=i?`${i[1]} ${i[3]}`:r,m=t.get(g)??{sentence:r,ids:[]};i&&m.ids.push(i[2]),t.set(g,m)}let o=r=>r.replace(/^./,i=>i.toUpperCase());return[...t.entries()].map(([r,i])=>{if(i.ids.length<2)return{text:o(i.sentence),ids:[]};let[g,...m]=r.split(" "),u=m.join(" ").replace(/^has /,"have ").replace(/^is /,"are ").replace(/^lacks /,"lack ");return{text:`${i.ids.length} ${g}s ${u}`,ids:i.ids}})}function W(e,t){let o=t?.argv?.length?t.argv.map(pe).join(" "):void 0,r=!!o&&(e.title==="Diagnostic command"||e.title.startsWith("exec ")),i=r&&e.because?e.because:e.title,g=i.split(`\n`)[0].trimEnd(),m=g.length>140?`${g.slice(0,139).trimEnd()}\\u2026`:g===i?i:`${g} \\u2026`,u=e.inputMode==="diagnostic"?"Diagnostic":o&&!e.snapshots?"Command":"Action";return{headline:m,command:o??(m===i?void 0:i),reasonShown:!(r&&e.because),kind:u}}function fe(e){let t=/^Authoritative receipt outcomes: (\\[.*\\])$/m.exec(e??"");if(t)try{let o=new Set;return JSON.parse(t[1]).filter(r=>{let i=JSON.stringify(r);return o.has(i)?!1:(o.add(i),!0)})}catch{return}}var Y=(e,t)=>`<span class="exit ${e.code===0&&!t?"ok":"bad"}">exit ${l(e.code??"none")}${e.signal?` \\xB7 ${l(e.signal)}`:""}${t?" \\xB7 timed out":""}</span>`;function he(e,t,o=!0){let r=l(e.observed??"No confirmed result"),i=`<details class="raw"><summary>Receipt as recorded</summary><pre>${r}</pre></details>`;if(t){let m=t.exit===void 0?"":Y({code:t.exit,signal:t.signal},t.timedOut),u=o?_(t):"";return`${m}${u||(o?\'<p class="quiet">No output.</p>\':"")}${i}`}let g=fe(e.observed);return g?.length?`<ul class="receipts">${g.map(m=>`<li>${B(m.execution??m.outcome?.kind??"unknown")}${m.outcome?.exitStatus?Y(m.outcome.exitStatus):""}${m.outcome?.diagnostic?`<span class="diag">${l(m.outcome.diagnostic)}</span>`:""}</li>`).join("")}</ul>${i}`:`<pre class="plain">${r}</pre>`}var _=e=>["stdout","stderr"].filter(t=>e[t]?.trim()).map(t=>`<div class="stream"><span class="label">${t}</span><pre>${l(e[t].trimEnd())}</pre></div>`).join("");function U(e){let t=Date.parse(e?.afterAt??"")-Date.parse(e?.beforeAt??"");return Number.isFinite(t)&&t>=0?te(t):void 0}var V=(e,t)=>`lightbox-${e.id}--${t}`,G=e=>l(e).replace(/^Step (\\d+)/,\'Step <span class="d">$1</span>\'),ue=\'<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M9.5 2.5h4v4M6.5 13.5h-4v-4M13.5 2.5 9 7M2.5 13.5 7 9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>\';function X(e){let t=(o,r)=>o?`<button type="button" class="lb-nav ${r}" popovertarget="${l(o.id)}" aria-label="${r==="prev"?"Previous":"Next"}: ${l(o.label)}, ${l(o.title)}"><span class="dir" aria-hidden="true">${r==="prev"?"\\u2039":"\\u203A"}</span><span class="role">${G(o.nav??o.label)}</span></button>`:"";return e.map((o,r)=>`<div class="lightbox" id="${l(o.id)}" data-step="${l(o.step)}" popover><div class="lb-body">${o.body}</div>${t(e[r-1],"prev")}<p class="lb-cap"><span class="label">${G(o.label)}</span>${o.caption}<button type="button" class="close" popovertarget="${l(o.id)}" popovertargetaction="hide" aria-label="Close">\\xD7</button></p>${t(e[r+1],"next")}</div>`).join(`\n`)}function ve(e,t,o){return e.flatMap(r=>{let i=t.details.get(r.id),g=o.get(r.id),{headline:m,command:u}=W(r,i),v=c=>`step-${r.id}--${c}`;if(!r.snapshots){let c=F(i?.at);return[{id:V(r,"command"),step:v("command"),label:`Step ${g} \\xB7 ${r.inputMode==="diagnostic"?"Diagnostic":"Command"}`,title:m,body:`<div class="lb-term"><pre class="lb-cmd"><span class="prompt" aria-hidden="true">$</span>${l(u??m)}</pre>${i?.output?_(i.output)||\'<p class="quiet">No output.</p>\':""}</div>`,caption:c?`<time>${c} UTC</time>`:""}]}return["before","after"].filter(c=>r.snapshots?.[c]).map(c=>{let b=r.snapshots[c],x=c==="before"?"Before":"After",w=ee(c==="before"?i?.beforeAt:i?.afterAt);return{id:V(r,c),step:v(c),label:`Step ${g} \\xB7 ${x}`,title:m,body:`<img loading="lazy" alt="${x} dispatch snapshot, enlarged" src="${j(b)}">`,caption:`${w?`<time>${w}</time>`:""}<a href="${j(b)}">Open the original</a>`}})})}function be(e){let t=[];for(let o of e)(o.snapshots?["before","after"]:["command"]).forEach((r,i)=>t.push({step:o,role:r,id:`step-${o.id}--${r}`,index:t.length,first:i===0}));return t}var ae=e=>`#${encodeURIComponent(e.id)}`,I=e=>e.role==="before"?"Before":e.role==="after"?"After":e.step.inputMode==="diagnostic"?"Diagnostic":"Command";function xe(e,t,o,r){let i=e.step,{headline:g,command:m}=W(i,t),u=o.get(i.id),v=a=>o.get(a.step.id),c=(a,s,d)=>a?`<a class="arrow ${s} ${d}" href="${l(ae(a))}" aria-label="${s==="prev"?"Previous":"Next"}${d==="errs"?" with errors":""}: step ${v(a)}, ${I(a).toLowerCase()}">${s==="prev"?"\\u2039":"\\u203A"}</a>`:"",b=c(r.previous,"prev","all")+c(r.next,"next","all")+c(r.previousError,"prev","errs")+c(r.nextError,"next","errs"),x=U(t),w=e.role==="command"?F(t?.at)?`${F(t?.at)} UTC`:void 0:ee(e.role==="before"?t?.beforeAt:t?.afterAt),E=`<div class="vlabel"><span class="badge" data-role="${e.role}"><span class="role">${I(e)}</span>${w?`<time>${w}</time>`:""}</span></div>`,T=`<h2 class="sname" title="${l(g)}"><span class="d">${u}</span><span class="h">${l(g)}</span>${x?`<span class="took" title="Time from the before snapshot to the after snapshot">${x}</span>`:""}</h2>`,C=`<section class="stage view${e.role==="command"?" terminal":""}${e.first?" first":""}" id="${l(e.id)}" data-v="${e.index}" aria-label="Step ${u}, ${I(e).toLowerCase()}">${b}${T}`;if(e.role==="command")return`${C}<div class="term"><div class="term-bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span>${i.inputMode==="diagnostic"?"Diagnostic command":"Command"} \\xB7 no snapshots</span><button type="button" class="enlarge" popovertarget="${l(V(i,"command"))}" title="Enlarge the command">${ue}Enlarge</button></div>\n<pre class="term-cmd"><span class="prompt" aria-hidden="true">$</span>${l(m??g)}</pre>${t?.output?_(t.output)||\'<p class="quiet">No output.</p>\':""}\n<p class="term-note">${i.inputMode==="diagnostic"?"Screenshots were not requested for this diagnostic.":"No snapshots were captured for this step."}</p></div>${E}</section>`;let R=i.snapshots?.[e.role],L=R?`<button type="button" class="zoom" popovertarget="${l(V(i,e.role))}" title="Enlarge the ${e.role} snapshot"><img alt="${I(e)} dispatch snapshot" src="${j(R)}"></button>`:`<div class="void">${I(e)}: unavailable \\u2014 incomplete evidence</div>`;return`${C}<div class="solo">${L}</div>${E}</section>`}var re=e=>e?`<p class="do"><b>What you can do:</b> ${l(e)}</p>`:"";function we(e,t,o,r,i){let{headline:g,command:m,reasonShown:u,kind:v}=W(e,t),c=e.snapshots?.declaredAfterIntervalMs,b=F(t?.at),x=(w,E)=>`<div><dt>${w}</dt><dd>${E}</dd></div>`;return`<aside class="panel" aria-label="Step ${o} details"><div class="panel-scroll">\n<div class="stephead"><h2 class="stepno"><span class="n">Step <span class="d">${o}</span></span> <span class="of">of <span class="d">${String(r).padStart(2,"0")}</span></span></h2><a class="permalink" href="${l(Q(e))}" title="Stable link to this step" aria-label="Stable link to step ${o}">${ye}</a></div>\n<p class="meta"><span>${v}</span>${b?`<time>${b} UTC</time>`:""}<span class="state"><span class="sr">Execution: </span>${B(e.execution)}</span></p>\n${i.length?`<section class="concern"><h3>Why this step affects the verdicts</h3><ul>${i.map(w=>`<li><span class="label">${l(w.verdict)}</span><p>${l(w.text)}</p>${re(w.action)}</li>`).join("")}</ul></section>`:""}\n${u?`<section class="block"><h3>Reason</h3><p>${l(e.because??"Not present in retained host metadata")}</p></section>`:""}\n${m&&e.snapshots?`<section class="block"><h3>Command</h3><pre class="command">${l(m)}</pre></section>`:""}\n<section class="block"><h3>Expected</h3><p>${l(e.expected||"Not supplied")}</p></section>\n<section class="block"><h3>Observed</h3>${he(e,t?.output,!!e.snapshots)}</section>\n<dl class="facts">${x("State",l(e.state))}${x("Input",l(e.inputMode))}${x("After interval",c===void 0?"unavailable":`${c} ms`)}${U(t)?x("Before to after",U(t)):""}${e.snapshots?.groupId?x("Group",l(e.snapshots.groupId)):""}</dl>\n</div></aside>`}var ye=\'<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M6.6 9.4l2.8-2.8M7.2 4.6l.9-.9a2.8 2.8 0 0 1 4 4l-.9.9M8.8 11.4l-.9.9a2.8 2.8 0 0 1-4-4l.9-.9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>\',$e=\'<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7.2 8 10.4l3.2-3.2M3 13h10" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>\';function ke(e,t,o,r,i){let{headline:g,command:m}=W(e,t),u=U(t),v=i.map((c,b)=>{let x=c.role==="command"?void 0:e.snapshots?.[c.role],w=c.role==="command"?`<pre aria-hidden="true"><span class="prompt">$</span>${l(m??g)}</pre>`:x?`<img loading="lazy" alt="" src="${j(x)}">`:`<span class="none">No ${c.role} snapshot</span>`;return`<a data-t="${c.index}" href="${l(ae(c))}" title="${l(`Step ${o} \\xB7 ${I(c)} \\xB7 ${g}`)}"><span class="face${c.role==="command"?" text":""}">${w}${c.role==="command"?"":`<span class="role">${I(c)}</span>`}${r&&b===0?\'<span class="flag" title="This step affects the verdicts">!</span>\':""}</span></a>`}).join("");return`<li class="${D(e.execution)}${e.inputMode==="diagnostic"?" diagnostic":""}${q(e)?" err":""}"><div class="faces">${v}</div><span class="cap"><span class="n">${o}</span><i class="dot" aria-hidden="true"></i><span class="t">${l(g)}</span>${u?`<span class="took">${u}</span>`:""}</span><span class="sr">${l(e.execution)}</span></li>`}var Se=(e,t,o)=>e?Array.from({length:e},(r,i)=>`.app:has(.center>.step:nth-of-type(${i+1}):target) .track li:nth-child(${i+1}),.app:has(.center>.step:nth-of-type(${i+1}) :target) .track li:nth-child(${i+1})`).join(",")+",.app:not(:has(.center :target)) .track li:first-child{background:var(--s1)}"+[...Array.from({length:o},(r,i)=>`.app:has([data-v="${i}"]:target) .track [data-t="${i}"] .face`),...t.map(r=>`.app:has(.center>.step[data-first="${r}"]:target) .track [data-t="${r}"] .face`),\'.app:not(:has(.center :target)) .track [data-t="0"] .face\'].join(",")+"{box-shadow:0 0 0 1px var(--ink),0 0 0 4px var(--tab)}":"";function Me(e,t){let o=l(t.label);return`<div class="fwin" id="${e}" data-step="overview" data-src="${t.href}" popover aria-label="${o}"><div class="fw-card"><div class="fw-bar"><span class="fw-name" title="${o}">${o}</span><span class="fw-note" title="The download is the original file" hidden>Formatted</span><span class="size">${H(t.bytes)}</span><a class="fw-dl" href="${t.href}" download="${l(t.name)}">${$e}<span>Download</span></a><button type="button" class="close" popovertarget="${e}" popovertargetaction="hide" aria-label="Close">\\xD7</button></div><pre class="fw-body"><span class="quiet">Reading the file\\u2026</span></pre></div></div>`}function ne(e){let t=me(e),o=new Map(t.map((n,p)=>[n.id,String(p+1).padStart(2,"0")])),r=be(t),i=t.map(n=>Date.parse(e.details.get(n.id)?.at??"")).filter(Number.isFinite),g=t.filter(n=>n.inputMode==="diagnostic").length,m=t.length-g,u=t.filter(q).length,v=i.length?new Date(Math.min(...i)).toISOString():void 0,c=new Map,b=e.reasons.defects??[];for(let[n,p]of[["snapshots",`Snapshots ${e.completeness}`],["execution",`Execution ${e.execution}`],["defects","Relay defect"]])for(let f of n==="defects"?b:e.reasons[n])for(let M of f.stepIds)c.set(M,[...c.get(M)??[],{verdict:p,text:f.text,action:f.action}]);let x=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,w=new Map;for(let n of e.outputs){let[,p="",...f]=n.path.split("/");w.set(p,[...w.get(p)??[],{...n,label:f.filter(M=>!x.test(M)).join("/")||n.path.split("/").at(-1)}])}let E=[],T=[],C=(n,p)=>(T.push(Me(n,p)),`<button type="button" class="fopen" popovertarget="${n}" title="View ${l(p.name)}">${l(p.label)}</button>`),R=n=>se.test(n.path)?C(`window-output-${T.length+1}`,{href:j(n.path),label:n.label,name:n.label.split("/").at(-1),bytes:n.bytes}):`<a href="${j(n.path)}">${l(n.label)}</a>`,L=[...w].map(([n,p])=>{let f=p.filter(k=>/\\.(png|jpe?g|webp|gif)$/i.test(k.path)),M=p.filter(k=>!f.includes(k)),ie=p.reduce((k,P)=>k+P.bytes,0);return`<details class="group"${e.outputs.length<=12?" open":""}><summary><span class="where">${l(n)}</span><span class="count">${ce(p.length,"file")} \\xB7 ${H(ie)}</span></summary>${M.length?`<ul class="flist">${M.map(k=>`<li>${R(k)}<span>${H(k.bytes)}</span></li>`).join("")}</ul>`:""}${f.length?`<div class="gallery">${f.map(k=>{let P=`lightbox-output-${E.length+1}`,J=k.label.split("/").at(-1);return E.push({id:P,step:"overview",label:n,title:k.label,nav:J,body:`<img loading="lazy" alt="${l(k.label)}, enlarged" src="${j(k.path)}">`,caption:`<span class="file">${l(k.label)}</span><span class="size">${H(k.bytes)}</span><a href="${j(k.path)}">Open the original</a>`}),`<button type="button" class="gthumb" popovertarget="${P}" title="Enlarge ${l(J)}"><img loading="lazy" alt="${l(k.label)}" src="${j(k.path)}"><span>${l(J)}<small>${H(k.bytes)}</small></span></button>`}).join("")}</div>`:""}</details>`}).join(""),a={"manifest.json":"Checksums of every artifact","OPENING.txt":"How to review this package","summary.json":"Verdicts as an earlier relay derived them","trajectory.json":"Steps as an earlier relay derived them","walkthrough.json":"Steps as an earlier relay derived them"},s=e.files.map(n=>`<li>${C(`window-${n.path.replace(/\\W+/g,"-")}`,{href:j(n.path),label:n.path,name:n.path.split("/").at(-1),bytes:n.bytes})}${a[n.path]?`<span>${a[n.path]}</span>`:""}</li>`).join(""),d=(n,p)=>`<li><b>${p}</b>${n?` <span>${n}</span>`:""}</li>`,h=n=>[...n.reduce((p,f)=>p.set(f.text,{...f,stepIds:[...new Set([...p.get(f.text)?.stepIds??[],...f.stepIds])]}),new Map).values()],y=n=>n.map(p=>`<a href="${l(`#step-${encodeURIComponent(p)}`)}">Step <span class="d">${o.get(p)??"?"}</span></a>`).join(""),$=n=>`<ul class="reasons">${h(n).map(p=>`<li><p>${l(p.text)}</p>${re(p.action)}${p.stepIds.length?`<p class="steps">${y(p.stepIds)}</p>`:""}</li>`).join("")}</ul>`,S=(n,p)=>n==="snapshots"?`Why snapshots are ${p}`:p==="failed"?"Why execution failed":`Why execution is ${p}`,z=(n,p,f)=>e.reasons[n].length?`<li class="pill ${D(f)}"><button type="button" popovertarget="why-${n}" title="${S(n,f)}"><span>${p}</span>${B(f)}<span class="q" aria-hidden="true">?</span></button><div class="why" id="why-${n}" popover><h3>${S(n,f)}</h3>${$(e.reasons[n])}</div></li>`:`<li class="pill ${D(f)}"><span>${p}</span>${B(f)}</li>`,A=(n,p,f,M)=>`<div class="vblock"><h4>${p} ${B(f)}</h4>${e.reasons[n].length?`<p class="vwhy">${S(n,f)}:</p>${$(e.reasons[n])}`:`<p class="quiet">${M}</p>`}</div>`,N=`<article class="step overview" id="overview"><section class="stage doc" aria-label="Package overview"><div class="doc-in">\n<h2>Overview</h2><p class="lede">Delivery integrity is separate from execution success. Snapshots are dispatch-time evidence, not continuous video: each shows the screen just before a step was sent and shortly after it returned.</p>\n<section class="block"><h3>Verdicts</h3>${A("snapshots","Snapshots",e.completeness,"Every snapshot the steps declared is present and tied to its step.")}${A("execution","Execution",e.execution,"Every step completed, and every retained receipt confirms it.")}</section>\n${b.length?`<section class="block"><h3>Relay defects <span class="count">${h(b).length}</span></h3><div><p class="vwhy">These are faults in the relay\'s own records, not in the run, and they change no verdict.</p>${$(b)}</div></section>`:""}\n<section class="block"><h3>Findings as recorded <span class="count">${e.findings.length}</span></h3>${e.findings.length?`<ul class="findings">${ge(e.findings).map(n=>`<li>${n.ids.length?`<details><summary>${l(n.text)}</summary><code>${n.ids.map(l).join("<br>")}</code></details>`:l(n.text)}</li>`).join("")}</ul>`:\'<p class="quiet">No findings.</p>\'}</section>\n<section class="block"><h3>Declared outputs <span class="count">${e.outputs.length}</span></h3>${L?`<div class="outputs">${L}</div>`:\'<p class="quiet">No declared outputs were delivered.</p>\'}</section>\n<section class="block"><h3>Package</h3><div class="package"><dl class="ids"><div><dt>Package</dt><dd>${l(e.packageId)}</dd></div><div><dt>Task</dt><dd>${l(e.taskId)}</dd></div><div><dt>Session</dt><dd>${l(e.sessionId)}</dd></div>${v?`<div><dt>Started</dt><dd>${K(v,!0)}</dd></div>`:""}</dl>\n<ul class="files">${s}</ul></div></section></div></section></article>`;return{title:`Relay review: ${e.packageId}`,selection:Se(t.length,r.filter(n=>n.first).map(n=>n.index),r.length),html:`<div class="app">\n<header class="top"><div class="brand"><span class="mark" aria-hidden="true">${de}</span><h1 title="${l(e.packageId)}">Relay</h1>\n<ul class="stats">${d(O(t.length,"step"),String(t.length))}${d(O(m,"action"),String(m))}${d(O(g,"diagnostic"),String(g))}${v?`<li class="at"><time datetime="${v}" title="Started ${v}">${K(v)}</time><span class="local" hidden><span class="sep" aria-hidden="true">\\xB7</span><time datetime="${v}" data-local title="Started, in your time zone"></time></span></li>`:""}${i.length?d("",te(Math.max(...i)-Math.min(...i))):""}</ul></div>\n<nav class="tabs mid" aria-label="View"><a class="t-traj" href="${t[0]?l(Q(t[0])):"#"}">Trajectory</a><a class="t-over" href="#overview">Overview<span class="${e.findings.length?"has":""}">${e.findings.length}</span></a></nav>\n<ul class="pills"><li class="keys" title="Keyboard shortcuts"><kbd aria-label="Left arrow">\\u2190</kbd><kbd aria-label="Right arrow">\\u2192</kbd><span>Steps</span><kbd>Space</kbd><span>Enlarge</span></li>${z("snapshots","Snapshots",e.completeness)}${z("execution","Execution",e.execution)}</ul></header>\n<main class="center">${u?\'<label class="focus" title="Highlight the steps with errors, and move between them with the arrows"><input type="checkbox" id="focus-errors">Focus on errors</label>\':""}${t.map(n=>{let p=r.filter(f=>f.step===n);return`<article id="step-${l(n.id)}" data-first="${p[0].index}" class="step ${D(n.execution)}${q(n)?" err":""}">${p.map(f=>xe(f,e.details.get(n.id),o,{previous:r[f.index-1],next:r[f.index+1],previousError:r.slice(0,f.index).findLast(M=>q(M.step)),nextError:r.slice(f.index+1).find(M=>q(M.step))})).join("")}${we(n,e.details.get(n.id),o.get(n.id),t.length,c.get(n.id)??[])}</article>`}).join(`\n`)}\n${N}</main>\n<footer class="track" aria-label="Steps"><ol>${t.map(n=>ke(n,e.details.get(n.id),o.get(n.id),c.has(n.id),r.filter(p=>p.step===n))).join("")}</ol></footer>\n</div>\n${X(ve(t,e,o))}\n${X(E)}${T.join("")}`}}function oe(e=document){let t=()=>[...e.querySelectorAll(".center .view")],o=()=>matchMedia("(prefers-reduced-motion: reduce)").matches,r=a=>a.querySelector(".lb-body>*"),i=a=>a?e.getElementById(a.getAttribute("popovertarget")??""):null,g=a=>{for(let s of e.querySelectorAll(".zoom,.enlarge,.gthumb")){if(s.getAttribute("popovertarget")!==a.id)continue;let d=s.classList.contains("enlarge")?s.closest(".term"):s.querySelector("img");if(d&&d.getBoundingClientRect().width)return d}return null},m=a=>{let s=a.getBoundingClientRect();if(!(a instanceof HTMLImageElement)||getComputedStyle(a).objectFit!=="contain"||!a.naturalWidth||!a.naturalHeight)return s;let d=Math.min(s.width/a.naturalWidth,s.height/a.naturalHeight),h=a.naturalWidth*d,y=a.naturalHeight*d;return{left:s.left+(s.width-h)/2,top:s.top+(s.height-y)/2,width:h,height:y}},u=(a,s)=>{let d=getComputedStyle(a).transform;a.style.transition="none",a.style.transform="none";let h=a.getBoundingClientRect(),y=m(s);if(a.style.transform=d==="none"?"":d,a.getBoundingClientRect(),a.style.transition="",!h.width)return"";let $=y.width/h.width;return`translate(${y.left+y.width/2-h.left-h.width*$/2}px,${y.top+y.height/2-h.top-h.height*$/2}px) scale(${$})`},v=null,c=0,b=()=>{v&&(v.style.visibility=""),v=null},x=a=>{c++,b();let s=o()?null:g(a);a.toggleAttribute("data-flip",!!s),a.showPopover();let d=r(a);if(s&&d){let h=u(d,s);d.style.transition="none",d.style.transform=h,d.getBoundingClientRect(),d.style.transition="",d.style.transform="",s.style.visibility="hidden",v=s}},w=a=>{if(a.hasAttribute("data-instant"))return;let s=r(a),d=v,h=++c;d&&s&&!o()&&d.getBoundingClientRect().width?(a.setAttribute("data-flip",""),s.style.transform=u(s,d),s.addEventListener("transitionend",()=>{h===c&&b()},{once:!0}),setTimeout(()=>{h===c&&b()},450)):(a.removeAttribute("data-flip"),b()),setTimeout(()=>{h===c&&!a.matches(":popover-open")&&s&&(s.style.transform="")},520)};e.querySelectorAll(".lightbox").forEach(a=>a.addEventListener("beforetoggle",s=>{s.newState==="closed"&&w(a)}));let E=a=>{let s=a.closest(".lightbox"),d=i(a);if(!d)return;let h=[s,d].filter(z=>!!z);h.forEach(z=>z.setAttribute("data-instant","")),c++,b(),s&&s.hidePopover();let y=d.dataset.step;y&&decodeURIComponent(location.hash.slice(1))!==y&&(location.hash=encodeURIComponent(y));let $=r(d);$&&($.style.transform=""),d.showPopover();let S=g(d);S&&(S.style.visibility="hidden",v=S),setTimeout(()=>h.forEach(z=>z.removeAttribute("data-instant")),60)};e.querySelectorAll(".fwin").forEach(a=>a.addEventListener("beforetoggle",s=>{s.newState==="open"&&Ee(a)})),e.addEventListener("click",a=>{let s=a.target instanceof Element?a.target:null,d=s?.closest(".lb-nav");if(d){a.preventDefault(),E(d);return}let h=i(s?.closest(".zoom,.enlarge,.gthumb")??null);if(h){a.preventDefault(),x(h);return}s instanceof HTMLElement&&(s.classList.contains("lightbox")||s.classList.contains("fwin"))&&s.hidePopover()});try{e.querySelectorAll("time[data-local]").forEach(a=>{let s=new Date(a.dateTime);if(isNaN(s.getTime())||!s.getTimezoneOffset())return;a.textContent=new Intl.DateTimeFormat(void 0,{...s.getFullYear()!==s.getUTCFullYear()?{year:"numeric"}:{},month:"short",day:"numeric",hour:"numeric",minute:"2-digit",timeZoneName:"short"}).format(s);let d=a.closest("[hidden]");d&&(d.hidden=!1)})}catch{}let T=()=>{let a=null;try{a=e.getElementById(decodeURIComponent(location.hash.slice(1)))}catch{}if(!a)return 0;let s=a.classList.contains("step")?a.querySelector(".view.first"):a.closest(".view");return s?t().indexOf(s):-1},C=()=>!!e.getElementById("focus-errors")?.checked,R="",L=()=>{let a=T();a<0||(R=location.hash,e.querySelector(`.track a[data-t="${a}"]`)?.scrollIntoView({block:"nearest",inline:"nearest"}))};e.addEventListener("keydown",a=>{if(a.defaultPrevented||a.altKey||a.ctrlKey||a.metaKey||a.shiftKey)return;let s=a.target;if(s instanceof HTMLElement&&(s.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(s.tagName)))return;let d=e.querySelector(".lightbox:popover-open");if(a.key===" "){if(d){a.preventDefault(),a.repeat||d.hidePopover();return}let S=s instanceof Element?s.closest(".zoom,.enlarge,.gthumb"):null;if(s instanceof Element&&!S&&(s.closest("summary")||s.closest("button"))||(a.preventDefault(),a.repeat))return;if(S?.classList.contains("gthumb")){let n=i(S);n&&x(n);return}let z=T(),A=z<0?null:t()[z],N=A&&e.getElementById(A.id.replace(/^step-/,"lightbox-"));N&&x(N);return}let h=a.key==="ArrowRight"?1:a.key==="ArrowLeft"?-1:0;if(!h)return;if(d){a.preventDefault();let S=d.querySelector(h<0?".lb-nav.prev":".lb-nav.next");S&&E(S);return}let y=t(),$=T();if(!($<0)){do $+=h;while($>=0&&$<y.length&&C()&&!y[$].closest(".step").classList.contains("err"));$<0||$>=y.length||(a.preventDefault(),location.hash=encodeURIComponent(y[$].id))}}),e.querySelector(".tabs .t-traj")?.addEventListener("click",a=>{R&&(a.preventDefault(),location.hash=R)}),addEventListener("hashchange",()=>{let a="";try{a=decodeURIComponent(location.hash.slice(1))}catch{}e.querySelectorAll(":popover-open").forEach(s=>{s.dataset.step!==a&&s.hidePopover()}),L()}),L()}async function Ee(e){if(e.dataset.filled)return;e.dataset.filled="reading";let t=e.querySelector(".fw-body"),o=e.querySelector(".fw-note");try{let r=await fetch(e.dataset.src);if(!r.ok)throw new Error(`${r.status}`);let i=new Uint8Array(await r.arrayBuffer()),g=i.length>1e6,m=new TextDecoder().decode(g?i.subarray(0,1e6):i);if(!g&&/\\.json$/i.test(e.dataset.src))try{let u=JSON.stringify(JSON.parse(m),null,2);u!==m.trimEnd()&&(m=u,o.hidden=!1)}catch{}t.textContent=m,m||(t.innerHTML=\'<span class="quiet">Empty file.</span>\'),g&&t.insertAdjacentHTML("beforeend",`\n<span class="quiet">Showing the first megabyte; download the file for the rest.</span>`),e.dataset.filled="done"}catch{t.innerHTML=\'<span class="quiet">The file could not be read.</span>\',delete e.dataset.filled}}async function ze(){let[,e="",t=""]=location.pathname.split("/");try{let o=await fetch(`/.api/${e}/${t}.json`);if(!o.ok)throw new Error(`The review server answered ${o.status}.`);let r=ne(Z(await o.json()));document.title=r.title;let i=new CSSStyleSheet;i.replaceSync(r.selection),document.adoptedStyleSheets=[...document.adoptedStyleSheets,i],document.body.innerHTML=r.html}catch(o){let r=document.createElement("p");r.className="loading",r.textContent=`The trajectory could not be loaded. ${o instanceof Error?o.message:""}`,document.body.replaceChildren(r);return}location.hash&&location.replace(location.hash),oe()}ze();\n' : /* @__PURE__ */ (() => {
   let script;
   return () => script ??= null.then((m) => m.buildReviewApp());
 })();

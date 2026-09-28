@@ -62,12 +62,12 @@ async function rewriteJournal(f: Awaited<ReturnType<typeof fixture>>) {
 
 // The page the review app renders for a package, from the data the review server sends.
 async function page(root: string) {
-  const html = renderReview(reviewModelOf(JSON.parse(JSON.stringify(await reviewData(root))))).html;
+  const html = renderReview(reviewModelOf(JSON.parse(JSON.stringify((await reviewData(root)) as any)))).html;
   assert.doesNotMatch(html, /<script|https?:\/\/|fetch\(/, "the page carries no script and names no address");
   return html;
 }
 
-test("delivers capture-classified package; all originals, summary, and extractions are checksummed, and no page is written", async t => {
+test("delivers capture-classified package; all originals and extractions are checksummed, and nothing derived is written", async t => {
   const { root } = await fixture(t);
   const original = await readFile(join(root, "state/journal/events.jsonl"));
   const delivered = await deliverPackage(root, options);
@@ -79,7 +79,9 @@ test("delivers capture-classified package; all originals, summary, and extractio
   assert.equal(manifest.snapshots.length, 2);
   assert.ok(manifest.snapshots.every((s: any) => s.provenance === "dispatch-captured" && s.actionId === "action-0"));
   assert.equal(manifest.attachments[0].path, "extractions/app.log");
-  for (const path of ["summary.json", "trajectory.json", "OPENING.txt", "state/journal/events.jsonl", "host/routing.json", "state/records/action/action-0.json"]) assert.ok(manifest.records.some((r: any) => r.path === path), path);
+  for (const path of ["OPENING.txt", "state/journal/events.jsonl", "host/routing.json", "state/records/action/action-0.json"]) assert.ok(manifest.records.some((r: any) => r.path === path), path);
+  // Steps and verdicts are derived when the package is reviewed, never stored with it.
+  for (const path of ["summary.json", "trajectory.json", "journal/session-events.jsonl"]) await assert.rejects(readFile(join(root, path)), path);
   assert.deepEqual(await readFile(join(root, "state/journal/events.jsonl")), original);
   assert.deepEqual(await verifyDeliveredPackage(root), delivered);
   // The package is data: the review app renders its page on demand.
@@ -106,30 +108,27 @@ test("verification accepts a package delivered with a page, checking the page by
   await assert.rejects(verifyDeliveredPackage(root), /artifact integrity mismatch: index.html/);
 });
 
-test("verification accepts a legacy package that carries walkthrough.json instead of trajectory.json", async t => {
-  const { root } = await fixture(t);
-  const delivered = await deliverPackage(root, options);
-  const bytes = await readFile(join(root, "trajectory.json"));
-  await rm(join(root, "trajectory.json"));
-  await save(root, "walkthrough.json", bytes);
-  const manifest = JSON.parse(await readFile(join(root, "manifest.json"), "utf8"));
-  manifest.records.find((r: any) => r.path === "trajectory.json").path = "walkthrough.json";
-  await save(root, "manifest.json", manifest);
-  assert.deepEqual(await verifyDeliveredPackage(root), delivered);
-});
-
-test("verification accepts a package delivered with the former fixed human review field", async t => {
-  const { root } = await fixture(t);
-  const delivered = await deliverPackage(root, options);
-  const summary = JSON.parse(await readFile(join(root, "summary.json"), "utf8"));
-  assert.equal("humanReview" in summary, false);
-  const legacy = Buffer.from(JSON.stringify({ formatVersion: summary.formatVersion, packageId: summary.packageId, sessionId: summary.sessionId, taskId: summary.taskId,
-    snapshots: summary.snapshots, execution: summary.execution, humanReview: "pending", findings: summary.findings }, null, 2) + "\n");
-  await writeFile(join(root, "summary.json"), legacy);
-  const manifest = JSON.parse(await readFile(join(root, "manifest.json"), "utf8"));
-  Object.assign(manifest.records.find((r: any) => r.path === "summary.json"), { sha256: createHash("sha256").update(legacy).digest("hex"), bytes: legacy.length });
-  await save(root, "manifest.json", manifest);
-  assert.deepEqual(await verifyDeliveredPackage(root), delivered);
+// An earlier relay wrote its derived steps and verdicts into the package, and a
+// rule it applied may have been corrected since. Those files are sealed records:
+// verification checks their bytes, and the review derives its own verdicts.
+for (const legacy of ["trajectory.json", "walkthrough.json"]) test(`an earlier package's summary.json and ${legacy} are sealed records that never override the derived verdicts`, async t => {
+  const f = await fixture(t, "incomplete");
+  const delivered = await deliverPackage(f.root, options);
+  assert.equal(delivered.snapshots, "incomplete");
+  const stale = { summary: { formatVersion: 1, ...options, snapshots: "complete", execution: "passed", humanReview: "pending", findings: [] }, steps: { steps: [{ id: "step-0", execution: "completed" }] } };
+  const manifest = JSON.parse(await readFile(join(f.root, "manifest.json"), "utf8"));
+  for (const [path, value] of [["summary.json", stale.summary], [legacy, stale.steps]] as const) {
+    const bytes = Buffer.from(JSON.stringify(value, null, 2) + "\n");
+    await save(f.root, path, bytes);
+    manifest.records.push({ path, sha256: sha(bytes), bytes: bytes.length });
+  }
+  await save(f.root, "manifest.json", manifest);
+  assert.deepEqual(await verifyDeliveredPackage(f.root), delivered);
+  const data = await reviewData(f.root);
+  assert.equal(data.completeness, "incomplete"); assert.equal(data.execution, "uncertain");
+  assert.deepEqual(data.files.map(file => file.path), ["manifest.json", "OPENING.txt", "summary.json", legacy]);
+  await writeFile(join(f.root, "summary.json"), "{}\n");
+  await assert.rejects(verifyDeliveredPackage(f.root), /artifact integrity mismatch: summary.json/);
 });
 
 test('pre-stage diagnostic repair is visible as command-only evidence without fabricated screenshots', async t => {
@@ -137,16 +136,15 @@ test('pre-stage diagnostic repair is visible as command-only evidence without fa
   await save(root, 'host/diagnostics/repair.request.json', { executionId: 'repair', evidenceMode: 'diagnostic', because: 'Repair capture service', argv: ['repair'], step: { title: 'Repair capture', expected: 'Capture works' } });
   await save(root, 'host/diagnostics/repair.receipt.json', { executionId: 'repair', evidenceMode: 'diagnostic', outcome: { kind: 'completed', exitStatus: { code: 0, signal: null } }, stdout: 'repaired', timeoutMs: 120000 });
   const result = await deliverPackage(root, options);
-  assert.equal(result.deliveryVerified, true); assert.equal(result.snapshots, 'incomplete');
+  // Diagnostics take no screenshots and run outside the guest receiver by design,
+  // so neither is a gap: the reader could do nothing about it.
+  assert.equal(result.deliveryVerified, true); assert.equal(result.snapshots, 'complete'); assert.equal(result.execution, 'passed');
+  assert.deepEqual(result.findings, []);
   const html = await page(root);
-  // Each verdict that is not complete or passed explains itself, and names the step that caused it.
-  assert.match(html, /<button type="button" popovertarget="why-snapshots" title="Why snapshots are incomplete">/);
-  assert.match(html, /<div class="why" id="why-snapshots" popover><h3>Why snapshots are incomplete<\/h3><ul class="reasons"><li><p>This diagnostic command ran without screenshots, as diagnostics do\./);
-  assert.match(html, /<div class="why" id="why-execution" popover><h3>Why execution is uncertain<\/h3><ul class="reasons"><li><p>Snapshot evidence is incomplete, so the relay does not confirm the run as a whole/);
-  const repair = html.split('<article id="step-diagnostic-repair"')[1]!.split('</article>')[0]!;
-  assert.match(repair, /<section class="concern"><h3>Why this step affects the verdicts<\/h3><ul><li><span class="label">Snapshots incomplete<\/span><p>This diagnostic command ran without screenshots/);
+  assert.doesNotMatch(html, /popovertarget="why-|class="concern"/);
+  assert.match(html, /<p class="term-note">Screenshots were not requested for this diagnostic.<\/p>/);
   assert.doesNotMatch(html, /Human review|>Review</);
-  const walk = JSON.parse(await readFile(join(root, 'trajectory.json'), 'utf8'));
+  const walk = ((await reviewData(root)) as any);
   const step = walk.steps.find((s: any) => s.inputMode === 'diagnostic');
   assert.equal(step.title, 'Repair capture'); assert.match(step.observed, /No screenshot evidence/); assert.equal(step.snapshots, undefined);
   assert.equal((await verifyDeliveredPackage(root)).deliveryVerified, true);
@@ -245,7 +243,8 @@ test("review page orders steps by time and reads commands, exit status, output s
   assert.match(html, /<button type="button" class="fopen" popovertarget="window-output-\d+" title="View app.log">app.log<\/button>/);
   // The package's own files open the same way.
   assert.match(html, /<ul class="files"><li><button type="button" class="fopen" popovertarget="window-manifest-json" title="View manifest.json">manifest.json<\/button><span>Checksums of every artifact<\/span><\/li>/);
-  for (const name of ["manifest", "summary", "trajectory"]) assert.match(html, new RegExp(`<div class="fwin" id="window-${name}-json" data-step="overview" data-src="${name}.json" popover`));
+  for (const [id, path] of [["manifest-json", "manifest.json"], ["OPENING-txt", "OPENING.txt"]]) assert.match(html, new RegExp(`<div class="fwin" id="window-${id}" data-step="overview" data-src="${path}" popover`));
+  assert.match(html, /<span>How to review this package<\/span>/);
   assert.equal((await verifyDeliveredPackage(root)).deliveryVerified, true);
 });
 
@@ -253,7 +252,7 @@ test("group members each review the shared causal pair", async t => {
   const { root } = await fixture(t, "group");
   const result = await deliverPackage(root, options);
   assert.equal(result.execution, "passed");
-  const trajectory = JSON.parse(await readFile(join(root, "trajectory.json"), "utf8"));
+  const trajectory = ((await reviewData(root)) as any);
   assert.equal(trajectory.steps.length, 3);
   for (const step of trajectory.steps) {
     assert.equal(step.snapshots.groupId, "typing");
@@ -277,9 +276,28 @@ test("refusal-only and nonzero-exit evidence is never reported as passed", async
     const result = await deliverPackage(root, options);
     assert.equal(result.execution, "failed");
     assert.equal(result.deliveryVerified, true);
-    const trajectory = JSON.parse(await readFile(join(root, "trajectory.json"), "utf8"));
+    const trajectory = ((await reviewData(root)) as any);
     assert.equal(trajectory.steps.length, 1, "refusal-only action is not duplicated by the SDK");
   }
+});
+
+test("a request the guest never recorded makes execution uncertain, not snapshots incomplete, and says what to do", async t => {
+  const f = await fixture(t);
+  await save(f.root, "host/lost.json", { executionId: "execution-lost", because: "Press Save" });
+  const result = await deliverPackage(f.root, options);
+  assert.equal(result.snapshots, "complete"); assert.equal(result.execution, "uncertain");
+  const data = await reviewData(f.root);
+  assert.deepEqual(data.reasons.snapshots, []);
+  assert.deepEqual(data.reasons.execution, [{ stepIds: [], text: "The relay sent a request that the guest's event journal never recorded starting or finishing, so whether it ran is unknown.", action: "Look for its effect in the next step's before snapshot, or run the task again." }]);
+});
+
+test("a missing snapshot names its step and what to do, and the run is uncertain through that step alone", async t => {
+  const f = await fixture(t, "incomplete");
+  await deliverPackage(f.root, options);
+  const data = await reviewData(f.root);
+  assert.deepEqual(data.reasons.snapshots, [{ stepIds: ["step-0"], text: "This action's before or after snapshot is missing.", action: "Check the step another way, by its output or the next step's before snapshot, or run the task again." }]);
+  assert.deepEqual(data.reasons.execution.map(r => r.stepIds), [["step-0"]]);
+  assert.match(await page(f.root), /<p class="do"><b>What you can do:<\/b> Check the step another way/);
 });
 
 test("partial coalescing group preserves classified originals and explicit incomplete status", async t => {
@@ -331,13 +349,23 @@ test("rejects orphan snapshots, cross-action references and capture-plan mismatc
   await assert.rejects(deliverPackage(h.root, options), /contradicts declared plan/);
 });
 
-test("missing reverse reference remains incomplete rather than fabricated success", async t => {
+// The snapshots are present and the journal ties them to their action; only the
+// action's own record fails to point back. The reader can do nothing about that
+// but report it, so it is a relay defect and changes no verdict.
+test("a missing reverse reference is a relay defect that changes no verdict", async t => {
   const f = await fixture(t);
   f.actions[0].snapshots = [];
   await save(f.root, "state/records/action/action-0.json", f.actions[0]);
   const result = await deliverPackage(f.root, options);
-  assert.equal(result.execution, "uncertain");
-  assert.equal(result.snapshots, "incomplete");
+  assert.equal(result.snapshots, "complete"); assert.equal(result.execution, "passed");
+  assert.match(result.findings.join("\n"), /action action-0 is missing reverse snapshot reference/);
+  const data = await reviewData(f.root);
+  assert.deepEqual(data.reasons.snapshots, []); assert.deepEqual(data.reasons.execution, []);
+  assert.deepEqual(data.reasons.defects?.map(r => r.stepIds), [["step-0"], ["step-0"]], "one for each snapshot");
+  const html = await page(f.root);
+  assert.match(html, /<h3>Relay defects <span class="count">2<\/span><\/h3>/);
+  assert.match(html, /<span class="label">Relay defect<\/span><p>The snapshot state\/snapshots\/session-test\/a0-before.png was taken for this action, but the action&#39;s record does not refer back to it.<\/p><p class="do"><b>What you can do:<\/b> Nothing in this review depends on it. Report it as an mcp-vm-relay issue, with this package.<\/p>/);
+  assert.doesNotMatch(html, /popovertarget="why-/);
 });
 
 test("review page escapes routing reasons, titles and stable identifiers", async t => {
@@ -406,7 +434,7 @@ test("guest receiver's real SDK journal and action records deliver end-to-end wi
   const result = await deliverPackage(root, options);
   assert.equal(result.deliveryVerified, true);
   assert.equal(result.execution, "passed");
-  const trajectory = JSON.parse(await readFile(join(root, "trajectory.json"), "utf8"));
+  const trajectory = ((await reviewData(root)) as any);
   assert.equal(trajectory.steps[0].because, "Avoid interrupting the active display");
   assert.equal(trajectory.steps[0].expected, "Saved");
 });
@@ -447,7 +475,7 @@ for (const scenario of ["driver-refused", "driver-uncertain", "transport-uncerta
     const result = await deliverPackage(root, options);
     assert.equal(result.execution, expected === "refused" ? "failed" : "uncertain");
     assert.equal(result.snapshots, "complete");
-    const trajectory = JSON.parse(await readFile(join(root, "trajectory.json"), "utf8"));
+    const trajectory = ((await reviewData(root)) as any);
     assert.equal(trajectory.steps.length, 1);
     assert.equal(trajectory.steps[0].execution, expected);
     assert.match(trajectory.steps[0].observed, /Authoritative receipt outcomes:/);
@@ -475,14 +503,14 @@ test("each authoritative receipt source is scoped by execution or action, never 
       } else await save(f.root, `${location}/verdict.json`, receipt);
       const result = await deliverPackage(f.root, options);
       assert.equal(result.execution, "failed");
-      const trajectory = JSON.parse(await readFile(join(f.root, "trajectory.json"), "utf8"));
+      const trajectory = ((await reviewData(f.root)) as any);
       assert.equal(trajectory.steps[0].execution, "refused", `${location}, ${identity}`);
     }
   }
   const f = await fixture(t);
   await save(f.root, "host/receipts/unrelated.json", { executionId: "unrelated", stepId: "step-0", outcome: { kind: "refused", diagnostic: "another execution" } });
   assert.equal((await deliverPackage(f.root, options)).execution, "failed");
-  const trajectory = JSON.parse(await readFile(join(f.root, "trajectory.json"), "utf8"));
+  const trajectory = ((await reviewData(f.root)) as any);
   assert.equal(trajectory.steps[0].execution, "completed");
   assert.doesNotMatch(trajectory.steps[0].observed, /another execution/);
 });
@@ -493,7 +521,7 @@ test("receipt conflicts prefer known refusal/failure and successful receipts nev
     await save(f.root, "host/receipts/uncertain.json", { executionId: "execution-1", outcome: { kind: "uncertain", diagnostic: "transport lost" } });
     await save(f.root, "state/receiver/receipts/verdict.json", { executionId: "execution-1", outcome: kind === "refused" ? { kind, diagnostic: "input refused" } : { kind: "completed", exitStatus: { code: 9, signal: null } } });
     assert.equal((await deliverPackage(f.root, options)).execution, "failed");
-    assert.equal(JSON.parse(await readFile(join(f.root, "trajectory.json"), "utf8")).steps[0].execution, kind);
+    assert.equal(((await reviewData(f.root)) as any).steps[0].execution, kind);
   }
   for (const mode of ["failed", "refused", "incomplete", "missing-completion"] as const) {
     const f = await fixture(t, mode === "missing-completion" ? "single" : mode);
@@ -503,7 +531,7 @@ test("receipt conflicts prefer known refusal/failure and successful receipts nev
     }
     await save(f.root, "host/receipts/success.json", { executionId: "execution-1", actionId: "action-0", outcome: { kind: "completed", exitStatus: { code: 0, signal: null } } });
     assert.notEqual((await deliverPackage(f.root, options)).execution, "passed");
-    assert.equal(JSON.parse(await readFile(join(f.root, "trajectory.json"), "utf8")).steps[0].execution, mode === "missing-completion" ? "incomplete" : mode === "incomplete" ? "uncertain" : mode);
+    assert.equal(((await reviewData(f.root)) as any).steps[0].execution, mode === "missing-completion" ? "incomplete" : mode === "incomplete" ? "uncertain" : mode);
   }
 });
 
@@ -512,7 +540,7 @@ test("malformed receipts fail closed and cannot leave a completed review step", 
     const f = await fixture(t);
     await save(f.root, "host/receipts/verdict.json", { executionId: "execution-1", outcome });
     assert.equal((await deliverPackage(f.root, options)).execution, "uncertain");
-    assert.equal(JSON.parse(await readFile(join(f.root, "trajectory.json"), "utf8")).steps[0].execution, "uncertain");
+    assert.equal(((await reviewData(f.root)) as any).steps[0].execution, "uncertain");
   }
   for (const receipt of [null, {}, { executionId: "execution-1", sessionId: "wrong" }]) {
     const f = await fixture(t);
@@ -540,7 +568,7 @@ test("repeated valid step IDs retain each real receiver execution's reason and e
   }
   const originals = await originalBytes(root);
   assert.equal((await deliverPackage(root, options)).execution, "passed");
-  const trajectory = JSON.parse(await readFile(join(root, "trajectory.json"), "utf8"));
+  const trajectory = ((await reviewData(root)) as any);
   assert.equal(trajectory.steps.length, 2);
   assert.equal(new Set(trajectory.steps.map((s: any) => s.id)).size, 2);
   assert.equal(trajectory.steps[0].id, "repeated");
@@ -569,23 +597,10 @@ test("step-only routing fallback rejects ambiguity but accepts one identity and 
     }
     await rewriteJournal(f);
     await deliverPackage(f.root, options);
-    const step = JSON.parse(await readFile(join(f.root, "trajectory.json"), "utf8")).steps[0];
+    const step = ((await reviewData(f.root)) as any).steps[0];
     assert.equal(step.because, ambiguous ? undefined : "Fallback reason");
     assert.equal(step.expected, ambiguous ? undefined : "Fallback expectation");
   }
-});
-
-test("revalidation rederives outcomes even when a tampered summary is rehashed", async t => {
-  const f = await fixture(t, "incomplete");
-  await deliverPackage(f.root, options);
-  const manifest = JSON.parse(await readFile(join(f.root, "manifest.json"), "utf8"));
-  const summary = JSON.parse(await readFile(join(f.root, "summary.json"), "utf8"));
-  summary.execution = "passed";
-  const bytes = Buffer.from(JSON.stringify(summary, null, 2) + "\n");
-  await save(f.root, "summary.json", bytes);
-  Object.assign(manifest.records.find((r: any) => r.path === "summary.json"), { bytes: bytes.length, sha256: sha(bytes) });
-  await save(f.root, "manifest.json", manifest);
-  await assert.rejects(verifyDeliveredPackage(f.root), /summary disagrees/);
 });
 
 test("the trajectory review command serves a verified package's review app, data and files, and nothing else", async t => {
@@ -617,8 +632,8 @@ test("the trajectory review command serves a verified package's review app, data
   const [, project, run] = address.pathname.split("/");
   const data = await (await fetch(new URL(`/.api/${project}/${run}.json`, address))).json();
   assert.equal(data.packageId, options.packageId);
-  assert.deepEqual(data.files.map((f: any) => f.path), ["manifest.json", "summary.json", "trajectory.json"]);
-  assert.equal(await (await fetch(new URL("summary.json", address))).text(), await readFile(join(root, "summary.json"), "utf8"));
+  assert.deepEqual(data.files.map((f: any) => f.path), ["manifest.json", "OPENING.txt"]);
+  assert.equal(await (await fetch(new URL("OPENING.txt", address))).text(), await readFile(join(root, "OPENING.txt"), "utf8"));
   assert.equal((await fetch(new URL("extractions/app.log", address))).headers.get("content-type"), "text/plain; charset=utf-8");
   assert.equal((await fetch(new URL("..%2F..%2Fetc%2Fpasswd", address))).status, 404);
   assert.equal((await fetch(new URL(`/${project}/2026-01-01T00-00-00-000Z-00000000/`, address))).status, 404);

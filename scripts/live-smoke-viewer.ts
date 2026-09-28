@@ -3,7 +3,7 @@ import {readFile,writeFile,mkdir,readdir,cp,stat} from 'node:fs/promises';
 import {join,resolve,relative} from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
-import {verifyDeliveredPackage} from '../src/package.js';
+import {reviewData,verifyDeliveredPackage} from '../src/package.js';
 import {inspectRecording,mapEventFrame} from './live-smoke-timeline.js';
 if(process.argv[2]==='--verify-media'){
  const video=resolve(process.argv[3]!);const result=await inspectRecording(video,resolve(video,'../ffmpeg.log'));
@@ -17,7 +17,7 @@ await mkdir(output);await cp(source,join(output,'evidence'),{recursive:true});aw
 async function all(dir:string):Promise<string[]>{const out:string[]=[];for(const e of await readdir(dir,{withFileTypes:true})){const p=join(dir,e.name);if(e.isDirectory())out.push(...await all(p));else if(e.isFile())out.push(p);else throw Error('Nonregular artifact');}return out.sort();}
 const files=await all(join(output,'evidence'));const video=files.find(p=>p.endsWith('/original.mp4'));if(!video)throw Error('Original recording missing');const walk=resolve(video,'..');
 const {stream,duration,frames,maximumMappingErrorSeconds:maxError,mappingErrorFormula}=await inspectRecording(video,join(walk,'ffmpeg.log'));
-const review=JSON.parse(await readFile(join(output,'evidence/trajectory.json'),'utf8'));
+const review=await reviewData(join(output,'evidence'));
 const journal=(await readFile(join(output,'evidence/state/journal/events.jsonl'),'utf8')).trim().split('\n').map(x=>JSON.parse(x));
 const application=(await readFile(join(walk,'events.jsonl'),'utf8')).trim().split('\n').map(x=>JSON.parse(x));
 const actions=application.filter(e=>e.phase==='start').map(e=>({...e,end:application.find(x=>x.phase==='end'&&x.start===e.utcMs&&x.tool===e.tool)}));

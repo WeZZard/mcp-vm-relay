@@ -311,10 +311,11 @@ Default output is `relay-evidence/<unique-task>/` under the project, with
 `state/` (the guest journal, action records, receipts and snapshot PNGs),
 `host/` (reasons, submissions, transfer facts, receipts, diagnostics, image
 deliveries and lifecycle events), `extractions/` (declared files, including the
-page captures), and `manifest.json`, `summary.json`, `trajectory.json`
-and `OPENING.txt`. The package is data only; `/mcp-vm-relay:trajectory <directory>`
+page captures), `manifest.json`, which checksums everything, and `OPENING.txt`.
+The package is the raw evidence only; `/mcp-vm-relay:trajectory <directory>`
 (the `relay_trajectory` tool) verifies it and opens the review app on it, served by
-the relay on 127.0.0.1 while it runs. No network, VM or external assets are
+the relay on 127.0.0.1 while it runs. The steps and verdicts are derived from the
+evidence when you review it, so an earlier package is reviewed with today's rules. No network, VM or external assets are
 needed. Diagnostic commands appear in the trajectory
 as command-only steps without screenshots. `finish` verifies the package before
 destroying the VM; a failed delivery removes only the derived files it created

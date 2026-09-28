@@ -37,8 +37,8 @@ export interface ReviewPageStep {
   snapshots?: { before?: string; after?: string; groupId?: string; declaredAfterIntervalMs?: number };
 }
 
-/** A plain-words reason for a verdict that is not complete or passed, with the steps it concerns. */
-export interface Reason { text: string; stepIds: string[] }
+/** A plain-words reason for a verdict that is not complete or passed, with the steps it concerns and what the reader can do. */
+export interface Reason { text: string; stepIds: string[]; action?: string }
 
 export interface ReviewPageModel {
   packageId: string;
@@ -47,7 +47,8 @@ export interface ReviewPageModel {
   completeness: string;
   execution: string;
   findings: string[];
-  reasons: { snapshots: Reason[]; execution: Reason[] };
+  /** Why each verdict is not complete or passed, and the relay's own defects, which change no verdict. */
+  reasons: { snapshots: Reason[]; execution: Reason[]; defects?: Reason[] };
   steps: ReviewPageStep[];
   details: ReadonlyMap<string, StepDetail>;
   /** Declared extractions, by package path. */
@@ -259,7 +260,8 @@ function stage(view: View, detail: StepDetail | undefined, numbers: ReadonlyMap<
   return `${open}<div class="solo">${picture}</div>${label}</section>`;
 }
 /** A reason as it concerns one step: the verdict it affects, and why. */
-type Concern = { verdict: string; text: string };
+type Concern = { verdict: string; text: string; action?: string };
+const whatToDo = (action?: string) => action ? `<p class="do"><b>What you can do:</b> ${escapeHtml(action)}</p>` : "";
 
 /** The right panel of a step: what it was, why it was sent, and what came back. */
 function panel(step: ReviewPageStep, detail: StepDetail | undefined, number: string, total: number, concerns: Concern[]) {
@@ -270,7 +272,7 @@ function panel(step: ReviewPageStep, detail: StepDetail | undefined, number: str
   return `<aside class="panel" aria-label="Step ${number} details"><div class="panel-scroll">
 <div class="stephead"><h2 class="stepno"><span class="n">Step <span class="d">${number}</span></span> <span class="of">of <span class="d">${String(total).padStart(2, "0")}</span></span></h2><a class="permalink" href="${escapeHtml(link(step))}" title="Stable link to this step" aria-label="Stable link to step ${number}">${linkIcon}</a></div>
 <p class="meta"><span>${kind}</span>${at ? `<time>${at} UTC</time>` : ""}<span class="state"><span class="sr">Execution: </span>${verdict(step.execution)}</span></p>
-${concerns.length ? `<section class="concern"><h3>Why this step affects the verdicts</h3><ul>${concerns.map(c => `<li><span class="label">${escapeHtml(c.verdict)}</span><p>${escapeHtml(c.text)}</p></li>`).join("")}</ul></section>` : ""}
+${concerns.length ? `<section class="concern"><h3>Why this step affects the verdicts</h3><ul>${concerns.map(c => `<li><span class="label">${escapeHtml(c.verdict)}</span><p>${escapeHtml(c.text)}</p>${whatToDo(c.action)}</li>`).join("")}</ul></section>` : ""}
 ${reasonShown ? `<section class="block"><h3>Reason</h3><p>${escapeHtml(step.because ?? "Not present in retained host metadata")}</p></section>` : ""}
 ${command && step.snapshots ? `<section class="block"><h3>Command</h3><pre class="command">${escapeHtml(command)}</pre></section>` : ""}
 <section class="block"><h3>Expected</h3><p>${escapeHtml(step.expected || "Not supplied")}</p></section>
@@ -330,8 +332,9 @@ export function renderReview(model: ReviewPageModel): { title: string; html: str
   const errors = steps.filter(erred).length;
   const started = times.length ? new Date(Math.min(...times)).toISOString() : undefined;
   const concerns = new Map<string, Concern[]>();
-  for (const [key, label] of [["snapshots", `Snapshots ${model.completeness}`], ["execution", `Execution ${model.execution}`]] as const)
-    for (const reason of model.reasons[key]) for (const id of reason.stepIds) concerns.set(id, [...(concerns.get(id) ?? []), { verdict: label, text: reason.text }]);
+  const defects = model.reasons.defects ?? [];
+  for (const [key, label] of [["snapshots", `Snapshots ${model.completeness}`], ["execution", `Execution ${model.execution}`], ["defects", "Relay defect"]] as const)
+    for (const reason of key === "defects" ? defects : model.reasons[key]) for (const id of reason.stepIds) concerns.set(id, [...(concerns.get(id) ?? []), { verdict: label, text: reason.text, action: reason.action }]);
   // extractions/<name>/<transfer id>/…: outputs are grouped by their declared
   // name. The transfer id is the relay's own bookkeeping, so a file reads as
   // its guest path under that name.
@@ -360,14 +363,15 @@ export function renderReview(model: ReviewPageModel): { title: string; html: str
       return `<button type="button" class="gthumb" popovertarget="${id}" title="Enlarge ${escapeHtml(name)}"><img loading="lazy" alt="${escapeHtml(f.label)}" src="${src(f.path)}"><span>${escapeHtml(name)}<small>${size(f.bytes)}</small></span></button>`;
     }).join("")}</div>` : ""}</details>`;
   }).join("");
-  const notes: Record<string, string> = { "manifest.json": "Checksums of every artifact", "summary.json": "Verdicts and findings", "trajectory.json": "Steps as recorded" };
+  // An earlier relay also wrote its verdicts and steps into the package; this page derives its own.
+  const notes: Record<string, string> = { "manifest.json": "Checksums of every artifact", "OPENING.txt": "How to review this package",
+    "summary.json": "Verdicts as an earlier relay derived them", "trajectory.json": "Steps as an earlier relay derived them", "walkthrough.json": "Steps as an earlier relay derived them" };
   const generated = model.files.map(f => `<li>${opener(`window-${f.path.replace(/\W+/g, "-")}`, { href: src(f.path), label: f.path, name: f.path.split("/").at(-1)!, bytes: f.bytes })}${notes[f.path] ? `<span>${notes[f.path]}</span>` : ""}</li>`).join("");
   const stat = (label: string, value: string) => `<li><b>${value}</b>${label ? ` <span>${label}</span>` : ""}</li>`;
   // Reasons with the same words are one reason for all their steps.
-  const merged = (reasons: Reason[]) => [...reasons.reduce((all, r) => all.set(r.text, [...new Set([...(all.get(r.text) ?? []), ...r.stepIds])]), new Map<string, string[]>())]
-    .map(([text, stepIds]) => ({ text, stepIds }));
+  const merged = (reasons: Reason[]) => [...reasons.reduce((all, r) => all.set(r.text, { ...r, stepIds: [...new Set([...(all.get(r.text)?.stepIds ?? []), ...r.stepIds])] }), new Map<string, Reason>()).values()];
   const stepLinks = (ids: string[]) => ids.map(id => `<a href="${escapeHtml(`#step-${encodeURIComponent(id)}`)}">Step <span class="d">${numbers.get(id) ?? "?"}</span></a>`).join("");
-  const reasonList = (reasons: Reason[]) => `<ul class="reasons">${merged(reasons).map(r => `<li><p>${escapeHtml(r.text)}</p>${r.stepIds.length ? `<p class="steps">${stepLinks(r.stepIds)}</p>` : ""}</li>`).join("")}</ul>`;
+  const reasonList = (reasons: Reason[]) => `<ul class="reasons">${merged(reasons).map(r => `<li><p>${escapeHtml(r.text)}</p>${whatToDo(r.action)}${r.stepIds.length ? `<p class="steps">${stepLinks(r.stepIds)}</p>` : ""}</li>`).join("")}</ul>`;
   const why = (key: "snapshots" | "execution", value: string) => key === "snapshots" ? `Why snapshots are ${value}` : value === "failed" ? "Why execution failed" : `Why execution is ${value}`;
   const pill = (key: "snapshots" | "execution", label: string, value: string) => model.reasons[key].length
     ? `<li class="pill ${tone(value)}"><button type="button" popovertarget="why-${key}" title="${why(key, value)}"><span>${label}</span>${verdict(value)}<span class="q" aria-hidden="true">?</span></button><div class="why" id="why-${key}" popover><h3>${why(key, value)}</h3>${reasonList(model.reasons[key])}</div></li>`
@@ -376,6 +380,7 @@ export function renderReview(model: ReviewPageModel): { title: string; html: str
   const overview = `<article class="step overview" id="overview"><section class="stage doc" aria-label="Package overview"><div class="doc-in">
 <h2>Overview</h2><p class="lede">Delivery integrity is separate from execution success. Snapshots are dispatch-time evidence, not continuous video: each shows the screen just before a step was sent and shortly after it returned.</p>
 <section class="block"><h3>Verdicts</h3>${verdictBlock("snapshots", "Snapshots", model.completeness, "Every snapshot the steps declared is present and tied to its step.")}${verdictBlock("execution", "Execution", model.execution, "Every step completed, and every retained receipt confirms it.")}</section>
+${defects.length ? `<section class="block"><h3>Relay defects <span class="count">${merged(defects).length}</span></h3><div><p class="vwhy">These are faults in the relay's own records, not in the run, and they change no verdict.</p>${reasonList(defects)}</div></section>` : ""}
 <section class="block"><h3>Findings as recorded <span class="count">${model.findings.length}</span></h3>${model.findings.length ? `<ul class="findings">${groupFindings(model.findings).map(g => `<li>${g.ids.length ? `<details><summary>${escapeHtml(g.text)}</summary><code>${g.ids.map(escapeHtml).join("<br>")}</code></details>` : escapeHtml(g.text)}</li>`).join("")}</ul>` : `<p class="quiet">No findings.</p>`}</section>
 <section class="block"><h3>Declared outputs <span class="count">${model.outputs.length}</span></h3>${outputs ? `<div class="outputs">${outputs}</div>` : `<p class="quiet">No declared outputs were delivered.</p>`}</section>
 <section class="block"><h3>Package</h3><div class="package"><dl class="ids"><div><dt>Package</dt><dd>${escapeHtml(model.packageId)}</dd></div><div><dt>Task</dt><dd>${escapeHtml(model.taskId)}</dd></div><div><dt>Session</dt><dd>${escapeHtml(model.sessionId)}</dd></div>${started ? `<div><dt>Started</dt><dd>${utcStamp(started, true)}</dd></div>` : ""}</dl>
@@ -443,6 +448,7 @@ h1{display:flex;align-items:baseline;gap:.6rem;font:700 1.45rem/1.05 var(--sans)
 .why{white-space:normal;text-align:left;font:400 14px/1.57 var(--sans);position:fixed;inset:auto;top:4.75rem;right:1.5rem;margin:0;width:min(26rem,calc(100vw - 2rem));max-height:calc(100vh - 6rem);overflow:auto;padding:0 1.25rem 1.25rem;border:var(--edge);background:var(--bg);color:var(--text);box-shadow:3px 3px 0 rgba(0,0,0,.25)}
 .why h3{margin:0 -1.25rem 1rem;padding:.45rem 1.25rem;background:var(--tab);border-bottom:var(--edge);font:700 14px/1.3 var(--sans)}
 .reasons{list-style:none;margin:0;padding:0;display:grid;gap:.75rem}.reasons li{display:grid;gap:.35rem}.reasons p{margin:0;color:var(--dim);font-size:13.5px;line-height:1.55}
+.reasons p.do,.concern p.do{color:var(--text)}.do b{font-weight:700}
 .reasons .steps{display:flex;flex-wrap:wrap;gap:.75rem}.reasons .steps a{font:700 12px var(--sans)}
 .concern{margin-top:1.5rem;padding:1rem 1rem 1.1rem;background:#fff4c7;border:var(--edge);border-left:6px solid var(--tab)}.concern h3{margin:0 0 .75rem}
 .concern ul{list-style:none;margin:0;padding:0;display:grid;gap:.75rem}.concern li{display:grid;gap:.15rem}.concern p{margin:0;color:var(--text);font-size:14px;line-height:1.55}
