@@ -5,6 +5,7 @@ import { mkdtemp, mkdir, writeFile, readFile, rm, symlink, realpath, readdir } f
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { deliverPackage, verifyDeliveredPackage } from "../src/package.js";
+import { escapeHtml } from "../src/review-page.js";
 
 const options = { packageId: "pkg-test", sessionId: "session-test", taskId: "task-test" };
 const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=", "base64");
@@ -140,6 +141,7 @@ test("review page orders steps by time and reads commands, exit status, output s
   await save(root, "extractions/evidence/run-1/result.json", { passed: false });
   await save(root, "extractions/evidence/run-1/big.log", "x".repeat(256 * 1024 + 1));
   await save(root, "extractions/evidence/run-1/trace.txt", "\nfirst <line>\n");
+  await save(root, "extractions/evidence/run-1/core.bin", Buffer.from([0, 1, 2]));
   await deliverPackage(root, options);
   const html = await readFile(join(root, "index.html"), "utf8");
   // The diagnostic ran first, so it is step 01 even though the trajectory lists actions first.
@@ -213,8 +215,23 @@ test("review page orders steps by time and reads commands, exit status, output s
   assert.match(track, /<li class="ok"><div class="faces"><a data-t="1" [^>]+><span class="face"><img [^>]+><span class="role">Before<\/span><\/span><\/a><a data-t="2" [^>]+><span class="face"><img [^>]+><span class="role">After<\/span>/);
   assert.match(track.split('<li class="ok">')[1]!, /<span class="took">\d+\.\d s<\/span><\/span>/);
   assert.doesNotMatch(track.split('<li class="ok">')[0]!, /class="took"/);
-  // Small text outputs open in a window that shows them and offers the original for download; larger ones stay links.
-  assert.match(html, /<span class="where">evidence<\/span><span class="count">3 files · [^<]+<\/span><\/summary><ul class="flist"><li><a href="extractions\/evidence\/run-1\/big.log">run-1\/big.log<\/a>/);
+  // Text outputs open in a window that holds small ones and frames larger ones; other outputs stay links.
+  assert.match(html, /<span class="where">evidence<\/span><span class="count">4 files · [^<]+<\/span><\/summary><ul class="flist"><li><button type="button" class="fopen" popovertarget="window-output-\d+" title="View big.log">run-1\/big.log<\/button>/);
+  assert.match(html, /<li><a href="extractions\/evidence\/run-1\/core.bin">run-1\/core.bin<\/a>/);
+  const framedLog = html.split('aria-label="run-1/big.log">')[1]!.split('<div class="fwin"')[0]!;
+  assert.match(framedLog, /<div class="fw-card framed">/);
+  assert.match(framedLog, /<a class="fw-dl" href="extractions\/evidence\/run-1\/big.log" download="big.log" data-framed>/);
+  assert.match(framedLog, /<iframe class="fw-frame" src="extractions\/evidence\/run-1\/big.log" title="run-1\/big.log" loading="lazy" sandbox><\/iframe>/);
+  assert.match(html, /frame-src 'self' file:;/);
+  // The package's own files open in windows too: the manifest, which records this page's checksum, in a frame,
+  // and the summary and trajectory as the page holds them, exactly as delivered.
+  assert.match(html, /<ul class="files"><li><button type="button" class="fopen" popovertarget="window-manifest" title="View manifest.json">manifest.json<\/button><span>Checksums of every artifact<\/span><\/li>/);
+  assert.match(html.split('id="window-manifest"')[1]!.split('<div class="fwin"')[0]!, /<iframe class="fw-frame" src="manifest.json"/);
+  for (const name of ["summary", "trajectory"]) {
+    const held = html.split(`id="window-${name}"`)[1]!.split("</pre>")[0]!;
+    assert.ok(held.includes(`<pre class="fw-body">\n${escapeHtml(await readFile(join(root, `${name}.json`), "utf8"))}`), name);
+    assert.doesNotMatch(held, /Formatted|<iframe/);
+  }
   const opener = /<li><button type="button" class="fopen" popovertarget="(window-output-\d+)" title="View result.json">run-1\/result.json<\/button><span>/.exec(html);
   assert.ok(opener);
   const window1 = html.split(`<div class="fwin" id="${opener[1]}" data-step="overview" popover aria-label="run-1/result.json">`)[1]!.split('<div class="fwin"')[0]!;
@@ -224,7 +241,6 @@ test("review page orders steps by time and reads commands, exit status, output s
   const window2 = html.split('aria-label="run-1/trace.txt">')[1]!;
   assert.doesNotMatch(window2.split("</pre>")[0]!, /Formatted|data-raw/);
   assert.ok(window2.includes('<pre class="fw-body">\n\nfirst &lt;line&gt;\n</pre>'));
-  assert.doesNotMatch(html, /aria-label="run-1\/big.log"/);
   assert.match(html, /<button type="button" class="fopen" popovertarget="window-output-\d+" title="View app.log">app.log<\/button>/);
   assert.doesNotMatch(withoutKeyScript(html), /<script|https?:\/\/|fetch\(/);
   assert.equal((await verifyDeliveredPackage(root)).deliveryVerified, true);

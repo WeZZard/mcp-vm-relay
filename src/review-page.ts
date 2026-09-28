@@ -56,7 +56,12 @@ export interface ReviewPageModel {
   details: ReadonlyMap<string, StepDetail>;
   /** Declared extractions, by package path, with the text of those the page shows. */
   outputs: { path: string; bytes: number; text?: string }[];
+  /** The texts of the package's summary.json and trajectory.json, when the page shows them. */
+  generated?: { summary?: string; trajectory?: string };
 }
+
+/** Files a window can show as text. */
+export const textFile = /\.(json|jsonl|ndjson|log|txt|md|csv|tsv|ya?ml|xml|toml)$/i;
 
 export const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 const src = (path: string) => escapeHtml(path.split("/").map(encodeURIComponent).join("/"));
@@ -327,11 +332,13 @@ const keys = `(()=>{const views=()=>[...document.querySelectorAll(".center .view
   + `const el=body(next);if(el)el.style.transform="";next.showPopover();const src=sourceOf(next);if(src){src.style.visibility="hidden";hidden=src}`
   + `setTimeout(()=>instant.forEach(x=>x.removeAttribute("data-instant")),60)};`
   // A page opened from disk cannot download the file beside it (the browser
-  // opens it instead), so the window downloads the text it holds.
+  // opens it instead), so the window downloads the text it holds; a framed
+  // file offers to open in a tab instead.
   + `const save=dl=>{const p=dl.closest(".fwin").querySelector(".fw-body"),raw=dl.dataset.raw??(p.querySelector(".quiet")?"":p.textContent);`
   + `const u=URL.createObjectURL(new Blob([raw],{type:"text/plain"})),a=document.createElement("a");a.href=u;a.download=dl.getAttribute("download");document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1e3)};`
+  + `if(location.protocol==="file:")document.querySelectorAll(".fw-dl[data-framed]").forEach(a=>{a.removeAttribute("download");a.target="_blank";a.rel="noopener";a.lastElementChild.textContent="Open"});`
   + `document.addEventListener("click",e=>{const t=e.target instanceof Element?e.target:null;const b=t&&t.closest(".lb-nav");if(b){e.preventDefault();go(b);return}`
-  + `const dl=t&&t.closest(".fw-dl");if(dl){e.preventDefault();save(dl);return}`
+  + `const dl=t&&t.closest(".fw-dl");if(dl&&!dl.hasAttribute("data-framed")){e.preventDefault();save(dl);return}`
   + `const o=t&&t.closest(".zoom,.enlarge,.gthumb"),lb=o&&document.getElementById(o.getAttribute("popovertarget"));if(lb){e.preventDefault();open(lb);return}`
   + `if(t&&(t.classList.contains("lightbox")||t.classList.contains("fwin")))t.hidePopover()});`
   + `try{document.querySelectorAll("time[data-local]").forEach(t=>{const d=new Date(t.dateTime);if(isNaN(d.getTime())||!d.getTimezoneOffset())return;`
@@ -371,6 +378,24 @@ const selection = (steps: number, firsts: number[], views: number) => !steps ? "
     `.app:not(:has(.center :target)) .track [data-t="0"] .face`].join(",")
   + "{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--accent),0 0 18px var(--ring)}";
 
+type FileItem = { href: string; label: string; name: string; bytes?: number; text?: string };
+// A file's window shows the text the page holds and offers the original for
+// download; JSON is laid out for reading when that changes it, and then the
+// original rides along for the download. The text starts after a newline,
+// which the parser drops, so a leading newline of the file survives. A file
+// whose text the page does not hold is shown in a frame, read from the file.
+function fileWindow(id: string, f: FileItem) {
+  let text = f.text, formatted = false;
+  if (f.text !== undefined && /\.json$/i.test(f.name)) try { const pretty = JSON.stringify(JSON.parse(f.text), null, 2); formatted = pretty !== f.text.trimEnd(); if (formatted) text = pretty; } catch { formatted = false; }
+  const framed = text === undefined, label = escapeHtml(f.label);
+  return `<div class="fwin" id="${id}" data-step="overview" popover aria-label="${label}"><div class="fw-card${framed ? " framed" : ""}"><div class="fw-bar"><span class="fw-name" title="${label}">${label}</span>`
+    + `${formatted ? `<span class="fw-note" title="The download is the original file">Formatted</span>` : ""}${f.bytes !== undefined ? `<span class="size">${size(f.bytes)}</span>` : ""}`
+    + `<a class="fw-dl" href="${f.href}" download="${escapeHtml(f.name)}"${formatted ? ` data-raw="${escapeHtml(f.text)}"` : ""}${framed ? " data-framed" : ""}>${downloadIcon}<span>Download</span></a>`
+    + `<button type="button" class="close" popovertarget="${id}" popovertargetaction="hide" aria-label="Close">×</button></div>`
+    + (framed ? `<iframe class="fw-frame" src="${f.href}" title="${label}" loading="lazy" sandbox></iframe>` : `<pre class="fw-body">\n${text ? escapeHtml(text) : `<span class="quiet">Empty file.</span>`}</pre>`)
+    + `</div></div>`;
+}
+
 export function renderReviewPage(model: ReviewPageModel): string {
   const steps = chronological(model);
   const numbers = new Map(steps.map((step, i) => [step.id, String(i + 1).padStart(2, "0")]));
@@ -392,18 +417,14 @@ export function renderReviewPage(model: ReviewPageModel): string {
     byName.set(declared, [...(byName.get(declared) ?? []), { ...output, label: rest.filter(part => !uuid.test(part)).join("/") || output.path.split("/").at(-1)! }]);
   }
   const outputBoxes: Box[] = [], windows: string[] = [];
-  // A text output opens in a window that shows it and offers the original for
-  // download; JSON is laid out for reading when that changes it, and then the
-  // original rides along for the download. The window's text starts after a
-  // newline, which the parser drops, so a leading newline of the file survives.
-  const file = (f: { path: string; bytes: number; text?: string; label: string }) => {
-    if (f.text === undefined) return `<a href="${src(f.path)}">${escapeHtml(f.label)}</a>`;
-    let text = f.text, formatted = false;
-    if (/\.json$/i.test(f.path)) try { const pretty = JSON.stringify(JSON.parse(f.text), null, 2); formatted = pretty !== f.text.trimEnd(); if (formatted) text = pretty; } catch { formatted = false; }
-    const id = `window-output-${windows.length + 1}`, name = f.label.split("/").at(-1)!;
-    windows.push(`<div class="fwin" id="${id}" data-step="overview" popover aria-label="${escapeHtml(f.label)}"><div class="fw-card"><div class="fw-bar"><span class="fw-name" title="${escapeHtml(f.label)}">${escapeHtml(f.label)}</span>${formatted ? `<span class="fw-note" title="The download is the original file">Formatted</span>` : ""}<span class="size">${size(f.bytes)}</span><a class="fw-dl" href="${src(f.path)}" download="${escapeHtml(name)}"${formatted ? ` data-raw="${escapeHtml(f.text)}"` : ""}>${downloadIcon}Download</a><button type="button" class="close" popovertarget="${id}" popovertargetaction="hide" aria-label="Close">×</button></div><pre class="fw-body">\n${text ? escapeHtml(text) : `<span class="quiet">Empty file.</span>`}</pre></div></div>`);
-    return `<button type="button" class="fopen" popovertarget="${id}" title="View ${escapeHtml(name)}">${escapeHtml(f.label)}</button>`;
+  const opener = (id: string, f: FileItem) => {
+    windows.push(fileWindow(id, f));
+    return `<button type="button" class="fopen" popovertarget="${id}" title="View ${escapeHtml(f.name)}">${escapeHtml(f.label)}</button>`;
   };
+  // A text output opens in a window; any other output is a link to the file.
+  const file = (f: { path: string; bytes: number; text?: string; label: string }) => f.text === undefined && !textFile.test(f.path)
+    ? `<a href="${src(f.path)}">${escapeHtml(f.label)}</a>`
+    : opener(`window-output-${windows.length + 1}`, { href: src(f.path), label: f.label, name: f.label.split("/").at(-1)!, bytes: f.bytes, text: f.text });
   const outputs = [...byName].map(([declared, files]) => {
     const images = files.filter(f => /\.(png|jpe?g|webp|gif)$/i.test(f.path)), others = files.filter(f => !images.includes(f));
     const total = files.reduce((sum, f) => sum + f.bytes, 0);
@@ -414,6 +435,9 @@ export function renderReviewPage(model: ReviewPageModel): string {
       return `<button type="button" class="gthumb" popovertarget="${id}" title="Enlarge ${escapeHtml(name)}"><img loading="lazy" alt="${escapeHtml(f.label)}" src="${src(f.path)}"><span>${escapeHtml(name)}<small>${size(f.bytes)}</small></span></button>`;
     }).join("")}</div>` : ""}</details>`;
   }).join("");
+  // manifest.json records this page's checksum, so the page cannot hold it and frames it instead.
+  const generated = ([["manifest.json", "Checksums of every artifact", undefined], ["summary.json", "Verdicts and findings", model.generated?.summary], ["trajectory.json", "Steps as recorded", model.generated?.trajectory]] as const)
+    .map(([name, note, text]) => `<li>${opener(`window-${name.replace(".json", "")}`, { href: name, label: name, name, ...(text !== undefined ? { bytes: Buffer.byteLength(text), text } : {}) })}<span>${note}</span></li>`).join("");
   const stat = (label: string, value: string) => `<li><b>${value}</b>${label ? ` <span>${label}</span>` : ""}</li>`;
   // Reasons with the same words are one reason for all their steps.
   const merged = (reasons: Reason[]) => [...reasons.reduce((all, r) => all.set(r.text, [...new Set([...(all.get(r.text) ?? []), ...r.stepIds])]), new Map<string, string[]>())]
@@ -431,8 +455,8 @@ export function renderReviewPage(model: ReviewPageModel): string {
 <section class="block"><h3>Findings as recorded <span class="count">${model.findings.length}</span></h3>${model.findings.length ? `<ul class="findings">${groupFindings(model.findings).map(g => `<li>${g.ids.length ? `<details><summary>${escapeHtml(g.text)}</summary><code>${g.ids.map(escapeHtml).join("<br>")}</code></details>` : escapeHtml(g.text)}</li>`).join("")}</ul>` : `<p class="quiet">No findings.</p>`}</section>
 <section class="block"><h3>Declared outputs <span class="count">${model.outputs.length}</span></h3>${outputs ? `<div class="outputs">${outputs}</div>` : `<p class="quiet">No declared outputs were delivered.</p>`}</section>
 <section class="block"><h3>Package</h3><div class="package"><dl class="ids"><div><dt>Package</dt><dd>${escapeHtml(model.packageId)}</dd></div><div><dt>Task</dt><dd>${escapeHtml(model.taskId)}</dd></div><div><dt>Session</dt><dd>${escapeHtml(model.sessionId)}</dd></div>${started ? `<div><dt>Started</dt><dd>${utcStamp(started, true)}</dd></div>` : ""}</dl>
-<ul class="files"><li><a href="manifest.json">manifest.json</a><span>Checksums of every artifact</span></li><li><a href="summary.json">summary.json</a><span>Verdicts and findings</span></li><li><a href="trajectory.json">trajectory.json</a><span>Steps as recorded</span></li></ul></div></section></div></section></article>`;
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' file:; style-src 'unsafe-inline'; script-src ${keysPolicy}; base-uri 'none'; form-action 'none'"><title>Relay review: ${escapeHtml(model.packageId)}</title><style>${css}${selection(steps.length, views.filter(v => v.first).map(v => v.index), views.length)}</style></head><body>
+<ul class="files">${generated}</ul></div></section></div></section></article>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' file:; frame-src 'self' file:; style-src 'unsafe-inline'; script-src ${keysPolicy}; base-uri 'none'; form-action 'none'"><title>Relay review: ${escapeHtml(model.packageId)}</title><style>${css}${selection(steps.length, views.filter(v => v.first).map(v => v.index), views.length)}</style></head><body>
 <div class="app">
 <header class="top"><div class="brand"><span class="mark" aria-hidden="true">${relayMark}</span><h1 title="${escapeHtml(model.packageId)}">Relay</h1>
 <ul class="stats">${stat(noun(steps.length, "step"), String(steps.length))}${stat(noun(actions, "action"), String(actions))}${stat(noun(diagnostics, "diagnostic"), String(diagnostics))}${started ? `<li class="at"><time datetime="${started}" title="Started ${started}">${utcStamp(started)}</time><span class="local" hidden><span class="sep" aria-hidden="true">·</span><time datetime="${started}" data-local title="Started, in your time zone"></time></span></li>` : ""}${times.length ? stat("", duration(Math.max(...times) - Math.min(...times))) : ""}</ul></div>
@@ -573,7 +597,7 @@ kbd{display:inline-grid;place-items:center;min-width:1.3rem;height:1.3rem;paddin
 .raw summary{cursor:pointer;font-size:12px;color:var(--faint);width:max-content}.raw summary:hover{color:var(--dim)}.raw pre{margin-top:.5rem;color:var(--faint);font-size:11.5px;max-height:12rem;overflow:auto}
 .facts{display:grid;grid-template-columns:1fr 1fr;gap:1rem 1.25rem;margin:1.75rem 0 0;padding:0}.facts dd{margin:.2rem 0 0;font:12.5px var(--mono);color:var(--dim);overflow-wrap:anywhere}
 .facts.stack{grid-template-columns:1fr}
-.files{list-style:none;margin:0;padding:0;display:grid;gap:.6rem}.files li{display:grid}.files a{font:12.5px var(--mono)}.files span{font-size:12px;color:var(--faint)}
+.files{list-style:none;margin:0;padding:0;display:grid;gap:.6rem}.files li{display:grid;justify-items:start}.files .fopen{font:12.5px var(--mono)}.files span{font-size:12px;color:var(--faint)}
 .doc{display:block;overflow:auto;font-size:1rem;line-height:1.6}.doc-in{width:100%;max-width:56rem;margin:0 auto;padding:2.75rem 2.75rem 4rem}
 .doc h2{font:700 2.25rem/1.15 var(--round);letter-spacing:-.02em;margin:0}.lede{color:var(--dim);margin:.85rem 0 0;font-size:1.125rem;line-height:1.6}
 .doc .block{margin-top:2.75rem}.doc .block>h3{display:flex;align-items:baseline;gap:.6rem;margin:0 0 1rem;font:700 1.25rem/1.3 var(--round);letter-spacing:-.005em;text-transform:none;color:var(--text)}
@@ -586,7 +610,7 @@ kbd{display:inline-grid;place-items:center;min-width:1.3rem;height:1.3rem;paddin
 .doc .flist{font-size:.875rem;gap:.4rem}.doc .gallery{grid-template-columns:repeat(auto-fill,minmax(11rem,1fr));gap:1rem}.doc .gthumb{font-size:.8125rem}
 .package{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:1.5rem;padding:1.25rem 1.4rem;border-radius:18px;background:var(--s1);box-shadow:var(--shadow)}
 .package .ids{display:grid;gap:.9rem;margin:0}.package dt{font-size:.75rem}.package dd{margin:.2rem 0 0;font:.875rem var(--mono);color:var(--dim);overflow-wrap:anywhere}
-.doc .files{gap:.9rem}.doc .files a{font-size:.875rem}.doc .files span{font-size:.8125rem}
+.doc .files{gap:.9rem}.doc .files .fopen{font-size:.875rem}.doc .files span{font-size:.8125rem}
 @media(max-width:960px){.package{grid-template-columns:minmax(0,1fr)}}
 .findings{list-style:none;margin:0;padding:0;display:grid;gap:.5rem}.findings li{padding:.8rem 1rem;border-radius:14px;background:var(--s1);box-shadow:var(--shadow)}
 .findings summary{cursor:pointer}.findings code{display:block;font:11.5px/1.6 var(--mono);color:var(--faint);margin-top:.4rem;overflow-wrap:anywhere}
@@ -595,7 +619,7 @@ kbd{display:inline-grid;place-items:center;min-width:1.3rem;height:1.3rem;paddin
 .group summary{align-items:center}.group .where{display:inline-flex;align-items:center;gap:.7rem;font-weight:600}
 .group .where::before{content:"";flex:none;width:.4rem;height:.4rem;border:solid var(--accent);border-width:0 1.5px 1.5px 0;rotate:-45deg;transition:rotate .15s}.group[open] .where::before{rotate:45deg}.group .count{color:var(--faint);flex:none}
 .group[open] summary{margin-bottom:.75rem}
-.flist{list-style:none;margin:0;padding:0;display:grid;gap:.3rem;font:12px var(--mono);max-height:16rem;overflow:auto}.flist li{display:flex;justify-content:space-between;gap:1rem}.flist a{overflow-wrap:anywhere;min-width:0}.flist span{color:var(--faint);flex:none}
+.flist{list-style:none;margin:-6px;padding:6px;display:grid;gap:.3rem;font:12px var(--mono);max-height:16rem;overflow:auto}.flist li{display:flex;justify-content:space-between;gap:1rem}.flist a{overflow-wrap:anywhere;min-width:0}.flist span{color:var(--faint);flex:none}
 .gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(8.5rem,1fr));gap:.75rem}.flist+.gallery{margin-top:.75rem}
 .gthumb{all:unset;box-sizing:border-box;cursor:zoom-in;display:grid;gap:.4rem;font:11.5px var(--mono);min-width:0;color:var(--dim)}.gthumb span{display:flex;justify-content:space-between;gap:.5rem;overflow:hidden;white-space:nowrap}.gthumb small{color:var(--faint);font-size:inherit;flex:none}
 .gthumb img{width:100%;aspect-ratio:16/9;object-fit:contain;border-radius:10px;display:block;background:var(--s2);box-shadow:inset 0 0 0 1px var(--hair);transition:box-shadow .15s}.gthumb:hover img,.gthumb:focus-visible img{box-shadow:0 0 0 2px var(--accent)}
@@ -615,8 +639,8 @@ kbd{display:inline-grid;place-items:center;min-width:1.3rem;height:1.3rem;paddin
 @media(max-width:960px){.top{grid-template-columns:minmax(0,1fr)}.pills{justify-self:center;justify-content:center}.app{height:auto;min-height:100vh;overflow:visible}.center{grid-template-columns:minmax(0,1fr);grid-template-areas:"stage" "panel";gap:.75rem}
 .stage{min-height:60vh}.view{padding:.5rem 3.75rem 1rem}.track{position:sticky;bottom:0;background:var(--bg)}}
 @supports (corner-shape:squircle){*,*::before,*::after,::backdrop{corner-shape:squircle}.dot,.verdict i,.arrow,.q,.flag,.close,.dots i,.lb-nav .dir,
-:focus-visible,.pill,.tabs,.tabs a,.tabs a span,.reasons .steps a,.took,.badge,.face .role,.focus,.lb-cap,.lb-nav,.enlarge,.permalink,.exit,.fw-dl{corner-shape:round}}
-.fopen{all:unset;cursor:pointer;color:var(--accent);overflow-wrap:anywhere;min-width:0}.fopen:hover{text-decoration:underline}.fopen:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+:focus-visible,.pill,.tabs,.tabs a,.tabs a span,.reasons .steps a,.took,.badge,.face .role,.focus,.lb-cap,.lb-nav,.enlarge,.permalink,.exit,.fw-dl,.fopen{corner-shape:round}}
+.fopen{all:unset;cursor:pointer;color:var(--accent);overflow-wrap:anywhere;min-width:0}.fopen:hover{text-decoration:underline;text-underline-offset:3px}.fopen:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:999px}
 .fwin{position:fixed;inset:0;width:auto;height:auto;max-width:none;max-height:none;margin:0;padding:2rem;border:0;background:none;place-items:center;overflow:hidden;transition:overlay .28s allow-discrete,display .28s allow-discrete}
 .fwin:popover-open{display:grid}
 .fwin::backdrop{background:rgba(42,29,21,0);transition:background .28s ease,overlay .28s allow-discrete,display .28s allow-discrete}
@@ -632,6 +656,7 @@ kbd{display:inline-grid;place-items:center;min-width:1.3rem;height:1.3rem;paddin
 .fw-dl{flex:none;display:inline-flex;align-items:center;gap:.4rem;padding:.4rem .85rem .4rem .7rem;border-radius:999px;background:var(--grad);color:var(--on);font-size:12.5px;font-weight:600}
 .fw-dl:hover{text-decoration:none;filter:brightness(1.05)}
 .fw-dl:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.fw-card.framed{height:min(42rem,100%)}.fw-frame{display:block;width:100%;height:100%;border:0;background:#fff}
 .fw-body{margin:0;padding:1rem 1.15rem 1.25rem;overflow:auto;background:var(--bg);font:12.5px/1.6 var(--mono);color:var(--text);white-space:pre-wrap;overflow-wrap:anywhere;tab-size:2}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 @media print{.app{height:auto;display:block}.track,.arrow,.mid,.lightbox,.enlarge{display:none}.center{display:block}.step{display:block!important;break-inside:avoid;margin-bottom:1rem}.view{display:flex!important}.stage{background:none}}`;

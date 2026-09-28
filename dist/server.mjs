@@ -20278,6 +20278,7 @@ import { dirname as dirname6, join as join10, resolve as resolve6, parse as pars
 
 // src/review-page.ts
 import { createHash as createHash4 } from "node:crypto";
+var textFile = /\.(json|jsonl|ndjson|log|txt|md|csv|tsv|ya?ml|xml|toml)$/i;
 var escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 var src = (path) => escapeHtml(path.split("/").map(encodeURIComponent).join("/"));
 var link2 = (step2) => `#step-${encodeURIComponent(step2.id)}`;
@@ -20446,13 +20447,26 @@ function thumb(step2, detail, number3, flagged, views) {
   }).join("");
   return `<li class="${tone(step2.execution)}${step2.inputMode === "diagnostic" ? " diagnostic" : ""}${erred(step2) ? " err" : ""}"><div class="faces">${faces}</div><span class="cap"><span class="n">${number3}</span><i class="dot" aria-hidden="true"></i><span class="t">${escapeHtml(headline)}</span>${span ? `<span class="took">${span}</span>` : ""}</span><span class="sr">${escapeHtml(step2.execution)}</span></li>`;
 }
-var keys = `(()=>{const views=()=>[...document.querySelectorAll(".center .view")];const still=()=>matchMedia("(prefers-reduced-motion: reduce)").matches,body=box=>box.querySelector(".lb-body>*");const sourceOf=box=>{for(const o of document.querySelectorAll(".zoom,.enlarge,.gthumb")){if(o.getAttribute("popovertarget")!==box.id)continue;const s=o.classList.contains("enlarge")?o.closest(".term"):o.querySelector("img");if(s&&s.getBoundingClientRect().width)return s}return null};const shown=s=>{const r=s.getBoundingClientRect();if(s.tagName!=="IMG"||getComputedStyle(s).objectFit!=="contain"||!s.naturalWidth||!s.naturalHeight)return r;const k=Math.min(r.width/s.naturalWidth,r.height/s.naturalHeight),w=s.naturalWidth*k,h=s.naturalHeight*k;return{left:r.left+(r.width-w)/2,top:r.top+(r.height-h)/2,width:w,height:h}};const from=(el,src)=>{const now=getComputedStyle(el).transform;el.style.transition="none";el.style.transform="none";const b=el.getBoundingClientRect(),a=shown(src);el.style.transform=now==="none"?"":now;el.getBoundingClientRect();el.style.transition="";if(!b.width)return"";const k=a.width/b.width;return"translate("+(a.left+a.width/2-b.left-b.width*k/2)+"px,"+(a.top+a.height/2-b.top-b.height*k/2)+"px) scale("+k+")"};let hidden=null,token=0;const unhide=()=>{if(hidden)hidden.style.visibility="";hidden=null};const open=box=>{token++;unhide();const src=still()?null:sourceOf(box);box.toggleAttribute("data-flip",!!src);box.showPopover();const el=body(box);if(src&&el){const f=from(el,src);el.style.transition="none";el.style.transform=f;el.getBoundingClientRect();el.style.transition="";el.style.transform="";src.style.visibility="hidden";hidden=src}};const leave=box=>{if(box.hasAttribute("data-instant"))return;const el=body(box),src=hidden,n=++token;if(src&&el&&!still()&&src.getBoundingClientRect().width){box.setAttribute("data-flip","");el.style.transform=from(el,src);el.addEventListener("transitionend",()=>{if(n===token)unhide()},{once:true});setTimeout(()=>{if(n===token)unhide()},450)}else{box.removeAttribute("data-flip");unhide()}setTimeout(()=>{if(n===token&&!box.matches(":popover-open")&&el)el.style.transform=""},520)};document.querySelectorAll(".lightbox").forEach(b=>b.addEventListener("beforetoggle",e=>{if(e.newState==="closed")leave(b)}));const go=b=>{const box=b.closest(".lightbox"),next=document.getElementById(b.getAttribute("popovertarget"));if(!next)return;const instant=[box,next].filter(Boolean);instant.forEach(x=>x.setAttribute("data-instant",""));token++;unhide();if(box)box.hidePopover();const s=next.dataset.step;if(s&&decodeURIComponent(location.hash.slice(1))!==s)location.hash=encodeURIComponent(s);const el=body(next);if(el)el.style.transform="";next.showPopover();const src=sourceOf(next);if(src){src.style.visibility="hidden";hidden=src}setTimeout(()=>instant.forEach(x=>x.removeAttribute("data-instant")),60)};const save=dl=>{const p=dl.closest(".fwin").querySelector(".fw-body"),raw=dl.dataset.raw??(p.querySelector(".quiet")?"":p.textContent);const u=URL.createObjectURL(new Blob([raw],{type:"text/plain"})),a=document.createElement("a");a.href=u;a.download=dl.getAttribute("download");document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1e3)};document.addEventListener("click",e=>{const t=e.target instanceof Element?e.target:null;const b=t&&t.closest(".lb-nav");if(b){e.preventDefault();go(b);return}const dl=t&&t.closest(".fw-dl");if(dl){e.preventDefault();save(dl);return}const o=t&&t.closest(".zoom,.enlarge,.gthumb"),lb=o&&document.getElementById(o.getAttribute("popovertarget"));if(lb){e.preventDefault();open(lb);return}if(t&&(t.classList.contains("lightbox")||t.classList.contains("fwin")))t.hidePopover()});try{document.querySelectorAll("time[data-local]").forEach(t=>{const d=new Date(t.dateTime);if(isNaN(d.getTime())||!d.getTimezoneOffset())return;t.textContent=new Intl.DateTimeFormat(undefined,{...(d.getFullYear()!==d.getUTCFullYear()?{year:"numeric"}:{}),month:"short",day:"numeric",hour:"numeric",minute:"2-digit",timeZoneName:"short"}).format(d);const li=t.closest("[hidden]");if(li)li.hidden=false})}catch{}const current=()=>{let el=null;try{el=document.getElementById(decodeURIComponent(location.hash.slice(1)))}catch{}if(!el)return 0;const v=el.classList.contains("step")?el.querySelector(".view.first"):el.closest(".view");return v?views().indexOf(v):-1};const focused=()=>{const f=document.getElementById("focus-errors");return!!(f&&f.checked)};let last="";const reveal=()=>{const i=current();if(i<0)return;last=location.hash;const a=document.querySelector('.track a[data-t="'+i+'"]');if(a)a.scrollIntoView({block:"nearest",inline:"nearest"})};document.addEventListener("keydown",e=>{if(e.defaultPrevented||e.altKey||e.ctrlKey||e.metaKey||e.shiftKey)return;const t=e.target;if(t instanceof HTMLElement&&(t.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)))return;let box=null;try{box=document.querySelector(".lightbox:popover-open")}catch{}if(e.key===" "){if(box){e.preventDefault();if(!e.repeat)box.hidePopover();return}const opener=t instanceof Element?t.closest(".zoom,.enlarge,.gthumb"):null;if(t instanceof Element&&!opener&&(t.closest("summary")||t.closest("button")))return;e.preventDefault();if(e.repeat)return;if(opener&&opener.classList.contains("gthumb")){const g=document.getElementById(opener.getAttribute("popovertarget"));if(g)open(g);return}const i=current(),v=i<0?null:views()[i];const lb=v&&document.getElementById(v.id.replace(/^step-/,"lightbox-"));if(lb)open(lb);return}const d=e.key==="ArrowRight"?1:e.key==="ArrowLeft"?-1:0;if(!d)return;if(box){e.preventDefault();const b=box.querySelector(d<0?".lb-nav.prev":".lb-nav.next");if(b)go(b);return}const all=views();let j=current();if(j<0)return;do j+=d;while(j>=0&&j<all.length&&focused()&&!all[j].closest(".step").classList.contains("err"));if(j<0||j>=all.length)return;e.preventDefault();location.hash=encodeURIComponent(all[j].id)});const tab=document.querySelector(".tabs .t-traj");if(tab)tab.addEventListener("click",e=>{if(last){e.preventDefault();location.hash=last}});addEventListener("hashchange",()=>{let id="";try{id=decodeURIComponent(location.hash.slice(1))}catch{}try{document.querySelectorAll(":popover-open").forEach(p=>{if(p.dataset.step!==id)p.hidePopover()})}catch{}reveal()});reveal()})();`;
+var keys = `(()=>{const views=()=>[...document.querySelectorAll(".center .view")];const still=()=>matchMedia("(prefers-reduced-motion: reduce)").matches,body=box=>box.querySelector(".lb-body>*");const sourceOf=box=>{for(const o of document.querySelectorAll(".zoom,.enlarge,.gthumb")){if(o.getAttribute("popovertarget")!==box.id)continue;const s=o.classList.contains("enlarge")?o.closest(".term"):o.querySelector("img");if(s&&s.getBoundingClientRect().width)return s}return null};const shown=s=>{const r=s.getBoundingClientRect();if(s.tagName!=="IMG"||getComputedStyle(s).objectFit!=="contain"||!s.naturalWidth||!s.naturalHeight)return r;const k=Math.min(r.width/s.naturalWidth,r.height/s.naturalHeight),w=s.naturalWidth*k,h=s.naturalHeight*k;return{left:r.left+(r.width-w)/2,top:r.top+(r.height-h)/2,width:w,height:h}};const from=(el,src)=>{const now=getComputedStyle(el).transform;el.style.transition="none";el.style.transform="none";const b=el.getBoundingClientRect(),a=shown(src);el.style.transform=now==="none"?"":now;el.getBoundingClientRect();el.style.transition="";if(!b.width)return"";const k=a.width/b.width;return"translate("+(a.left+a.width/2-b.left-b.width*k/2)+"px,"+(a.top+a.height/2-b.top-b.height*k/2)+"px) scale("+k+")"};let hidden=null,token=0;const unhide=()=>{if(hidden)hidden.style.visibility="";hidden=null};const open=box=>{token++;unhide();const src=still()?null:sourceOf(box);box.toggleAttribute("data-flip",!!src);box.showPopover();const el=body(box);if(src&&el){const f=from(el,src);el.style.transition="none";el.style.transform=f;el.getBoundingClientRect();el.style.transition="";el.style.transform="";src.style.visibility="hidden";hidden=src}};const leave=box=>{if(box.hasAttribute("data-instant"))return;const el=body(box),src=hidden,n=++token;if(src&&el&&!still()&&src.getBoundingClientRect().width){box.setAttribute("data-flip","");el.style.transform=from(el,src);el.addEventListener("transitionend",()=>{if(n===token)unhide()},{once:true});setTimeout(()=>{if(n===token)unhide()},450)}else{box.removeAttribute("data-flip");unhide()}setTimeout(()=>{if(n===token&&!box.matches(":popover-open")&&el)el.style.transform=""},520)};document.querySelectorAll(".lightbox").forEach(b=>b.addEventListener("beforetoggle",e=>{if(e.newState==="closed")leave(b)}));const go=b=>{const box=b.closest(".lightbox"),next=document.getElementById(b.getAttribute("popovertarget"));if(!next)return;const instant=[box,next].filter(Boolean);instant.forEach(x=>x.setAttribute("data-instant",""));token++;unhide();if(box)box.hidePopover();const s=next.dataset.step;if(s&&decodeURIComponent(location.hash.slice(1))!==s)location.hash=encodeURIComponent(s);const el=body(next);if(el)el.style.transform="";next.showPopover();const src=sourceOf(next);if(src){src.style.visibility="hidden";hidden=src}setTimeout(()=>instant.forEach(x=>x.removeAttribute("data-instant")),60)};const save=dl=>{const p=dl.closest(".fwin").querySelector(".fw-body"),raw=dl.dataset.raw??(p.querySelector(".quiet")?"":p.textContent);const u=URL.createObjectURL(new Blob([raw],{type:"text/plain"})),a=document.createElement("a");a.href=u;a.download=dl.getAttribute("download");document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1e3)};if(location.protocol==="file:")document.querySelectorAll(".fw-dl[data-framed]").forEach(a=>{a.removeAttribute("download");a.target="_blank";a.rel="noopener";a.lastElementChild.textContent="Open"});document.addEventListener("click",e=>{const t=e.target instanceof Element?e.target:null;const b=t&&t.closest(".lb-nav");if(b){e.preventDefault();go(b);return}const dl=t&&t.closest(".fw-dl");if(dl&&!dl.hasAttribute("data-framed")){e.preventDefault();save(dl);return}const o=t&&t.closest(".zoom,.enlarge,.gthumb"),lb=o&&document.getElementById(o.getAttribute("popovertarget"));if(lb){e.preventDefault();open(lb);return}if(t&&(t.classList.contains("lightbox")||t.classList.contains("fwin")))t.hidePopover()});try{document.querySelectorAll("time[data-local]").forEach(t=>{const d=new Date(t.dateTime);if(isNaN(d.getTime())||!d.getTimezoneOffset())return;t.textContent=new Intl.DateTimeFormat(undefined,{...(d.getFullYear()!==d.getUTCFullYear()?{year:"numeric"}:{}),month:"short",day:"numeric",hour:"numeric",minute:"2-digit",timeZoneName:"short"}).format(d);const li=t.closest("[hidden]");if(li)li.hidden=false})}catch{}const current=()=>{let el=null;try{el=document.getElementById(decodeURIComponent(location.hash.slice(1)))}catch{}if(!el)return 0;const v=el.classList.contains("step")?el.querySelector(".view.first"):el.closest(".view");return v?views().indexOf(v):-1};const focused=()=>{const f=document.getElementById("focus-errors");return!!(f&&f.checked)};let last="";const reveal=()=>{const i=current();if(i<0)return;last=location.hash;const a=document.querySelector('.track a[data-t="'+i+'"]');if(a)a.scrollIntoView({block:"nearest",inline:"nearest"})};document.addEventListener("keydown",e=>{if(e.defaultPrevented||e.altKey||e.ctrlKey||e.metaKey||e.shiftKey)return;const t=e.target;if(t instanceof HTMLElement&&(t.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)))return;let box=null;try{box=document.querySelector(".lightbox:popover-open")}catch{}if(e.key===" "){if(box){e.preventDefault();if(!e.repeat)box.hidePopover();return}const opener=t instanceof Element?t.closest(".zoom,.enlarge,.gthumb"):null;if(t instanceof Element&&!opener&&(t.closest("summary")||t.closest("button")))return;e.preventDefault();if(e.repeat)return;if(opener&&opener.classList.contains("gthumb")){const g=document.getElementById(opener.getAttribute("popovertarget"));if(g)open(g);return}const i=current(),v=i<0?null:views()[i];const lb=v&&document.getElementById(v.id.replace(/^step-/,"lightbox-"));if(lb)open(lb);return}const d=e.key==="ArrowRight"?1:e.key==="ArrowLeft"?-1:0;if(!d)return;if(box){e.preventDefault();const b=box.querySelector(d<0?".lb-nav.prev":".lb-nav.next");if(b)go(b);return}const all=views();let j=current();if(j<0)return;do j+=d;while(j>=0&&j<all.length&&focused()&&!all[j].closest(".step").classList.contains("err"));if(j<0||j>=all.length)return;e.preventDefault();location.hash=encodeURIComponent(all[j].id)});const tab=document.querySelector(".tabs .t-traj");if(tab)tab.addEventListener("click",e=>{if(last){e.preventDefault();location.hash=last}});addEventListener("hashchange",()=>{let id="";try{id=decodeURIComponent(location.hash.slice(1))}catch{}try{document.querySelectorAll(":popover-open").forEach(p=>{if(p.dataset.step!==id)p.hidePopover()})}catch{}reveal()});reveal()})();`;
 var keysPolicy = `'sha256-${createHash4("sha256").update(keys).digest("base64")}'`;
 var selection = (steps, firsts, views) => !steps ? "" : Array.from({ length: steps }, (_, i) => `.app:has(.center>.step:nth-of-type(${i + 1}):target) .track li:nth-child(${i + 1}),.app:has(.center>.step:nth-of-type(${i + 1}) :target) .track li:nth-child(${i + 1})`).join(",") + ",.app:not(:has(.center :target)) .track li:first-child{background:var(--s2)}" + [
   ...Array.from({ length: views }, (_, k) => `.app:has([data-v="${k}"]:target) .track [data-t="${k}"] .face`),
   ...firsts.map((k) => `.app:has(.center>.step[data-first="${k}"]:target) .track [data-t="${k}"] .face`),
   `.app:not(:has(.center :target)) .track [data-t="0"] .face`
 ].join(",") + "{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--accent),0 0 18px var(--ring)}";
+function fileWindow(id2, f) {
+  let text4 = f.text, formatted = false;
+  if (f.text !== void 0 && /\.json$/i.test(f.name)) try {
+    const pretty = JSON.stringify(JSON.parse(f.text), null, 2);
+    formatted = pretty !== f.text.trimEnd();
+    if (formatted) text4 = pretty;
+  } catch {
+    formatted = false;
+  }
+  const framed = text4 === void 0, label = escapeHtml(f.label);
+  return `<div class="fwin" id="${id2}" data-step="overview" popover aria-label="${label}"><div class="fw-card${framed ? " framed" : ""}"><div class="fw-bar"><span class="fw-name" title="${label}">${label}</span>${formatted ? `<span class="fw-note" title="The download is the original file">Formatted</span>` : ""}${f.bytes !== void 0 ? `<span class="size">${size(f.bytes)}</span>` : ""}<a class="fw-dl" href="${f.href}" download="${escapeHtml(f.name)}"${formatted ? ` data-raw="${escapeHtml(f.text)}"` : ""}${framed ? " data-framed" : ""}>${downloadIcon}<span>Download</span></a><button type="button" class="close" popovertarget="${id2}" popovertargetaction="hide" aria-label="Close">\xD7</button></div>` + (framed ? `<iframe class="fw-frame" src="${f.href}" title="${label}" loading="lazy" sandbox></iframe>` : `<pre class="fw-body">
+${text4 ? escapeHtml(text4) : `<span class="quiet">Empty file.</span>`}</pre>`) + `</div></div>`;
+}
 function renderReviewPage(model) {
   const steps = chronological(model);
   const numbers = new Map(steps.map((step2, i) => [step2.id, String(i + 1).padStart(2, "0")]));
@@ -20471,21 +20485,11 @@ function renderReviewPage(model) {
     byName.set(declared, [...byName.get(declared) ?? [], { ...output, label: rest.filter((part) => !uuid2.test(part)).join("/") || output.path.split("/").at(-1) }]);
   }
   const outputBoxes = [], windows = [];
-  const file = (f) => {
-    if (f.text === void 0) return `<a href="${src(f.path)}">${escapeHtml(f.label)}</a>`;
-    let text4 = f.text, formatted = false;
-    if (/\.json$/i.test(f.path)) try {
-      const pretty = JSON.stringify(JSON.parse(f.text), null, 2);
-      formatted = pretty !== f.text.trimEnd();
-      if (formatted) text4 = pretty;
-    } catch {
-      formatted = false;
-    }
-    const id2 = `window-output-${windows.length + 1}`, name = f.label.split("/").at(-1);
-    windows.push(`<div class="fwin" id="${id2}" data-step="overview" popover aria-label="${escapeHtml(f.label)}"><div class="fw-card"><div class="fw-bar"><span class="fw-name" title="${escapeHtml(f.label)}">${escapeHtml(f.label)}</span>${formatted ? `<span class="fw-note" title="The download is the original file">Formatted</span>` : ""}<span class="size">${size(f.bytes)}</span><a class="fw-dl" href="${src(f.path)}" download="${escapeHtml(name)}"${formatted ? ` data-raw="${escapeHtml(f.text)}"` : ""}>${downloadIcon}Download</a><button type="button" class="close" popovertarget="${id2}" popovertargetaction="hide" aria-label="Close">\xD7</button></div><pre class="fw-body">
-${text4 ? escapeHtml(text4) : `<span class="quiet">Empty file.</span>`}</pre></div></div>`);
-    return `<button type="button" class="fopen" popovertarget="${id2}" title="View ${escapeHtml(name)}">${escapeHtml(f.label)}</button>`;
+  const opener = (id2, f) => {
+    windows.push(fileWindow(id2, f));
+    return `<button type="button" class="fopen" popovertarget="${id2}" title="View ${escapeHtml(f.name)}">${escapeHtml(f.label)}</button>`;
   };
+  const file = (f) => f.text === void 0 && !textFile.test(f.path) ? `<a href="${src(f.path)}">${escapeHtml(f.label)}</a>` : opener(`window-output-${windows.length + 1}`, { href: src(f.path), label: f.label, name: f.label.split("/").at(-1), bytes: f.bytes, text: f.text });
   const outputs = [...byName].map(([declared, files]) => {
     const images = files.filter((f) => /\.(png|jpe?g|webp|gif)$/i.test(f.path)), others = files.filter((f) => !images.includes(f));
     const total = files.reduce((sum, f) => sum + f.bytes, 0);
@@ -20495,6 +20499,7 @@ ${text4 ? escapeHtml(text4) : `<span class="quiet">Empty file.</span>`}</pre></d
       return `<button type="button" class="gthumb" popovertarget="${id2}" title="Enlarge ${escapeHtml(name)}"><img loading="lazy" alt="${escapeHtml(f.label)}" src="${src(f.path)}"><span>${escapeHtml(name)}<small>${size(f.bytes)}</small></span></button>`;
     }).join("")}</div>` : ""}</details>`;
   }).join("");
+  const generated2 = [["manifest.json", "Checksums of every artifact", void 0], ["summary.json", "Verdicts and findings", model.generated?.summary], ["trajectory.json", "Steps as recorded", model.generated?.trajectory]].map(([name, note, text4]) => `<li>${opener(`window-${name.replace(".json", "")}`, { href: name, label: name, name, ...text4 !== void 0 ? { bytes: Buffer.byteLength(text4), text: text4 } : {} })}<span>${note}</span></li>`).join("");
   const stat2 = (label, value) => `<li><b>${value}</b>${label ? ` <span>${label}</span>` : ""}</li>`;
   const merged = (reasons) => [...reasons.reduce((all, r) => all.set(r.text, [.../* @__PURE__ */ new Set([...all.get(r.text) ?? [], ...r.stepIds])]), /* @__PURE__ */ new Map())].map(([text4, stepIds]) => ({ text: text4, stepIds }));
   const stepLinks = (ids) => ids.map((id2) => `<a href="${escapeHtml(`#step-${encodeURIComponent(id2)}`)}">Step <span class="d">${numbers.get(id2) ?? "?"}</span></a>`).join("");
@@ -20508,8 +20513,8 @@ ${text4 ? escapeHtml(text4) : `<span class="quiet">Empty file.</span>`}</pre></d
 <section class="block"><h3>Findings as recorded <span class="count">${model.findings.length}</span></h3>${model.findings.length ? `<ul class="findings">${groupFindings(model.findings).map((g) => `<li>${g.ids.length ? `<details><summary>${escapeHtml(g.text)}</summary><code>${g.ids.map(escapeHtml).join("<br>")}</code></details>` : escapeHtml(g.text)}</li>`).join("")}</ul>` : `<p class="quiet">No findings.</p>`}</section>
 <section class="block"><h3>Declared outputs <span class="count">${model.outputs.length}</span></h3>${outputs ? `<div class="outputs">${outputs}</div>` : `<p class="quiet">No declared outputs were delivered.</p>`}</section>
 <section class="block"><h3>Package</h3><div class="package"><dl class="ids"><div><dt>Package</dt><dd>${escapeHtml(model.packageId)}</dd></div><div><dt>Task</dt><dd>${escapeHtml(model.taskId)}</dd></div><div><dt>Session</dt><dd>${escapeHtml(model.sessionId)}</dd></div>${started ? `<div><dt>Started</dt><dd>${utcStamp(started, true)}</dd></div>` : ""}</dl>
-<ul class="files"><li><a href="manifest.json">manifest.json</a><span>Checksums of every artifact</span></li><li><a href="summary.json">summary.json</a><span>Verdicts and findings</span></li><li><a href="trajectory.json">trajectory.json</a><span>Steps as recorded</span></li></ul></div></section></div></section></article>`;
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' file:; style-src 'unsafe-inline'; script-src ${keysPolicy}; base-uri 'none'; form-action 'none'"><title>Relay review: ${escapeHtml(model.packageId)}</title><style>${css}${selection(steps.length, views.filter((v) => v.first).map((v) => v.index), views.length)}</style></head><body>
+<ul class="files">${generated2}</ul></div></section></div></section></article>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' file:; frame-src 'self' file:; style-src 'unsafe-inline'; script-src ${keysPolicy}; base-uri 'none'; form-action 'none'"><title>Relay review: ${escapeHtml(model.packageId)}</title><style>${css}${selection(steps.length, views.filter((v) => v.first).map((v) => v.index), views.length)}</style></head><body>
 <div class="app">
 <header class="top"><div class="brand"><span class="mark" aria-hidden="true">${relayMark}</span><h1 title="${escapeHtml(model.packageId)}">Relay</h1>
 <ul class="stats">${stat2(noun(steps.length, "step"), String(steps.length))}${stat2(noun(actions, "action"), String(actions))}${stat2(noun(diagnostics, "diagnostic"), String(diagnostics))}${started ? `<li class="at"><time datetime="${started}" title="Started ${started}">${utcStamp(started)}</time><span class="local" hidden><span class="sep" aria-hidden="true">\xB7</span><time datetime="${started}" data-local title="Started, in your time zone"></time></span></li>` : ""}${times.length ? stat2("", duration3(Math.max(...times) - Math.min(...times))) : ""}</ul></div>
@@ -20649,7 +20654,7 @@ kbd{display:inline-grid;place-items:center;min-width:1.3rem;height:1.3rem;paddin
 .raw summary{cursor:pointer;font-size:12px;color:var(--faint);width:max-content}.raw summary:hover{color:var(--dim)}.raw pre{margin-top:.5rem;color:var(--faint);font-size:11.5px;max-height:12rem;overflow:auto}
 .facts{display:grid;grid-template-columns:1fr 1fr;gap:1rem 1.25rem;margin:1.75rem 0 0;padding:0}.facts dd{margin:.2rem 0 0;font:12.5px var(--mono);color:var(--dim);overflow-wrap:anywhere}
 .facts.stack{grid-template-columns:1fr}
-.files{list-style:none;margin:0;padding:0;display:grid;gap:.6rem}.files li{display:grid}.files a{font:12.5px var(--mono)}.files span{font-size:12px;color:var(--faint)}
+.files{list-style:none;margin:0;padding:0;display:grid;gap:.6rem}.files li{display:grid;justify-items:start}.files .fopen{font:12.5px var(--mono)}.files span{font-size:12px;color:var(--faint)}
 .doc{display:block;overflow:auto;font-size:1rem;line-height:1.6}.doc-in{width:100%;max-width:56rem;margin:0 auto;padding:2.75rem 2.75rem 4rem}
 .doc h2{font:700 2.25rem/1.15 var(--round);letter-spacing:-.02em;margin:0}.lede{color:var(--dim);margin:.85rem 0 0;font-size:1.125rem;line-height:1.6}
 .doc .block{margin-top:2.75rem}.doc .block>h3{display:flex;align-items:baseline;gap:.6rem;margin:0 0 1rem;font:700 1.25rem/1.3 var(--round);letter-spacing:-.005em;text-transform:none;color:var(--text)}
@@ -20662,7 +20667,7 @@ kbd{display:inline-grid;place-items:center;min-width:1.3rem;height:1.3rem;paddin
 .doc .flist{font-size:.875rem;gap:.4rem}.doc .gallery{grid-template-columns:repeat(auto-fill,minmax(11rem,1fr));gap:1rem}.doc .gthumb{font-size:.8125rem}
 .package{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:1.5rem;padding:1.25rem 1.4rem;border-radius:18px;background:var(--s1);box-shadow:var(--shadow)}
 .package .ids{display:grid;gap:.9rem;margin:0}.package dt{font-size:.75rem}.package dd{margin:.2rem 0 0;font:.875rem var(--mono);color:var(--dim);overflow-wrap:anywhere}
-.doc .files{gap:.9rem}.doc .files a{font-size:.875rem}.doc .files span{font-size:.8125rem}
+.doc .files{gap:.9rem}.doc .files .fopen{font-size:.875rem}.doc .files span{font-size:.8125rem}
 @media(max-width:960px){.package{grid-template-columns:minmax(0,1fr)}}
 .findings{list-style:none;margin:0;padding:0;display:grid;gap:.5rem}.findings li{padding:.8rem 1rem;border-radius:14px;background:var(--s1);box-shadow:var(--shadow)}
 .findings summary{cursor:pointer}.findings code{display:block;font:11.5px/1.6 var(--mono);color:var(--faint);margin-top:.4rem;overflow-wrap:anywhere}
@@ -20671,7 +20676,7 @@ kbd{display:inline-grid;place-items:center;min-width:1.3rem;height:1.3rem;paddin
 .group summary{align-items:center}.group .where{display:inline-flex;align-items:center;gap:.7rem;font-weight:600}
 .group .where::before{content:"";flex:none;width:.4rem;height:.4rem;border:solid var(--accent);border-width:0 1.5px 1.5px 0;rotate:-45deg;transition:rotate .15s}.group[open] .where::before{rotate:45deg}.group .count{color:var(--faint);flex:none}
 .group[open] summary{margin-bottom:.75rem}
-.flist{list-style:none;margin:0;padding:0;display:grid;gap:.3rem;font:12px var(--mono);max-height:16rem;overflow:auto}.flist li{display:flex;justify-content:space-between;gap:1rem}.flist a{overflow-wrap:anywhere;min-width:0}.flist span{color:var(--faint);flex:none}
+.flist{list-style:none;margin:-6px;padding:6px;display:grid;gap:.3rem;font:12px var(--mono);max-height:16rem;overflow:auto}.flist li{display:flex;justify-content:space-between;gap:1rem}.flist a{overflow-wrap:anywhere;min-width:0}.flist span{color:var(--faint);flex:none}
 .gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(8.5rem,1fr));gap:.75rem}.flist+.gallery{margin-top:.75rem}
 .gthumb{all:unset;box-sizing:border-box;cursor:zoom-in;display:grid;gap:.4rem;font:11.5px var(--mono);min-width:0;color:var(--dim)}.gthumb span{display:flex;justify-content:space-between;gap:.5rem;overflow:hidden;white-space:nowrap}.gthumb small{color:var(--faint);font-size:inherit;flex:none}
 .gthumb img{width:100%;aspect-ratio:16/9;object-fit:contain;border-radius:10px;display:block;background:var(--s2);box-shadow:inset 0 0 0 1px var(--hair);transition:box-shadow .15s}.gthumb:hover img,.gthumb:focus-visible img{box-shadow:0 0 0 2px var(--accent)}
@@ -20691,8 +20696,8 @@ kbd{display:inline-grid;place-items:center;min-width:1.3rem;height:1.3rem;paddin
 @media(max-width:960px){.top{grid-template-columns:minmax(0,1fr)}.pills{justify-self:center;justify-content:center}.app{height:auto;min-height:100vh;overflow:visible}.center{grid-template-columns:minmax(0,1fr);grid-template-areas:"stage" "panel";gap:.75rem}
 .stage{min-height:60vh}.view{padding:.5rem 3.75rem 1rem}.track{position:sticky;bottom:0;background:var(--bg)}}
 @supports (corner-shape:squircle){*,*::before,*::after,::backdrop{corner-shape:squircle}.dot,.verdict i,.arrow,.q,.flag,.close,.dots i,.lb-nav .dir,
-:focus-visible,.pill,.tabs,.tabs a,.tabs a span,.reasons .steps a,.took,.badge,.face .role,.focus,.lb-cap,.lb-nav,.enlarge,.permalink,.exit,.fw-dl{corner-shape:round}}
-.fopen{all:unset;cursor:pointer;color:var(--accent);overflow-wrap:anywhere;min-width:0}.fopen:hover{text-decoration:underline}.fopen:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+:focus-visible,.pill,.tabs,.tabs a,.tabs a span,.reasons .steps a,.took,.badge,.face .role,.focus,.lb-cap,.lb-nav,.enlarge,.permalink,.exit,.fw-dl,.fopen{corner-shape:round}}
+.fopen{all:unset;cursor:pointer;color:var(--accent);overflow-wrap:anywhere;min-width:0}.fopen:hover{text-decoration:underline;text-underline-offset:3px}.fopen:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:999px}
 .fwin{position:fixed;inset:0;width:auto;height:auto;max-width:none;max-height:none;margin:0;padding:2rem;border:0;background:none;place-items:center;overflow:hidden;transition:overlay .28s allow-discrete,display .28s allow-discrete}
 .fwin:popover-open{display:grid}
 .fwin::backdrop{background:rgba(42,29,21,0);transition:background .28s ease,overlay .28s allow-discrete,display .28s allow-discrete}
@@ -20708,12 +20713,12 @@ kbd{display:inline-grid;place-items:center;min-width:1.3rem;height:1.3rem;paddin
 .fw-dl{flex:none;display:inline-flex;align-items:center;gap:.4rem;padding:.4rem .85rem .4rem .7rem;border-radius:999px;background:var(--grad);color:var(--on);font-size:12.5px;font-weight:600}
 .fw-dl:hover{text-decoration:none;filter:brightness(1.05)}
 .fw-dl:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.fw-card.framed{height:min(42rem,100%)}.fw-frame{display:block;width:100%;height:100%;border:0;background:#fff}
 .fw-body{margin:0;padding:1rem 1.15rem 1.25rem;overflow:auto;background:var(--bg);font:12.5px/1.6 var(--mono);color:var(--text);white-space:pre-wrap;overflow-wrap:anywhere;tab-size:2}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 @media print{.app{height:auto;display:block}.track,.arrow,.mid,.lightbox,.enlarge{display:none}.center{display:block}.step{display:block!important;break-inside:avoid;margin-bottom:1rem}.view{display:flex!important}.stage{background:none}}`;
 
 // src/package.ts
-var textOutput = /\.(json|jsonl|ndjson|log|txt|md|csv|tsv|ya?ml|xml|toml)$/i;
 var textLimit = 256 * 1024;
 var textBudget = 2 * 1024 * 1024;
 var generated = /* @__PURE__ */ new Set(["manifest.json", "summary.json", "trajectory.json", "index.html", "OPENING.txt", "journal/session-events.jsonl"]);
@@ -21043,7 +21048,7 @@ Original subprocess/action evidence (not an authoritative input-success verdict)
   for (const path of files.filter((p) => p.startsWith("extractions/")).sort()) {
     const stat2 = await lstat4(join10(root, path));
     let text4;
-    if (stat2.isFile() && textOutput.test(path) && stat2.size <= Math.min(textLimit, budget)) {
+    if (stat2.isFile() && textFile.test(path) && stat2.size <= Math.min(textLimit, budget)) {
       try {
         text4 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(await readFile7(join10(root, path)));
       } catch {
@@ -21100,8 +21105,19 @@ async function buildReview(root, a) {
   const trajectory = await buildTrajectory(root, { steps: [...a.steps], execution: a.execution });
   return { ...trajectory, steps: a.steps, outcomes: { ...trajectory.outcomes, recording: a.completeness } };
 }
-function viewer(options2, a) {
-  return renderReviewPage({ ...options2, completeness: a.completeness, execution: a.execution, findings: a.findings, reasons: a.reasons, steps: a.steps, details: a.details, outputs: a.outputs });
+function viewer(options2, a, generated2) {
+  const held = (text4) => text4 !== void 0 && Buffer.byteLength(text4) <= textLimit ? text4 : void 0;
+  return renderReviewPage({
+    ...options2,
+    completeness: a.completeness,
+    execution: a.execution,
+    findings: a.findings,
+    reasons: a.reasons,
+    steps: a.steps,
+    details: a.details,
+    outputs: a.outputs,
+    generated: { summary: held(generated2.summary), trajectory: held(generated2.trajectory) }
+  });
 }
 function legacyViewer(options2, a) {
   const link3 = (step2) => `#step-${encodeURIComponent(step2.id)}`;
@@ -21126,9 +21142,6 @@ async function deliverPackage(rootDir, options2) {
   };
   try {
     await save("journal/session-events.jsonl", await readFile7(join10(root, "state/journal/events.jsonl")));
-    await save("summary.json", json(summary(options2, a)));
-    await save("index.html", viewer(options2, a));
-    await save("OPENING.txt", "Open index.html directly in a browser (file://); no server, network, or test machine is required. Select a step, or use the arrows or the left and right arrow keys. Snapshot completeness and execution are separate verdicts, and the page explains each one that is not complete or passed. Originals are under state/, host metadata under host/, and declared extractions under extractions/. manifest.json checksums every artifact except itself.\n");
     const build = async () => {
       const all = await filesUnder(root), snapshotPaths = new Set(a.snapshots.map((s) => s.path));
       return buildManifest({
@@ -21143,7 +21156,11 @@ async function deliverPackage(rootDir, options2) {
       });
     };
     await save("manifest.json", json(await build()));
-    await save("trajectory.json", json(await buildReview(root, a)));
+    const generated2 = { summary: json(summary(options2, a)), trajectory: json(await buildReview(root, a)) };
+    await save("summary.json", generated2.summary);
+    await save("index.html", viewer(options2, a, generated2));
+    await save("OPENING.txt", "Open index.html directly in a browser (file://); no server, network, or test machine is required. Select a step, or use the arrows or the left and right arrow keys. Snapshot completeness and execution are separate verdicts, and the page explains each one that is not complete or passed. Originals are under state/, host metadata under host/, and declared extractions under extractions/. manifest.json checksums every artifact except itself.\n");
+    await save("trajectory.json", generated2.trajectory);
     await writeFile3(join10(root, "manifest.json"), json(await build()));
     return await verifyDeliveredPackage(root);
   } catch (error2) {
@@ -21186,9 +21203,10 @@ async function verifyDeliveredPackage(rootDir) {
   const summaryText = await readFile7(join10(root, "summary.json"), "utf8");
   if (summaryText !== json(summary(options2, a)) && summaryText !== json(legacySummary(options2, a))) throw new Error("summary disagrees with original evidence");
   const page = await readFile7(join10(root, "index.html"), "utf8");
-  if (page !== viewer(options2, a) && page !== legacyViewer(options2, a)) throw new Error("viewer disagrees with original evidence");
+  const review = json(await buildReview(root, a));
+  if (page !== viewer(options2, a, { summary: json(summary(options2, a)), trajectory: review }) && page !== legacyViewer(options2, a)) throw new Error("viewer disagrees with original evidence");
   const trajectoryFile = !files.includes("trajectory.json") && files.includes(legacyTrajectoryFile) ? legacyTrajectoryFile : "trajectory.json";
-  if (await readFile7(join10(root, trajectoryFile), "utf8") !== json(await buildReview(root, a))) throw new Error("trajectory disagrees with original evidence");
+  if (await readFile7(join10(root, trajectoryFile), "utf8") !== review) throw new Error("trajectory disagrees with original evidence");
   const acceptance = await verifyPackage(manifest, root);
   const errors = acceptance.findings.filter((f) => f.code !== "ok" && !(f.code === "state-inconsistent" && [...a.incompleteGroups].some((g) => f.detail === `group ${g} does not carry exactly one before/after pair`)));
   if (errors.length) throw new Error(`package verification failed: ${errors.map((e) => e.detail).join("; ")}`);

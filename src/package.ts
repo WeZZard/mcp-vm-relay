@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { lstat, readFile, readdir, mkdir, writeFile, rm } from "node:fs/promises";
 import { dirname, join, resolve, parse } from "node:path";
 import { buildManifest, buildTrajectory, verifyPackage, type PackageManifest, type ReviewStep, type SnapshotArtifact } from "@wezzard/relay-driver-host-sdk";
-import { escapeHtml, renderReviewPage, type CommandOutput, type Reason, type StepDetail } from "./review-page.js";
+import { escapeHtml, renderReviewPage, textFile, type CommandOutput, type Reason, type StepDetail } from "./review-page.js";
 
 export interface DeliverPackageOptions {
   packageId: string;
@@ -18,8 +18,8 @@ export interface DeliveryResult {
 }
 type Obj = Record<string, any>;
 type Step = ReviewStep & { because?: string; actionId: string; inputMode: string };
-/** Outputs the page shows as text: readable, small, and within one page's budget. */
-const textOutput = /\.(json|jsonl|ndjson|log|txt|md|csv|tsv|ya?ml|xml|toml)$/i, textLimit = 256 * 1024, textBudget = 2 * 1024 * 1024;
+/** The page holds the text of a file up to this size, and of outputs up to the budget in all. */
+const textLimit = 256 * 1024, textBudget = 2 * 1024 * 1024;
 
 type Analysis = {
   snapshots: SnapshotArtifact[];
@@ -352,7 +352,7 @@ async function analyze(root: string, options: DeliverPackageOptions, files: stri
   for (const path of files.filter(p => p.startsWith("extractions/")).sort()) {
     const stat = await lstat(join(root, path));
     let text: string | undefined;
-    if (stat.isFile() && textOutput.test(path) && stat.size <= Math.min(textLimit, budget)) {
+    if (stat.isFile() && textFile.test(path) && stat.size <= Math.min(textLimit, budget)) {
       try { text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(await readFile(join(root, path))); } catch { text = undefined; }
       if (text?.includes("\0")) text = undefined;
       if (text !== undefined) budget -= stat.size;
@@ -407,8 +407,12 @@ async function buildReview(root: string, a: Analysis) {
   const trajectory = await buildTrajectory(root, { steps: [...a.steps], execution: a.execution });
   return { ...trajectory, steps: a.steps, outcomes: { ...trajectory.outcomes, recording: a.completeness } };
 }
-function viewer(options: DeliverPackageOptions, a: Analysis): string {
-  return renderReviewPage({ ...options, completeness: a.completeness, execution: a.execution, findings: a.findings, reasons: a.reasons, steps: a.steps, details: a.details, outputs: a.outputs });
+/** The texts of summary.json and trajectory.json, which the page shows when they are small enough. */
+type Generated = { summary?: string; trajectory?: string };
+function viewer(options: DeliverPackageOptions, a: Analysis, generated: Generated): string {
+  const held = (text?: string) => text !== undefined && Buffer.byteLength(text) <= textLimit ? text : undefined;
+  return renderReviewPage({ ...options, completeness: a.completeness, execution: a.execution, findings: a.findings, reasons: a.reasons, steps: a.steps, details: a.details, outputs: a.outputs,
+    generated: { summary: held(generated.summary), trajectory: held(generated.trajectory) } });
 }
 // Packages delivered before the review page redesign carry this page. It stays
 // byte-exact so verification still accepts their index.html, the same way a
@@ -428,10 +432,14 @@ export async function deliveredPackageRun(rootDir: string): Promise<{ taskId: st
 }
 
 /** The review page of an already delivered package, rendered with the current template. Development use only: it writes nothing. */
+const generatedOf = async (root: string): Promise<Generated> => {
+  const read = (path: string) => readFile(join(root, path), "utf8").catch(() => undefined);
+  return { summary: await read("summary.json"), trajectory: await read("trajectory.json") };
+};
 export async function renderDeliveredPage(rootDir: string): Promise<string> {
   const root = await rootPath(rootDir), m = await readJson(root, "manifest.json");
   const options = { packageId: text(m.packageId, "package id"), sessionId: text(m.sessionId, "session id"), taskId: text(m.taskId, "task id") };
-  return viewer(options, await analyze(root, options, await filesUnder(root)));
+  return viewer(options, await analyze(root, options, await filesUnder(root)), await generatedOf(root));
 }
 
 /** Assemble already-pulled evidence without rewriting a single guest original. */
@@ -453,9 +461,6 @@ export async function deliverPackage(rootDir: string, options: DeliverPackageOpt
   try {
   // buildTrajectory's SDK layout requires this journal path. Keep its original too.
   await save("journal/session-events.jsonl", await readFile(join(root, "state/journal/events.jsonl")));
-  await save("summary.json", json(summary(options, a)));
-  await save("index.html", viewer(options, a));
-  await save("OPENING.txt", "Open index.html directly in a browser (file://); no server, network, or test machine is required. Select a step, or use the arrows or the left and right arrow keys. Snapshot completeness and execution are separate verdicts, and the page explains each one that is not complete or passed. Originals are under state/, host metadata under host/, and declared extractions under extractions/. manifest.json checksums every artifact except itself.\n");
   const build = async () => {
     const all = await filesUnder(root), snapshotPaths = new Set(a.snapshots.map(s => s.path));
     return buildManifest({ ...options, rootDir: root, media: [], segments: [], attempts: [],
@@ -463,8 +468,16 @@ export async function deliverPackage(rootDir: string, options: DeliverPackageOpt
       attachments: all.filter(p => p.startsWith("extractions/")).map(p => ({ absolutePath: join(root, p), packagePath: p, declaredType: "declared-extraction" })),
       records: all.filter(p => p !== "manifest.json" && !snapshotPaths.has(p) && !p.startsWith("extractions/")).map(p => ({ absolutePath: join(root, p), packagePath: p })) });
   };
+  // The page shows summary.json and trajectory.json, so both are settled before
+  // it. trajectory.json reads the manifest's snapshots, media and segments,
+  // which do not depend on the page; the manifest is written again once every
+  // file is in place, and verification rebuilds trajectory.json against it.
   await save("manifest.json", json(await build()));
-  await save("trajectory.json", json(await buildReview(root, a)));
+  const generated = { summary: json(summary(options, a)), trajectory: json(await buildReview(root, a)) };
+  await save("summary.json", generated.summary);
+  await save("index.html", viewer(options, a, generated));
+  await save("OPENING.txt", "Open index.html directly in a browser (file://); no server, network, or test machine is required. Select a step, or use the arrows or the left and right arrow keys. Snapshot completeness and execution are separate verdicts, and the page explains each one that is not complete or passed. Originals are under state/, host metadata under host/, and declared extractions under extractions/. manifest.json checksums every artifact except itself.\n");
+  await save("trajectory.json", generated.trajectory);
   await writeFile(join(root, "manifest.json"), json(await build()));
   return await verifyDeliveredPackage(root);
   } catch (error) {
@@ -512,10 +525,12 @@ export async function verifyDeliveredPackage(rootDir: string): Promise<DeliveryR
   const summaryText = await readFile(join(root, "summary.json"), "utf8");
   if (summaryText !== json(summary(options, a)) && summaryText !== json(legacySummary(options, a))) throw new Error("summary disagrees with original evidence");
   const page = await readFile(join(root, "index.html"), "utf8");
-  if (page !== viewer(options, a) && page !== legacyViewer(options, a)) throw new Error("viewer disagrees with original evidence");
+  // The page holds the summary and trajectory that delivery wrote, which are rederived here too.
+  const review = json(await buildReview(root, a));
+  if (page !== viewer(options, a, { summary: json(summary(options, a)), trajectory: review }) && page !== legacyViewer(options, a)) throw new Error("viewer disagrees with original evidence");
   // A legacy package (pre-trajectory rename) still carries walkthrough.json; read whichever this package actually has.
   const trajectoryFile = !files.includes("trajectory.json") && files.includes(legacyTrajectoryFile) ? legacyTrajectoryFile : "trajectory.json";
-  if (await readFile(join(root, trajectoryFile), "utf8") !== json(await buildReview(root, a))) throw new Error("trajectory disagrees with original evidence");
+  if (await readFile(join(root, trajectoryFile), "utf8") !== review) throw new Error("trajectory disagrees with original evidence");
   const acceptance = await verifyPackage(manifest, root);
   // SDK rejects half group pairs categorically. Preserve them as captured snapshots,
   // accepting only this precisely identified incompleteness (never an integrity error).
