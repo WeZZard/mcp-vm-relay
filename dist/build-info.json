@@ -1017,7 +1017,7 @@
     "src/registry.ts": "33282535f5df351f497c261f19fed2c490ebf903431bf186fe273fd045dcbe5f",
     "src/relay-trajectory-viewer/behaviour.ts": "6726d34db547bc4511d6a99ec22d9c01048a03344d3a2bfbb13b82efb89dd2b3",
     "src/relay-trajectory-viewer/main.ts": "a159b2ac03200e669285ef478c8c40418a8582a8441a5603feab5af827cc8228",
-    "src/relay-trajectory-viewer/page.ts": "74cef58c1e32ecc8d6fa9ab82cfb6bae35ba6dc928d7165a11595f4040f85536",
+    "src/relay-trajectory-viewer/page.ts": "7293834202e309c7d06af2d2244cc01f9b4bf20f341ea1df84c3e0cee9789c81",
     "src/relay-trajectory-viewer/server.ts": "ce70f99832d6924b61835c33b958f7790e70b254d73cd9620980aa72350a27bc",
     "src/review-data.ts": "cd60d6e69b07e6fc5181dd64cf2a0cb87b6a817eb976a6ff256843393c8de7bf",
     "src/schema.ts": "584e291cd114e0f6e1b1e0009667e66fb0482e260008e765494dfe646f8c57d2",
