@@ -263,9 +263,8 @@ function panel(step: ReviewPageStep, detail: StepDetail | undefined, number: str
   const at = time(detail?.at);
   const fact = (term: string, value: string) => `<div><dt>${term}</dt><dd>${value}</dd></div>`;
   return `<aside class="panel" aria-label="Step ${number} details"><div class="panel-scroll">
-<h2 class="stepno"><span class="n">Step <span class="d">${number}</span></span> <span class="of">of <span class="d">${String(total).padStart(2, "0")}</span></span></h2>
-<p class="meta"><span>${kind}</span>${at ? `<time>${at} UTC</time>` : ""}<a class="permalink" href="${escapeHtml(link(step))}" title="Stable link to this step" aria-label="Stable link to step ${number}">${linkIcon}</a></p>
-<p class="state"><span class="sr">Execution: </span>${verdict(step.execution)}</p>
+<div class="stephead"><h2 class="stepno"><span class="n">Step <span class="d">${number}</span></span> <span class="of">of <span class="d">${String(total).padStart(2, "0")}</span></span></h2><a class="permalink" href="${escapeHtml(link(step))}" title="Stable link to this step" aria-label="Stable link to step ${number}">${linkIcon}</a></div>
+<p class="meta"><span>${kind}</span>${at ? `<time>${at} UTC</time>` : ""}<span class="state"><span class="sr">Execution: </span>${verdict(step.execution)}</span></p>
 ${concerns.length ? `<section class="concern"><h3>Why this step affects the verdicts</h3><ul>${concerns.map(c => `<li><span class="label">${escapeHtml(c.verdict)}</span><p>${escapeHtml(c.text)}</p></li>`).join("")}</ul></section>` : ""}
 ${reasonShown ? `<section class="block"><h3>Reason</h3><p>${escapeHtml(step.because ?? "Not present in retained host metadata")}</p></section>` : ""}
 ${command && step.snapshots ? `<section class="block"><h3>Command</h3><pre class="command">${escapeHtml(command)}</pre></section>` : ""}
@@ -541,12 +540,12 @@ kbd{display:inline-grid;place-items:center;min-width:1.3rem;height:1.3rem;paddin
 .panel{grid-area:panel;min-height:0;display:grid;grid-template-rows:minmax(0,1fr)}
 .panel-scroll{overflow:auto;padding:1.25rem .75rem 2.5rem 1rem;scrollbar-width:thin;scrollbar-color:var(--s3) transparent;--fade:linear-gradient(transparent,#000 1.25rem,#000 calc(100% - 2.5rem),transparent);-webkit-mask-image:var(--fade);mask-image:var(--fade)}
 .panel .stream pre,.panel .plain,.panel .command{background:var(--s1);box-shadow:0 0 0 1px var(--hair),0 1px 2px rgba(90,50,20,.05);padding:.8rem .95rem}
-.stepno{margin:0;font:700 1.45rem/1.2 var(--round);letter-spacing:-.015em;color:var(--faint)}
-.stepno .n{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}.stepno .of{font-size:1rem;font-weight:600}
+.stephead{display:flex;align-items:center;gap:.75rem}.stepno{margin:0;font:700 1.45rem/1.2 var(--round);letter-spacing:-.015em;color:var(--faint)}
+.stepno .n{color:var(--text)}.stepno .of{font-size:1rem;font-weight:600}
 .meta{display:flex;flex-wrap:wrap;align-items:center;gap:.3rem .9rem;margin:.45rem 0 0;font-size:12.5px;color:var(--faint)}.meta time{font-family:var(--mono)}
-.permalink{margin-left:auto;display:grid;place-items:center;width:1.9rem;height:1.9rem;margin-block:-.4rem;border-radius:999px;color:var(--faint)}.permalink:hover{background:var(--s3);color:var(--accent)}
+.permalink{margin-left:auto;display:grid;place-items:center;width:1.9rem;height:1.9rem;margin-block:-.4rem;border-radius:999px;color:var(--faint)}.permalink:hover{background:var(--s3);color:var(--text)}
 .panel h2{font:700 1.35rem/1.3 var(--round);letter-spacing:-.012em;margin:.55rem 0 .6rem;overflow-wrap:anywhere}
-.state{margin:.7rem 0 0}
+.meta .state{margin-left:auto}
 .block{margin-top:1.5rem}.block h3{margin:0 0 .45rem}.block p{margin:0;color:var(--dim)}.panel .block{margin-top:1.75rem}.panel .block h3{margin-bottom:.55rem}.panel .block p{font-size:14px;line-height:1.6}
 .command{font-size:12px;max-height:9rem}
 .receipts{list-style:none;margin:0 0 .4rem;padding:0;display:grid;gap:.45rem}.receipts li{display:flex;flex-wrap:wrap;gap:.4rem .8rem;align-items:center}.diag{font-size:13px;color:var(--dim)}
