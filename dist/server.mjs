@@ -20424,7 +20424,8 @@ function panel(step2, detail, number3, total, concerns) {
   const at = time3(detail?.at);
   const fact = (term, value) => `<div><dt>${term}</dt><dd>${value}</dd></div>`;
   return `<aside class="panel" aria-label="Step ${number3} details"><div class="panel-scroll">
-<p class="eyebrow"><span>Step <span class="d">${number3}</span> <span class="of">of <span class="d">${String(total).padStart(2, "0")}</span></span></span><span>${kind}</span>${at ? `<time>${at} UTC</time>` : ""}<a class="permalink" href="${escapeHtml(link2(step2))}" title="Stable link to this step" aria-label="Stable link to step ${number3}">${linkIcon}</a></p>
+<h2 class="stepno"><span class="n">Step <span class="d">${number3}</span></span> <span class="of">of <span class="d">${String(total).padStart(2, "0")}</span></span></h2>
+<p class="meta"><span>${kind}</span>${at ? `<time>${at} UTC</time>` : ""}<a class="permalink" href="${escapeHtml(link2(step2))}" title="Stable link to this step" aria-label="Stable link to step ${number3}">${linkIcon}</a></p>
 <p class="state"><span class="sr">Execution: </span>${verdict(step2.execution)}</p>
 ${concerns.length ? `<section class="concern"><h3>Why this step affects the verdicts</h3><ul>${concerns.map((c) => `<li><span class="label">${escapeHtml(c.verdict)}</span><p>${escapeHtml(c.text)}</p></li>`).join("")}</ul></section>` : ""}
 ${reasonShown ? `<section class="block"><h3>Reason</h3><p>${escapeHtml(step2.because ?? "Not present in retained host metadata")}</p></section>` : ""}
@@ -20621,8 +20622,9 @@ kbd{display:inline-grid;place-items:center;min-width:1.3rem;height:1.3rem;paddin
 .panel{grid-area:panel;min-height:0;display:grid;grid-template-rows:minmax(0,1fr)}
 .panel-scroll{overflow:auto;padding:1.25rem .75rem 2.5rem 1rem;scrollbar-width:thin;scrollbar-color:var(--s3) transparent;--fade:linear-gradient(transparent,#000 1.25rem,#000 calc(100% - 2.5rem),transparent);-webkit-mask-image:var(--fade);mask-image:var(--fade)}
 .panel .stream pre,.panel .plain,.panel .command{background:var(--s1);box-shadow:0 0 0 1px var(--hair),0 1px 2px rgba(90,50,20,.05);padding:.8rem .95rem}
-.eyebrow{display:flex;flex-wrap:wrap;align-items:center;gap:.3rem .9rem;margin:0;font-size:12px;color:var(--faint)}
-.eyebrow>span:first-child{font:700 12.5px var(--round);background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}.eyebrow .of{-webkit-text-fill-color:var(--faint);color:var(--faint);font-weight:500}.eyebrow time{font-family:var(--mono)}
+.stepno{margin:0;font:700 1.45rem/1.2 var(--round);letter-spacing:-.015em;color:var(--faint)}
+.stepno .n{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}.stepno .of{font-size:1rem;font-weight:600}
+.meta{display:flex;flex-wrap:wrap;align-items:center;gap:.3rem .9rem;margin:.45rem 0 0;font-size:12.5px;color:var(--faint)}.meta time{font-family:var(--mono)}
 .permalink{margin-left:auto;display:grid;place-items:center;width:1.9rem;height:1.9rem;margin-block:-.4rem;border-radius:999px;color:var(--faint)}.permalink:hover{background:var(--s3);color:var(--accent)}
 .panel h2{font:700 1.35rem/1.3 var(--round);letter-spacing:-.012em;margin:.55rem 0 .6rem;overflow-wrap:anywhere}
 .state{margin:.7rem 0 0}
