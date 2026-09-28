@@ -186,7 +186,7 @@ const labelHtml = (label: string) => escapeHtml(label).replace(/^Step (\d+)/, `S
 const expandIcon = `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M9.5 2.5h4v4M6.5 13.5h-4v-4M13.5 2.5 9 7M2.5 13.5 7 9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
 /** One item of a lightbox sequence. `step` is the id of the view it belongs to. */
-type Box = { id: string; step: string; label: string; title: string; body: string; caption: string };
+type Box = { id: string; step: string; label: string; title: string; body: string; caption: string; nav?: string };
 
 // A lightbox shows one item of a sequence at a time: the trajectory's
 // snapshots and commands in step order, or the overview's images. Its arrows
@@ -195,7 +195,7 @@ type Box = { id: string; step: string; label: string; title: string; body: strin
 // and moves the page to the item's step.
 function lightboxes(boxes: Box[]) {
   const nav = (target: Box | undefined, side: "prev" | "next") => target
-    ? `<button type="button" class="lb-nav ${side}" popovertarget="${escapeHtml(target.id)}" aria-label="${side === "prev" ? "Previous" : "Next"}: ${escapeHtml(target.label)}, ${escapeHtml(target.title)}"><span class="dir" aria-hidden="true">${side === "prev" ? "‹" : "›"}</span><span class="lbl"><span class="role">${labelHtml(target.label)}</span><span class="t">${escapeHtml(target.title)}</span></span></button>` : "";
+    ? `<button type="button" class="lb-nav ${side}" popovertarget="${escapeHtml(target.id)}" aria-label="${side === "prev" ? "Previous" : "Next"}: ${escapeHtml(target.label)}, ${escapeHtml(target.title)}"><span class="dir" aria-hidden="true">${side === "prev" ? "‹" : "›"}</span><span class="role">${labelHtml(target.nav ?? target.label)}</span></button>` : "";
   return boxes.map((box, i) => `<div class="lightbox" id="${escapeHtml(box.id)}" data-step="${escapeHtml(box.step)}" popover><div class="lb-body">${box.body}</div>${nav(boxes[i - 1], "prev")}<p class="lb-cap"><span class="label">${labelHtml(box.label)}</span>${box.caption}<button type="button" class="close" popovertarget="${escapeHtml(box.id)}" popovertargetaction="hide" aria-label="Close">×</button></p>${nav(boxes[i + 1], "next")}</div>`).join("\n");
 }
 
@@ -280,11 +280,30 @@ function thumb(step: ReviewPageStep, detail: StepDetail | undefined, number: str
 // to the item's step. The run's time is shown in the reader's own time zone. Links
 // alone cannot bind keys or read the reader's time zone.
 const keys = `(()=>{const steps=()=>[...document.querySelectorAll(".center>.step:not(.overview)")];`
+  + `const still=()=>matchMedia("(prefers-reduced-motion: reduce)").matches,body=box=>box.querySelector(".lb-body>*");`
+  + `const sourceOf=box=>{for(const o of document.querySelectorAll(".zoom,.enlarge,.gthumb")){if(o.getAttribute("popovertarget")!==box.id)continue;`
+  + `const s=o.classList.contains("enlarge")?o.closest(".term"):o.querySelector("img");if(s&&s.getBoundingClientRect().width)return s}return null};`
+  // The transform that lays an element over the source's rectangle, measured
+  // from the element's own untransformed place; the element keeps its current
+  // (possibly mid-flight) look until the caller animates it.
+  + `const from=(el,src)=>{const now=getComputedStyle(el).transform;el.style.transition="none";el.style.transform="none";`
+  + `const b=el.getBoundingClientRect(),a=src.getBoundingClientRect();el.style.transform=now==="none"?"":now;el.getBoundingClientRect();el.style.transition="";`
+  + `if(!b.width)return"";const k=a.width/b.width;return"translate("+(a.left+a.width/2-b.left-b.width*k/2)+"px,"+(a.top+a.height/2-b.top-b.height*k/2)+"px) scale("+k+")"};`
+  + `let hidden=null,token=0;const unhide=()=>{if(hidden)hidden.style.visibility="";hidden=null};`
+  + `const open=box=>{token++;unhide();const src=still()?null:sourceOf(box);box.toggleAttribute("data-flip",!!src);box.showPopover();const el=body(box);`
+  + `if(src&&el){const f=from(el,src);el.style.transition="none";el.style.transform=f;el.getBoundingClientRect();el.style.transition="";el.style.transform="";src.style.visibility="hidden";hidden=src}};`
+  + `const leave=box=>{if(box.hasAttribute("data-instant"))return;const el=body(box),src=hidden,n=++token;`
+  + `if(src&&el&&!still()&&src.getBoundingClientRect().width){box.setAttribute("data-flip","");el.style.transform=from(el,src);`
+  + `el.addEventListener("transitionend",()=>{if(n===token)unhide()},{once:true});setTimeout(()=>{if(n===token)unhide()},450)}else{box.removeAttribute("data-flip");unhide()}`
+  + `setTimeout(()=>{if(n===token&&!box.matches(":popover-open")&&el)el.style.transform=""},520)};`
+  + `document.querySelectorAll(".lightbox").forEach(b=>b.addEventListener("beforetoggle",e=>{if(e.newState==="closed")leave(b)}));`
   + `const go=b=>{const box=b.closest(".lightbox"),next=document.getElementById(b.getAttribute("popovertarget"));if(!next)return;`
-  + `const instant=[box,next].filter(Boolean);instant.forEach(x=>x.setAttribute("data-instant",""));`
-  + `if(box)box.hidePopover();const s=next.dataset.step;if(s&&decodeURIComponent(location.hash.slice(1))!==s)location.hash=encodeURIComponent(s);next.showPopover();`
+  + `const instant=[box,next].filter(Boolean);instant.forEach(x=>x.setAttribute("data-instant",""));token++;unhide();`
+  + `if(box)box.hidePopover();const s=next.dataset.step;if(s&&decodeURIComponent(location.hash.slice(1))!==s)location.hash=encodeURIComponent(s);`
+  + `const el=body(next);if(el)el.style.transform="";next.showPopover();const src=sourceOf(next);if(src){src.style.visibility="hidden";hidden=src}`
   + `setTimeout(()=>instant.forEach(x=>x.removeAttribute("data-instant")),60)};`
   + `document.addEventListener("click",e=>{const t=e.target instanceof Element?e.target:null;const b=t&&t.closest(".lb-nav");if(b){e.preventDefault();go(b);return}`
+  + `const o=t&&t.closest(".zoom,.enlarge,.gthumb"),lb=o&&document.getElementById(o.getAttribute("popovertarget"));if(lb){e.preventDefault();open(lb);return}`
   + `if(t&&t.classList.contains("lightbox"))t.hidePopover()});`
   + `try{document.querySelectorAll("time[data-local]").forEach(t=>{const d=new Date(t.dateTime);if(isNaN(d.getTime())||!d.getTimezoneOffset())return;`
   + `t.textContent=new Intl.DateTimeFormat(undefined,{...(d.getFullYear()!==d.getUTCFullYear()?{year:"numeric"}:{}),month:"short",day:"numeric",hour:"numeric",minute:"2-digit",timeZoneName:"short"}).format(d);const li=t.closest("[hidden]");if(li)li.hidden=false})}catch{}`
@@ -297,8 +316,8 @@ const keys = `(()=>{const steps=()=>[...document.querySelectorAll(".center>.step
   + `let box=null;try{box=document.querySelector(".lightbox:popover-open")}catch{}`
   + `if(e.key===" "){if(t instanceof Element&&(t.closest("summary")||(t.closest("button")&&!t.closest(".zoom,.enlarge,.lb-nav,.close"))))return;`
   + `e.preventDefault();if(e.repeat)return;if(box){box.hidePopover();return}const i=current(),step=steps()[i<0?-1:i];if(!step)return;`
-  + `const base=step.id.replace(/^step-/,"lightbox-");const open=["--before","--after","--command"].map(r=>document.getElementById(base+r)).find(Boolean);`
-  + `if(open)open.showPopover();return}`
+  + `const base=step.id.replace(/^step-/,"lightbox-");const lb=["--before","--after","--command"].map(r=>document.getElementById(base+r)).find(Boolean);`
+  + `if(lb)open(lb);return}`
   + `const d=e.key==="ArrowRight"?1:e.key==="ArrowLeft"?-1:0;if(!d)return;`
   + `if(box){e.preventDefault();const b=box.querySelector(d<0?".lb-nav.prev":".lb-nav.next");if(b)go(b);return}`
   + `const all=steps();let j=current();if(j<0){if(d<0)return;j=-1}`
@@ -343,7 +362,7 @@ export function renderReviewPage(model: ReviewPageModel): string {
     // A long list of outputs folds each declared name; a short one shows everything.
     return `<details class="group"${model.outputs.length <= 12 ? " open" : ""}><summary><span class="where">${escapeHtml(declared)}</span><span class="count">${plural(files.length, "file")} · ${size(total)}</span></summary>${others.length ? `<ul class="flist">${others.map(f => `<li><a href="${src(f.path)}">${escapeHtml(f.label)}</a><span>${size(f.bytes)}</span></li>`).join("")}</ul>` : ""}${images.length ? `<div class="gallery">${images.map(f => {
       const id = `lightbox-output-${outputBoxes.length + 1}`, name = f.label.split("/").at(-1)!;
-      outputBoxes.push({ id, step: "overview", label: declared, title: f.label, body: `<img loading="lazy" alt="${escapeHtml(f.label)}, enlarged" src="${src(f.path)}">`, caption: `<span class="file">${escapeHtml(f.label)}</span><span class="size">${size(f.bytes)}</span><a href="${src(f.path)}">Open the original</a>` });
+      outputBoxes.push({ id, step: "overview", label: declared, title: f.label, nav: name, body: `<img loading="lazy" alt="${escapeHtml(f.label)}, enlarged" src="${src(f.path)}">`, caption: `<span class="file">${escapeHtml(f.label)}</span><span class="size">${size(f.bytes)}</span><a href="${src(f.path)}">Open the original</a>` });
       return `<button type="button" class="gthumb" popovertarget="${id}" title="Enlarge ${escapeHtml(name)}"><img loading="lazy" alt="${escapeHtml(f.label)}" src="${src(f.path)}"><span>${escapeHtml(name)}<small>${size(f.bytes)}</small></span></button>`;
     }).join("")}</div>` : ""}</details>`;
   }).join("");
@@ -450,25 +469,25 @@ kbd{display:inline-grid;place-items:center;min-width:1.3rem;height:1.3rem;paddin
 .zoom:hover img{box-shadow:0 0 0 2px var(--accent),0 18px 44px rgba(60,30,10,.18)}
 .shot figcaption{display:flex;justify-content:center;gap:.7rem;align-items:baseline}.shot figcaption time{font:12px var(--mono);color:var(--faint)}
 .pair .shot:last-child figcaption .label{color:var(--accent)}
-.lightbox{position:fixed;inset:0;width:auto;height:auto;max-width:none;max-height:none;margin:0;padding:1.5rem 1.5rem 1.25rem;border:0;background:none;color:var(--text);overflow:hidden;opacity:0;transition:opacity .24s ease,overlay .24s allow-discrete,display .24s allow-discrete}
-.lightbox:popover-open{opacity:1}@starting-style{.lightbox:popover-open{opacity:0}}
-.lb-body{scale:.96;transition:scale .3s cubic-bezier(.2,.8,.2,1)}.lightbox:popover-open .lb-body{scale:1}@starting-style{.lightbox:popover-open .lb-body{scale:.96}}
-.lightbox>:not(.lb-body){translate:0 .6rem;transition:translate .3s cubic-bezier(.2,.8,.2,1)}.lightbox:popover-open>:not(.lb-body){translate:0}@starting-style{.lightbox:popover-open>:not(.lb-body){translate:0 .6rem}}
-.lightbox:popover-open{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto;gap:1rem 1.25rem;align-items:center}
-.lightbox::backdrop{background:rgba(22,15,10,0);backdrop-filter:blur(0);transition:background .24s ease,backdrop-filter .24s ease,overlay .24s allow-discrete,display .24s allow-discrete}
+.lightbox{position:fixed;inset:0;width:auto;height:auto;max-width:none;max-height:none;margin:0;padding:1.5rem 1.5rem 1.25rem;border:0;background:none;color:var(--text);overflow:hidden;transition:overlay .36s allow-discrete,display .36s allow-discrete}
+.lb-body>*{transform-origin:0 0;transition:transform .36s cubic-bezier(.3,.9,.3,1),opacity .24s ease}
+.lightbox:not([data-flip]):not(:popover-open) .lb-body>*{opacity:0}@starting-style{.lightbox:popover-open:not([data-flip]) .lb-body>*{opacity:0}}
+.lightbox>:not(.lb-body){translate:0 calc(100% + 2.5rem);transition:translate .36s cubic-bezier(.3,.9,.3,1)}.lightbox:popover-open>:not(.lb-body){translate:0}@starting-style{.lightbox:popover-open>:not(.lb-body){translate:0 calc(100% + 2.5rem)}}
+.lightbox{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto;gap:1rem 1.25rem;align-items:center}.lightbox:popover-open{display:grid}
+.lightbox::backdrop{background:rgba(22,15,10,0);backdrop-filter:blur(0);transition:background .32s ease,backdrop-filter .32s ease,overlay .36s allow-discrete,display .36s allow-discrete}
 .lightbox:popover-open::backdrop{background:rgba(22,15,10,.9);backdrop-filter:blur(10px)}@starting-style{.lightbox:popover-open::backdrop{background:rgba(22,15,10,0);backdrop-filter:blur(0)}}
-.lightbox[data-instant],.lightbox[data-instant]::backdrop,.lightbox[data-instant]>*{transition:none}
+.lightbox[data-instant],.lightbox[data-instant]::backdrop,.lightbox[data-instant]>*,.lightbox[data-instant] .lb-body>*{transition:none}
 .lb-body{grid-column:1/-1;grid-row:1;display:grid;place-items:center;min-height:0;height:100%;pointer-events:none}.lb-body>*{pointer-events:auto}
 .lb-body img{display:block;max-width:100%;max-height:calc(100vh - 7.5rem);object-fit:contain;border-radius:14px;background:#fff;box-shadow:0 30px 90px rgba(0,0,0,.5)}
 .lb-term{width:min(100%,72rem);max-height:calc(100vh - 7.5rem);overflow:auto;padding:2rem 2.25rem;border-radius:22px;background:var(--s1);color:var(--text);box-shadow:0 30px 90px rgba(0,0,0,.5)}
 .lb-cmd{font-size:18px;line-height:1.65;color:var(--text)}.lb-term .stream{margin:1.25rem 0 0}.lb-term .stream pre{font-size:15px;max-height:none}.lb-term .quiet{margin-top:1.25rem;font-size:15px}
 .lb-cap{grid-row:2;grid-column:2;display:flex;align-items:center;gap:.9rem;margin:0;padding:.35rem .45rem .35rem 1rem;border-radius:999px;background:var(--s1);box-shadow:0 8px 28px rgba(0,0,0,.35);font-size:12.5px;white-space:nowrap}
 .lb-cap time,.lb-cap .size{font:12px var(--mono);color:var(--faint)}.lb-cap a{font-weight:600}.lb-cap .file{font:12px var(--mono);color:var(--text)}
-.lb-nav{all:unset;box-sizing:border-box;grid-row:2;display:flex;align-items:center;gap:.7rem;min-width:0;max-width:22rem;padding:.4rem 1rem .4rem .4rem;border-radius:999px;background:var(--s1);box-shadow:0 8px 28px rgba(0,0,0,.35);cursor:pointer}
-.lb-nav.prev{grid-column:1;justify-self:start}.lb-nav.next{grid-column:3;justify-self:end;flex-direction:row-reverse;padding:.4rem .4rem .4rem 1rem;text-align:right}
+.lb-nav{all:unset;box-sizing:border-box;grid-row:2;display:flex;align-items:center;gap:.7rem;min-width:0;max-width:22rem;padding:.35rem 1rem .35rem .35rem;border-radius:999px;background:var(--s1);box-shadow:0 8px 28px rgba(0,0,0,.35);cursor:pointer}
+.lb-nav.prev{grid-column:1;justify-self:start}.lb-nav.next{grid-column:3;justify-self:end;flex-direction:row-reverse;padding:.35rem .35rem .35rem 1rem;text-align:right}
 .lb-nav .dir{flex:none;display:grid;place-items:center;width:2.1rem;height:2.1rem;border-radius:50%;background:var(--s2);font-size:1.3rem;line-height:1;color:var(--text)}
 .lb-nav:hover .dir{background:var(--grad);color:var(--on)}.lb-nav:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
-.lbl{display:grid;min-width:0}.lbl .role{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 10.5px/1.4 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}.lbl .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;color:var(--dim)}
+.lb-nav .role{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 10.5px/1.4 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
 .enlarge{all:unset;margin-left:auto;display:flex;align-items:center;gap:.4rem;padding:.3rem .7rem;border-radius:999px;font-weight:600;color:var(--dim);cursor:zoom-in}.enlarge:hover{background:var(--s2);color:var(--accent)}.enlarge:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .close{all:unset;display:grid;place-items:center;width:1.8rem;height:1.8rem;border-radius:50%;background:var(--s2);color:var(--dim);font:600 1.1rem/1 var(--sans);cursor:pointer}.close:hover{background:var(--grad);color:var(--on)}.close:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .void{display:grid;place-items:center;border-radius:14px;background:var(--s1);color:var(--faint);padding:2rem;text-align:center;aspect-ratio:16/9}

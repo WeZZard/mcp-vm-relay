@@ -128,6 +128,7 @@ acceptance remain separate from that inventory.
 | Header and overview | Owner decision, 2026-09-28: the page's title is Relay, with the task's name beside it, under a designed mark rather than a plain circle. The start time sits in the statistics under the title, in UTC and in the reader's local time. The Overview is one centered column in larger text on one type scale, and the package's identity and files close it instead of filling a right panel; see [UX §6.10](ux-design.md#610-evidence-review-page). |
 | Capsules and lightbox backdrop | Owner decision, 2026-09-28: the statistics and the start time share one line. Capsule-shaped controls keep fully round ends rather than continuous corners, step numbers use a monospace face, and the lightbox sits on a dark backdrop while its controls keep the light theme; see [UX §6.10](ux-design.md#610-evidence-review-page). |
 | Lightbox keys and motion | Owner decision, 2026-09-28: entering and leaving the lightbox is animated. Space opens the selected step's lightbox at its before snapshot, and the Trajectory view shows its keyboard shortcuts beside the verdicts; see [UX §6.10](ux-design.md#610-evidence-review-page). |
+| Lightbox continuity | Owner decision, 2026-09-28: the lightbox's arrows show only the step number and before or after. Its content enlarges from, and returns to, its place on the page, and its controls keep their size and rise from the bottom of the window; see [UX §6.10](ux-design.md#610-evidence-review-page). |
 
 ## Design boundaries
 

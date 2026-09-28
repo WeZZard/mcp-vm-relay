@@ -170,6 +170,8 @@ test("review page orders steps by time and reads commands, exit status, output s
     ["lightbox-diagnostic-early--command step-diagnostic-early", "lightbox-step-0--before step-step-0", "lightbox-step-0--after step-step-0"]);
   assert.match(html, /<div class="lightbox" id="lightbox-step-0--after" data-step="step-step-0" popover><div class="lb-body"><img loading="lazy" alt="After dispatch snapshot, enlarged" src="[^"]+"><\/div><button type="button" class="lb-nav prev" popovertarget="lightbox-step-0--before" aria-label="Previous: Step 02 · Before, [^"]+">/);
   assert.match(html, /<p class="lb-cap"><span class="label">Step <span class="d">02<\/span> · After<\/span><time>[^<]+<\/time><a href="[^"]+">Open the original<\/a><button type="button" class="close" popovertarget="lightbox-step-0--after" popovertargetaction="hide" aria-label="Close">/);
+  // A lightbox arrow names only the neighbouring item's step and role.
+  assert.match(html, /aria-label="Previous: Step 02 · Before, [^"]+"><span class="dir" aria-hidden="true">‹<\/span><span class="role">Step <span class="d">02<\/span> · Before<\/span><\/button>/);
   // A command has a lightbox too, where it reads in larger text.
   assert.match(diagnostic, /<button type="button" class="enlarge" popovertarget="lightbox-diagnostic-early--command" title="Enlarge the command">/);
   assert.match(html, /id="lightbox-diagnostic-early--command" data-step="step-diagnostic-early" popover><div class="lb-body"><div class="lb-term"><pre class="lb-cmd">/);
