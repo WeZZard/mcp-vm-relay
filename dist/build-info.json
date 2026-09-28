@@ -1017,7 +1017,7 @@
     "src/registry.ts": "33282535f5df351f497c261f19fed2c490ebf903431bf186fe273fd045dcbe5f",
     "src/review-app/behaviour.ts": "ffe5fe72bfa1fe03db1188e91c0203385d1f437b63ab4c9830efc6fff80fcf1d",
     "src/review-app/main.ts": "58be522fe4cab52507b20241b32f58e0f5e9564c1ece59d8ba74542e8030f21a",
-    "src/review-page.ts": "01aa2f1ce43fa24fd846ea396c3c4afba133480d5ae8edef41f9e4a29765069c",
+    "src/review-page.ts": "36e2cb831251a346752d889287bbf906fb1fa039136efc83cdf1d3612586a8b7",
     "src/review-server.ts": "5a528245a6bbb0eed7d86f36b7989da77471abba4766ea72fc5e2efb03b1ad37",
     "src/schema.ts": "584e291cd114e0f6e1b1e0009667e66fb0482e260008e765494dfe646f8c57d2",
     "src/search-diagnostics.ts": "cea037618c56f075d51155101ad1cc0314bfa67b174bdb070191e0ea5ea04679",
