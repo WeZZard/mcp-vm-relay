@@ -53,6 +53,7 @@ export function bind(doc: Document = document) {
     const src = still() ? null : sourceOf(box);
     box.toggleAttribute("data-flip", !!src); box.showPopover();
     const el = body(box);
+    if (el) el.style.opacity = "";
     if (src && el) {
       const f = from(el, src);
       el.style.transition = "none"; el.style.transform = f; el.getBoundingClientRect(); el.style.transition = ""; el.style.transform = "";
@@ -64,10 +65,13 @@ export function bind(doc: Document = document) {
     const el = body(box), src = hidden, n = ++token;
     if (src && el && !still() && src.getBoundingClientRect().width) {
       box.setAttribute("data-flip", ""); el.style.transform = from(el, src);
-      el.addEventListener("transitionend", () => { if (n === token) unhide(); }, { once: true });
-      setTimeout(() => { if (n === token) unhide(); }, 450);
+      // The flying copy is drawn from the full-size image, scaled, and does not
+      // look exactly like the page's copy; swapping them in one frame flashes.
+      // Once it is a few pixels from landing, the page's copy appears beneath
+      // and the flying copy fades out before the lightbox goes (at 0.36 s).
+      setTimeout(() => { if (n !== token) return; unhide(); el.style.transition = "transform .36s cubic-bezier(.3,.9,.3,1),opacity .1s linear"; el.style.opacity = "0"; }, 240);
     } else { box.removeAttribute("data-flip"); unhide(); }
-    setTimeout(() => { if (n === token && !box.matches(":popover-open") && el) el.style.transform = ""; }, 520);
+    setTimeout(() => { if (n === token && !box.matches(":popover-open") && el) { el.style.transform = ""; el.style.transition = ""; el.style.opacity = ""; } }, 520);
   };
   doc.querySelectorAll<HTMLElement>(".lightbox").forEach(b => b.addEventListener("beforetoggle", e => { if ((e as ToggleEvent).newState === "closed") leave(b); }));
   const go = (b: Element) => {
@@ -78,7 +82,7 @@ export function bind(doc: Document = document) {
     if (box) box.hidePopover();
     const s = next.dataset.step;
     if (s && decodeURIComponent(location.hash.slice(1)) !== s) location.hash = encodeURIComponent(s);
-    const el = body(next); if (el) el.style.transform = "";
+    const el = body(next); if (el) { el.style.transform = ""; el.style.transition = ""; el.style.opacity = ""; }
     next.showPopover();
     const src = sourceOf(next); if (src) { src.style.visibility = "hidden"; hidden = src; }
     setTimeout(() => instant.forEach(x => x.removeAttribute("data-instant")), 60);
