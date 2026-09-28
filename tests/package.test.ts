@@ -626,8 +626,13 @@ test("the trajectory review command serves a verified package's review app, data
   // The page is the same static app for every package, under a policy that runs only its own script.
   const shell = await fetch(address);
   assert.match(shell.headers.get("content-security-policy")!, /script-src 'self';/);
-  assert.match(await shell.text(), /<script type="module" src="\/\.app\/review\.js"><\/script>/);
+  const page = await shell.text();
+  assert.match(page, /<script type="module" src="\/\.app\/review\.js"><\/script>/);
+  assert.match(page, /<link rel="icon" href="\/\.app\/icon\.svg">/);
   assert.equal(await (await fetch(new URL("/.app/review.js", address))).text(), "/* the review app */");
+  const icon = await fetch(new URL("/.app/icon.svg", address));
+  assert.equal(icon.headers.get("content-type"), "image/svg+xml");
+  assert.match(await icon.text(), /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg"/);
   // The data is the package's, and the page's files are the package's own.
   const [, project, run] = address.pathname.split("/");
   const data = await (await fetch(new URL(`/.api/${project}/${run}.json`, address))).json();

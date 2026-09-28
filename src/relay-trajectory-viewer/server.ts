@@ -13,7 +13,7 @@ import type { AddressInfo } from 'node:net';
 import { basename, dirname, extname, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
 import { deliveredPackageRun, reviewData } from '../package.js';
-import { reviewCss } from './page.js';
+import { relayIcon, reviewCss } from './page.js';
 
 /** The review app's script: built with the relay, or supplied by the caller (the dev server, tests). */
 export type AppScript = () => Promise<string>;
@@ -30,9 +30,9 @@ const escape = (value: string) => value.replace(/[&<>"']/g, c => ({ '&': '&amp;'
 const href = (...parts: string[]) => `/${parts.map(encodeURIComponent).join('/')}/`;
 // The app may run only its own script and style, and ask only its own server.
 const policy = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
-const shell = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light"><title>Relay review</title><link rel="stylesheet" href="/.app/review.css"><script type="module" src="/.app/review.js"></script></head><body><p class="loading">Reading the trajectory…</p></body></html>`;
+const shell = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light"><title>Relay review</title><link rel="icon" href="/.app/icon.svg"><link rel="stylesheet" href="/.app/review.css"><script type="module" src="/.app/review.js"></script></head><body><p class="loading">Reading the trajectory…</p></body></html>`;
 const list = (title: string, items: [string, string][]) =>
-  `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${escape(title)}</title><link rel="stylesheet" href="/.app/review.css"></head><body class="runs"><h1>${escape(title)}</h1><ul>${items.map(([h, text]) => `<li><a href="${escape(h)}">${escape(text)}</a></li>`).join('')}</ul></body></html>`;
+  `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${escape(title)}</title><link rel="icon" href="/.app/icon.svg"><link rel="stylesheet" href="/.app/review.css"></head><body class="runs"><h1>${escape(title)}</h1><ul>${items.map(([h, text]) => `<li><a href="${escape(h)}">${escape(text)}</a></li>`).join('')}</ul></body></html>`;
 
 const git = async (dir: string, ...args: string[]) => {
   try { return (await promisify(execFile)('git', ['-C', dir, ...args])).stdout.trim() || undefined; } catch { return undefined; }
@@ -101,6 +101,7 @@ export class ReviewServer {
       const path = new URL(url, 'http://127.0.0.1').pathname;
       if (path === '/.app/review.js') return send(200, 'text/javascript; charset=utf-8', await this.script());
       if (path === '/.app/review.css') return send(200, 'text/css; charset=utf-8', reviewCss);
+      if (path === '/.app/icon.svg') return send(200, 'image/svg+xml', relayIcon);
       const api = /^\/\.api\/([^/]+)\/([^/]+)\.json$/.exec(path);
       if (api) {
         const root = this.projects.get(decodeURIComponent(api[1]!))?.get(decodeURIComponent(api[2]!));
