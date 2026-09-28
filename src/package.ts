@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { lstat, readFile, readdir, mkdir, writeFile, rm } from "node:fs/promises";
 import { dirname, join, resolve, parse } from "node:path";
 import { buildManifest, buildTrajectory, verifyPackage, type PackageManifest, type ReviewStep, type SnapshotArtifact } from "@wezzard/relay-driver-host-sdk";
-import { escapeHtml, renderReviewPage, textFile, type CommandOutput, type Reason, type StepDetail } from "./review-page.js";
+import { type CommandOutput, type Reason, type ReviewData, type StepDetail } from "./review-page.js";
 
 export interface DeliverPackageOptions {
   packageId: string;
@@ -18,8 +18,6 @@ export interface DeliveryResult {
 }
 type Obj = Record<string, any>;
 type Step = ReviewStep & { because?: string; actionId: string; inputMode: string };
-/** The page holds the text of a file up to this size, and of outputs up to the budget in all. */
-const textLimit = 256 * 1024, textBudget = 2 * 1024 * 1024;
 
 type Analysis = {
   snapshots: SnapshotArtifact[];
@@ -30,11 +28,11 @@ type Analysis = {
   execution: DeliveryResult["execution"];
   // Page-only evidence, kept out of trajectory.json so its schema is unchanged.
   details: Map<string, StepDetail>;
-  outputs: { path: string; bytes: number; text?: string }[];
+  outputs: { path: string; bytes: number }[];
   /** Why snapshots are not complete and execution has not passed, in plain words, with the steps concerned. */
   reasons: { snapshots: Reason[]; execution: Reason[] };
 };
-const generated = new Set(["manifest.json", "summary.json", "trajectory.json", "index.html", "OPENING.txt", "journal/session-events.jsonl"]);
+const generated = new Set(["manifest.json", "summary.json", "trajectory.json", "OPENING.txt", "journal/session-events.jsonl"]);
 // Packages built before the trajectory rename wrote `walkthrough.json` instead of `trajectory.json`.
 // Accept that legacy name when verifying so older delivered evidence packages still validate.
 const legacyTrajectoryFile = "walkthrough.json";
@@ -345,20 +343,8 @@ async function analyze(root: string, options: DeliverPackageOptions, files: stri
     ...(execution === "uncertain" && completeness === "incomplete" ? [{ text: "Snapshot evidence is incomplete, so the relay does not confirm the run as a whole, even when every step reports completed. See why snapshots are incomplete.", stepIds: [] }] : []),
     ...(execution === "uncertain" && unsettled.length ? [{ text: "These steps did not report a final execution outcome.", stepIds: unsettled }] : []),
   ];
-  // A page opened from disk cannot read the files beside it, so small text
-  // outputs are embedded for the page to show; larger ones stay links.
   const outputs: Analysis["outputs"] = [];
-  let budget = textBudget;
-  for (const path of files.filter(p => p.startsWith("extractions/")).sort()) {
-    const stat = await lstat(join(root, path));
-    let text: string | undefined;
-    if (stat.isFile() && textFile.test(path) && stat.size <= Math.min(textLimit, budget)) {
-      try { text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(await readFile(join(root, path))); } catch { text = undefined; }
-      if (text?.includes("\0")) text = undefined;
-      if (text !== undefined) budget -= stat.size;
-    }
-    outputs.push({ path, bytes: stat.size, ...(text !== undefined ? { text } : {}) });
-  }
+  for (const path of files.filter(p => p.startsWith("extractions/")).sort()) outputs.push({ path, bytes: (await lstat(join(root, path))).size });
   return { snapshots, steps, incompleteGroups, findings, completeness, execution, details, outputs, reasons: { snapshots: snapshotReasons, execution: executionReasons } };
 }
 
@@ -407,22 +393,6 @@ async function buildReview(root: string, a: Analysis) {
   const trajectory = await buildTrajectory(root, { steps: [...a.steps], execution: a.execution });
   return { ...trajectory, steps: a.steps, outcomes: { ...trajectory.outcomes, recording: a.completeness } };
 }
-/** The texts of summary.json and trajectory.json, which the page shows when they are small enough. */
-type Generated = { summary?: string; trajectory?: string };
-function viewer(options: DeliverPackageOptions, a: Analysis, generated: Generated): string {
-  const held = (text?: string) => text !== undefined && Buffer.byteLength(text) <= textLimit ? text : undefined;
-  return renderReviewPage({ ...options, completeness: a.completeness, execution: a.execution, findings: a.findings, reasons: a.reasons, steps: a.steps, details: a.details, outputs: a.outputs,
-    generated: { summary: held(generated.summary), trajectory: held(generated.trajectory) } });
-}
-// Packages delivered before the review page redesign carry this page. It stays
-// byte-exact so verification still accepts their index.html, the same way a
-// pre-rename package's walkthrough.json is still accepted.
-function legacyViewer(options: DeliverPackageOptions, a: Analysis): string {
-  const link = (step: Step) => `#step-${encodeURIComponent(step.id)}`;
-  const image = (path: string | undefined, role: string) => path ? `<figure><figcaption>${role}</figcaption><img alt="${role} dispatch snapshot" src="${escapeHtml(path.split("/").map(encodeURIComponent).join("/"))}"></figure>` : `<p>${role}: unavailable — incomplete evidence</p>`;
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' file:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>Relay review: ${escapeHtml(options.packageId)}</title><style>body{font:16px system-ui;margin:2rem;color:#202020;background:#fff}main{display:grid;grid-template-columns:17rem 1fr;gap:2rem}nav{position:sticky;top:1rem;align-self:start}article{border:1px solid #aaa;padding:1rem;margin-bottom:2rem;scroll-margin-top:1rem}article:target{outline:4px solid #258}img{max-width:100%;height:auto}.pair{display:grid;grid-template-columns:1fr 1fr;gap:1rem}figure{margin:0}pre{white-space:pre-wrap;overflow-wrap:anywhere}a{color:#136} @media(max-width:700px){main,.pair{display:block}nav{position:static}}</style></head><body><h1>${escapeHtml(options.packageId)}</h1><p>Snapshot completeness: ${a.completeness} · Execution: ${a.execution} · Human review: pending</p><p>Delivery integrity is separate from execution success. Snapshots are dispatch-time evidence, not continuous video.</p><main><nav aria-label="Review steps"><ol>${a.steps.map(s => `<li><a href="${escapeHtml(link(s))}">${escapeHtml(s.title)} — ${s.execution}</a></li>`).join("")}</ol><a href="manifest.json">Manifest</a> · <a href="summary.json">Summary</a></nav><section>${a.steps.map((s, i) => `<article id="step-${escapeHtml(s.id)}"><h2>${escapeHtml(s.title)}</h2><p>Execution: ${s.execution} · State: ${escapeHtml(s.state)} · Input mode: ${escapeHtml(s.inputMode)}</p><p>Routing reason: ${escapeHtml(s.because ?? "Not present in retained host metadata")}</p><p>Expected: ${escapeHtml(s.expected ?? "Not supplied")}</p><pre>Observed: ${escapeHtml(s.observed ?? "No confirmed result")}</pre><p>Declared after interval: ${s.snapshots?.declaredAfterIntervalMs ?? "unavailable"} ms${s.snapshots?.groupId ? ` · Group: ${escapeHtml(s.snapshots.groupId)}` : ""}</p><div class="pair">${image(s.snapshots?.before, "Before")}${image(s.snapshots?.after, "After")}</div><p>${i ? `<a href="${escapeHtml(link(a.steps[i - 1]!))}">Previous</a> · ` : ""}<a href="${escapeHtml(link(s))}">Stable link</a>${i + 1 < a.steps.length ? ` · <a href="${escapeHtml(link(a.steps[i + 1]!))}">Next</a>` : ""}</p></article>`).join("")}</section></main></body></html>\n`;
-}
-
 /** When an already delivered package's run started: its earliest step, or the package's creation without timed steps. Development use only. */
 export async function deliveredPackageRun(rootDir: string): Promise<{ taskId: string; startedAt: string }> {
   const root = await rootPath(rootDir), m = await readJson(root, "manifest.json");
@@ -431,15 +401,17 @@ export async function deliveredPackageRun(rootDir: string): Promise<{ taskId: st
   return { taskId: options.taskId, startedAt: times.length ? new Date(Math.min(...times)).toISOString() : text(m.createdAt, "creation time") };
 }
 
-/** The review page of an already delivered package, rendered with the current template. Development use only: it writes nothing. */
-const generatedOf = async (root: string): Promise<Generated> => {
-  const read = (path: string) => readFile(join(root, path), "utf8").catch(() => undefined);
-  return { summary: await read("summary.json"), trajectory: await read("trajectory.json") };
-};
-export async function renderDeliveredPage(rootDir: string): Promise<string> {
-  const root = await rootPath(rootDir), m = await readJson(root, "manifest.json");
+/** The package's own files the review page lists. */
+const listedFiles = ["manifest.json", "summary.json", "trajectory.json"];
+/** The review data of a verified package: the model the review app renders its page from. It writes nothing. */
+export async function reviewData(rootDir: string): Promise<ReviewData> {
+  const root = await rootPath(rootDir), m = await readJson(root, "manifest.json"), files = await filesUnder(root);
   const options = { packageId: text(m.packageId, "package id"), sessionId: text(m.sessionId, "session id"), taskId: text(m.taskId, "task id") };
-  return viewer(options, await analyze(root, options, await filesUnder(root)), await generatedOf(root));
+  const a = await analyze(root, options, files);
+  const listed = [];
+  for (const path of listedFiles.filter(p => files.includes(p))) listed.push({ path, bytes: (await lstat(join(root, path))).size });
+  return { ...options, completeness: a.completeness, execution: a.execution, findings: a.findings, reasons: a.reasons, steps: a.steps,
+    details: Object.fromEntries(a.details), outputs: a.outputs, files: listed };
 }
 
 /** Assemble already-pulled evidence without rewriting a single guest original. */
@@ -468,16 +440,10 @@ export async function deliverPackage(rootDir: string, options: DeliverPackageOpt
       attachments: all.filter(p => p.startsWith("extractions/")).map(p => ({ absolutePath: join(root, p), packagePath: p, declaredType: "declared-extraction" })),
       records: all.filter(p => p !== "manifest.json" && !snapshotPaths.has(p) && !p.startsWith("extractions/")).map(p => ({ absolutePath: join(root, p), packagePath: p })) });
   };
-  // The page shows summary.json and trajectory.json, so both are settled before
-  // it. trajectory.json reads the manifest's snapshots, media and segments,
-  // which do not depend on the page; the manifest is written again once every
-  // file is in place, and verification rebuilds trajectory.json against it.
+  await save("summary.json", json(summary(options, a)));
+  await save("OPENING.txt", "Review this package with the relay's trajectory review command: /mcp-vm-relay:trajectory <this directory> in Claude Code, /mcp-vm-relay-trajectory <this directory> in pi, or the relay_trajectory tool. It verifies the package and opens the review app on it in the browser. Snapshot completeness and execution are separate verdicts, and the page explains each one that is not complete or passed. Originals are under state/, host metadata under host/, and declared extractions under extractions/. manifest.json checksums every artifact except itself.\n");
   await save("manifest.json", json(await build()));
-  const generated = { summary: json(summary(options, a)), trajectory: json(await buildReview(root, a)) };
-  await save("summary.json", generated.summary);
-  await save("index.html", viewer(options, a, generated));
-  await save("OPENING.txt", "Open index.html directly in a browser (file://); no server, network, or test machine is required. Select a step, or use the arrows or the left and right arrow keys. Snapshot completeness and execution are separate verdicts, and the page explains each one that is not complete or passed. Originals are under state/, host metadata under host/, and declared extractions under extractions/. manifest.json checksums every artifact except itself.\n");
-  await save("trajectory.json", generated.trajectory);
+  await save("trajectory.json", json(await buildReview(root, a)));
   await writeFile(join(root, "manifest.json"), json(await build()));
   return await verifyDeliveredPackage(root);
   } catch (error) {
@@ -524,13 +490,9 @@ export async function verifyDeliveredPackage(rootDir: string): Promise<DeliveryR
   if (!(await readFile(join(root, "state/journal/events.jsonl"))).equals(await readFile(join(root, "journal/session-events.jsonl")))) throw new Error("trajectory journal differs from original");
   const summaryText = await readFile(join(root, "summary.json"), "utf8");
   if (summaryText !== json(summary(options, a)) && summaryText !== json(legacySummary(options, a))) throw new Error("summary disagrees with original evidence");
-  const page = await readFile(join(root, "index.html"), "utf8");
-  // The page holds the summary and trajectory that delivery wrote, which are rederived here too.
-  const review = json(await buildReview(root, a));
-  if (page !== viewer(options, a, { summary: json(summary(options, a)), trajectory: review }) && page !== legacyViewer(options, a)) throw new Error("viewer disagrees with original evidence");
   // A legacy package (pre-trajectory rename) still carries walkthrough.json; read whichever this package actually has.
   const trajectoryFile = !files.includes("trajectory.json") && files.includes(legacyTrajectoryFile) ? legacyTrajectoryFile : "trajectory.json";
-  if (await readFile(join(root, trajectoryFile), "utf8") !== review) throw new Error("trajectory disagrees with original evidence");
+  if (await readFile(join(root, trajectoryFile), "utf8") !== json(await buildReview(root, a))) throw new Error("trajectory disagrees with original evidence");
   const acceptance = await verifyPackage(manifest, root);
   // SDK rejects half group pairs categorically. Preserve them as captured snapshots,
   // accepting only this precisely identified incompleteness (never an integrity error).

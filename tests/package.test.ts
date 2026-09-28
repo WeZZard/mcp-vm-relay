@@ -3,9 +3,14 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, writeFile, readFile, rm, symlink, realpath, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { deliverPackage, verifyDeliveredPackage } from "../src/package.js";
-import { escapeHtml } from "../src/review-page.js";
+import { basename, dirname, join } from "node:path";
+import { request } from "node:http";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { deliverPackage, reviewData, verifyDeliveredPackage } from "../src/package.js";
+import { renderReview, reviewModelOf } from "../src/review-page.js";
+import { ReviewServer } from "../src/review-server.js";
+import { TRAJECTORY_TOOL, createRelayServer } from "../src/server.js";
 
 const options = { packageId: "pkg-test", sessionId: "session-test", taskId: "task-test" };
 const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=", "base64");
@@ -55,17 +60,14 @@ async function rewriteJournal(f: Awaited<ReturnType<typeof fixture>>) {
   await save(f.root, "state/journal/events.jsonl", f.events.map(e => JSON.stringify(e)).join("\n") + "\n");
 }
 
-// The page's only script is its arrow-key navigation, admitted by the policy's hash.
-function withoutKeyScript(html: string) {
-  const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)];
-  assert.equal(scripts.length, 1, "the page has exactly one script");
-  const hash = createHash("sha256").update(scripts[0]![1]!).digest("base64");
-  assert.ok(html.includes(`script-src 'sha256-${hash}';`), "the policy admits the script by its hash only");
-  assert.doesNotMatch(html, /script-src[^;]*unsafe/);
-  return html.replace(scripts[0]![0], "");
+// The page the review app renders for a package, from the data the review server sends.
+async function page(root: string) {
+  const html = renderReview(reviewModelOf(JSON.parse(JSON.stringify(await reviewData(root))))).html;
+  assert.doesNotMatch(html, /<script|https?:\/\/|fetch\(/, "the page carries no script and names no address");
+  return html;
 }
 
-test("delivers capture-classified package; all originals, viewer, summary, and extractions are checksummed", async t => {
+test("delivers capture-classified package; all originals, summary, and extractions are checksummed, and no page is written", async t => {
   const { root } = await fixture(t);
   const original = await readFile(join(root, "state/journal/events.jsonl"));
   const delivered = await deliverPackage(root, options);
@@ -77,15 +79,31 @@ test("delivers capture-classified package; all originals, viewer, summary, and e
   assert.equal(manifest.snapshots.length, 2);
   assert.ok(manifest.snapshots.every((s: any) => s.provenance === "dispatch-captured" && s.actionId === "action-0"));
   assert.equal(manifest.attachments[0].path, "extractions/app.log");
-  for (const path of ["index.html", "summary.json", "trajectory.json", "OPENING.txt", "state/journal/events.jsonl", "host/routing.json", "state/records/action/action-0.json"]) assert.ok(manifest.records.some((r: any) => r.path === path), path);
+  for (const path of ["summary.json", "trajectory.json", "OPENING.txt", "state/journal/events.jsonl", "host/routing.json", "state/records/action/action-0.json"]) assert.ok(manifest.records.some((r: any) => r.path === path), path);
   assert.deepEqual(await readFile(join(root, "state/journal/events.jsonl")), original);
   assert.deepEqual(await verifyDeliveredPackage(root), delivered);
-  const html = await readFile(join(root, "index.html"), "utf8");
+  // The package is data: the review app renders its page on demand.
+  assert.equal(manifest.records.some((r: any) => r.path === "index.html"), false);
+  await assert.rejects(readFile(join(root, "index.html")));
+  assert.match(await readFile(join(root, "OPENING.txt"), "utf8"), /\/mcp-vm-relay:trajectory <this directory>/);
+  const html = await page(root);
   assert.match(html, /The user is presenting/);
   assert.match(html, /href="#step-step-0"/);
   // Without steps with errors there is nothing to focus on, so the checkbox is not rendered.
   assert.doesNotMatch(html, /id="focus-errors"/);
-  assert.doesNotMatch(withoutKeyScript(html), /<script|https?:\/\/|fetch\(/);
+});
+
+test("verification accepts a package delivered with a page, checking the page by its manifest entry", async t => {
+  const { root } = await fixture(t);
+  const delivered = await deliverPackage(root, options);
+  const legacy = Buffer.from("<!doctype html><title>An earlier relay's page</title>");
+  await writeFile(join(root, "index.html"), legacy);
+  const manifest = JSON.parse(await readFile(join(root, "manifest.json"), "utf8"));
+  manifest.records.push({ path: "index.html", sha256: createHash("sha256").update(legacy).digest("hex"), bytes: legacy.length });
+  await save(root, "manifest.json", manifest);
+  assert.deepEqual(await verifyDeliveredPackage(root), delivered);
+  await writeFile(join(root, "index.html"), "tampered");
+  await assert.rejects(verifyDeliveredPackage(root), /artifact integrity mismatch: index.html/);
 });
 
 test("verification accepts a legacy package that carries walkthrough.json instead of trajectory.json", async t => {
@@ -120,7 +138,7 @@ test('pre-stage diagnostic repair is visible as command-only evidence without fa
   await save(root, 'host/diagnostics/repair.receipt.json', { executionId: 'repair', evidenceMode: 'diagnostic', outcome: { kind: 'completed', exitStatus: { code: 0, signal: null } }, stdout: 'repaired', timeoutMs: 120000 });
   const result = await deliverPackage(root, options);
   assert.equal(result.deliveryVerified, true); assert.equal(result.snapshots, 'incomplete');
-  const html = await readFile(join(root, 'index.html'), 'utf8');
+  const html = await page(root);
   // Each verdict that is not complete or passed explains itself, and names the step that caused it.
   assert.match(html, /<button type="button" popovertarget="why-snapshots" title="Why snapshots are incomplete">/);
   assert.match(html, /<div class="why" id="why-snapshots" popover><h3>Why snapshots are incomplete<\/h3><ul class="reasons"><li><p>This diagnostic command ran without screenshots, as diagnostics do\./);
@@ -143,7 +161,7 @@ test("review page orders steps by time and reads commands, exit status, output s
   await save(root, "extractions/evidence/run-1/trace.txt", "\nfirst <line>\n");
   await save(root, "extractions/evidence/run-1/core.bin", Buffer.from([0, 1, 2]));
   await deliverPackage(root, options);
-  const html = await readFile(join(root, "index.html"), "utf8");
+  const html = await page(root);
   // The diagnostic ran first, so it is step 01 even though the trajectory lists actions first.
   assert.ok(html.indexOf('id="step-diagnostic-early"') < html.indexOf('id="step-step-0"'));
   const diagnostic = html.split('<article id="step-diagnostic-early"')[1]!.split("</article>")[0]!;
@@ -215,34 +233,19 @@ test("review page orders steps by time and reads commands, exit status, output s
   assert.match(track, /<li class="ok"><div class="faces"><a data-t="1" [^>]+><span class="face"><img [^>]+><span class="role">Before<\/span><\/span><\/a><a data-t="2" [^>]+><span class="face"><img [^>]+><span class="role">After<\/span>/);
   assert.match(track.split('<li class="ok">')[1]!, /<span class="took">\d+\.\d s<\/span><\/span>/);
   assert.doesNotMatch(track.split('<li class="ok">')[0]!, /class="took"/);
-  // Text outputs open in a window that holds small ones and frames larger ones; other outputs stay links.
+  // Text outputs open in a window that reads the file when it opens; other outputs stay links.
   assert.match(html, /<span class="where">evidence<\/span><span class="count">4 files · [^<]+<\/span><\/summary><ul class="flist"><li><button type="button" class="fopen" popovertarget="window-output-\d+" title="View big.log">run-1\/big.log<\/button>/);
   assert.match(html, /<li><a href="extractions\/evidence\/run-1\/core.bin">run-1\/core.bin<\/a>/);
-  const framedLog = html.split('aria-label="run-1/big.log">')[1]!.split('<div class="fwin"')[0]!;
-  assert.match(framedLog, /<div class="fw-card framed">/);
-  assert.match(framedLog, /<a class="fw-dl" href="extractions\/evidence\/run-1\/big.log" download="big.log" data-framed>/);
-  assert.match(framedLog, /<iframe class="fw-frame" src="extractions\/evidence\/run-1\/big.log" title="run-1\/big.log" loading="lazy" sandbox><\/iframe>/);
-  assert.match(html, /frame-src 'self' file:;/);
-  // The package's own files open in windows too: the manifest, which records this page's checksum, in a frame,
-  // and the summary and trajectory as the page holds them, exactly as delivered.
-  assert.match(html, /<ul class="files"><li><button type="button" class="fopen" popovertarget="window-manifest" title="View manifest.json">manifest.json<\/button><span>Checksums of every artifact<\/span><\/li>/);
-  assert.match(html.split('id="window-manifest"')[1]!.split('<div class="fwin"')[0]!, /<iframe class="fw-frame" src="manifest.json"/);
-  for (const name of ["summary", "trajectory"]) {
-    const held = html.split(`id="window-${name}"`)[1]!.split("</pre>")[0]!;
-    assert.ok(held.includes(`<pre class="fw-body">\n${escapeHtml(await readFile(join(root, `${name}.json`), "utf8"))}`), name);
-    assert.doesNotMatch(held, /Formatted|<iframe/);
-  }
   const opener = /<li><button type="button" class="fopen" popovertarget="(window-output-\d+)" title="View result.json">run-1\/result.json<\/button><span>/.exec(html);
   assert.ok(opener);
-  const window1 = html.split(`<div class="fwin" id="${opener[1]}" data-step="overview" popover aria-label="run-1/result.json">`)[1]!.split('<div class="fwin"')[0]!;
-  assert.match(window1, /<span class="fw-note" [^>]+>Formatted<\/span>/);
-  assert.match(window1, /<a class="fw-dl" href="extractions\/evidence\/run-1\/result.json" download="result.json" data-raw="\{&quot;passed&quot;:false\}">/);
-  assert.ok(window1.includes('<pre class="fw-body">\n{\n  &quot;passed&quot;: false\n}</pre>'));
-  const window2 = html.split('aria-label="run-1/trace.txt">')[1]!;
-  assert.doesNotMatch(window2.split("</pre>")[0]!, /Formatted|data-raw/);
-  assert.ok(window2.includes('<pre class="fw-body">\n\nfirst &lt;line&gt;\n</pre>'));
+  const window1 = html.split(`<div class="fwin" id="${opener[1]}" data-step="overview" data-src="extractions/evidence/run-1/result.json" popover aria-label="run-1/result.json">`)[1]!.split('<div class="fwin"')[0]!;
+  assert.match(window1, /<span class="fw-note" [^>]+ hidden>Formatted<\/span><span class="size">16 B<\/span>/);
+  assert.match(window1, /<a class="fw-dl" href="extractions\/evidence\/run-1\/result.json" download="result.json">/);
+  assert.match(window1, /<pre class="fw-body"><span class="quiet">Reading the file…<\/span><\/pre>/);
   assert.match(html, /<button type="button" class="fopen" popovertarget="window-output-\d+" title="View app.log">app.log<\/button>/);
-  assert.doesNotMatch(withoutKeyScript(html), /<script|https?:\/\/|fetch\(/);
+  // The package's own files open the same way.
+  assert.match(html, /<ul class="files"><li><button type="button" class="fopen" popovertarget="window-manifest-json" title="View manifest.json">manifest.json<\/button><span>Checksums of every artifact<\/span><\/li>/);
+  for (const name of ["manifest", "summary", "trajectory"]) assert.match(html, new RegExp(`<div class="fwin" id="window-${name}-json" data-step="overview" data-src="${name}.json" popover`));
   assert.equal((await verifyDeliveredPackage(root)).deliveryVerified, true);
 });
 
@@ -337,7 +340,7 @@ test("missing reverse reference remains incomplete rather than fabricated succes
   assert.equal(result.snapshots, "incomplete");
 });
 
-test("offline viewer escapes routing reasons, titles and stable identifiers", async t => {
+test("review page escapes routing reasons, titles and stable identifiers", async t => {
   const f = await fixture(t);
   const attack = '</article><script>alert("bad")</script>';
   f.events.find(e => e.kind === "action-start").title = attack;
@@ -345,8 +348,8 @@ test("offline viewer escapes routing reasons, titles and stable identifiers", as
   await rewriteJournal(f);
   await save(f.root, "host/routing.json", { executionId: "execution-1", because: attack });
   await deliverPackage(f.root, options);
-  const html = await readFile(join(f.root, "index.html"), "utf8");
-  assert.doesNotMatch(withoutKeyScript(html), /<script/);
+  const html = await page(f.root);
+  assert.doesNotMatch(html, /<script/);
   assert.match(html, /&lt;script&gt;/);
   assert.match(html, /%3Cscript%3E/);
 });
@@ -371,7 +374,7 @@ test("journal routing annotations survive without a separate host reason", async
   await rewriteJournal(f);
   await rm(join(f.root, "host/routing.json"));
   await deliverPackage(f.root, options);
-  assert.match(await readFile(join(f.root, "index.html"), "utf8"), /Journaled foreground interference/);
+  assert.match(await page(f.root), /Journaled foreground interference/);
 });
 
 test("receiver or transport uncertainty overrides successful action completion", async t => {
@@ -450,7 +453,7 @@ for (const scenario of ["driver-refused", "driver-uncertain", "transport-uncerta
     assert.match(trajectory.steps[0].observed, /Authoritative receipt outcomes:/);
     assert.match(trajectory.steps[0].observed, /Original subprocess\/action evidence \(not an authoritative input-success verdict\):/);
     assert.ok(trajectory.steps[0].observed.includes(JSON.stringify(completion.toolOutcome)));
-    const html = await readFile(join(root, "index.html"), "utf8");
+    const html = await page(root);
     assert.match(html, new RegExp(`<span class="t">Click Save</span>(<span class="took">[^<]*</span>)?</span><span class="sr">${expected}</span>`));
     assert.match(html, new RegExp(`Execution: </span><span class="verdict [a-z]+"><i aria-hidden="true"></i>${expected}</span>`));
     assert.doesNotMatch(html, /Execution: <\/span><span class="verdict ok"><i aria-hidden="true"><\/i>completed/);
@@ -542,7 +545,7 @@ test("repeated valid step IDs retain each real receiver execution's reason and e
   assert.equal(new Set(trajectory.steps.map((s: any) => s.id)).size, 2);
   assert.equal(trajectory.steps[0].id, "repeated");
   assert.equal(trajectory.steps[1].id, `repeated@${trajectory.steps[1].actionId}`);
-  const html = await readFile(join(root, "index.html"), "utf8");
+  const html = await page(root);
   for (const [index, step] of trajectory.steps.entries()) {
     const i = index + 1;
     assert.equal(step.because, `Reason${i}`);
@@ -583,4 +586,46 @@ test("revalidation rederives outcomes even when a tampered summary is rehashed",
   Object.assign(manifest.records.find((r: any) => r.path === "summary.json"), { bytes: bytes.length, sha256: sha(bytes) });
   await save(f.root, "manifest.json", manifest);
   await assert.rejects(verifyDeliveredPackage(f.root), /summary disagrees/);
+});
+
+test("the trajectory review command serves a verified package's review app, data and files, and nothing else", async t => {
+  const { root } = await fixture(t);
+  await deliverPackage(root, options);
+  const opened: string[] = [];
+  const review = new ReviewServer(async () => "/* the review app */");
+  t.after(() => review.close());
+  const relay = createRelayServer({ project: dirname(root), open: async url => { opened.push(url); }, review });
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  await relay.server.connect(serverTransport);
+  t.after(() => relay.server.close());
+  const client = new Client({ name: "mcp-vm-relay-review-test", version: "0" });
+  await client.connect(clientTransport);
+  t.after(() => client.close());
+  const result: any = await client.callTool({ name: TRAJECTORY_TOOL, arguments: { directory: basename(root) } });
+  assert.equal(result.isError, false, result.content[0].text);
+  assert.equal(opened.length, 1);
+  const address = new URL(opened[0]!);
+  assert.equal(address.hostname, "127.0.0.1");
+  assert.match(address.pathname, /^\/[^/]+\/2026-09-13T00-00-00-000Z-[^/]+\/$/);
+  assert.ok(result.content[0].text.includes(address.href));
+  // The page is the same static app for every package, under a policy that runs only its own script.
+  const shell = await fetch(address);
+  assert.match(shell.headers.get("content-security-policy")!, /script-src 'self';/);
+  assert.match(await shell.text(), /<script type="module" src="\/\.app\/review\.js"><\/script>/);
+  assert.equal(await (await fetch(new URL("/.app/review.js", address))).text(), "/* the review app */");
+  // The data is the package's, and the page's files are the package's own.
+  const [, project, run] = address.pathname.split("/");
+  const data = await (await fetch(new URL(`/.api/${project}/${run}.json`, address))).json();
+  assert.equal(data.packageId, options.packageId);
+  assert.deepEqual(data.files.map((f: any) => f.path), ["manifest.json", "summary.json", "trajectory.json"]);
+  assert.equal(await (await fetch(new URL("summary.json", address))).text(), await readFile(join(root, "summary.json"), "utf8"));
+  assert.equal((await fetch(new URL("extractions/app.log", address))).headers.get("content-type"), "text/plain; charset=utf-8");
+  assert.equal((await fetch(new URL("..%2F..%2Fetc%2Fpasswd", address))).status, 404);
+  assert.equal((await fetch(new URL(`/${project}/2026-01-01T00-00-00-000Z-00000000/`, address))).status, 404);
+  // A page elsewhere that rebinds its own name to 127.0.0.1 is refused.
+  const foreign = await new Promise<number>((done, fail) => request({ host: "127.0.0.1", port: address.port, path: address.pathname, headers: { host: `attacker.example:${address.port}` } }, r => done(r.statusCode!)).on("error", fail).end());
+  assert.equal(foreign, 421);
+  // Asking again for the same package opens the same address.
+  await client.callTool({ name: TRAJECTORY_TOOL, arguments: { directory: basename(root) } });
+  assert.equal(opened[1], opened[0]);
 });

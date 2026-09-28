@@ -1,14 +1,10 @@
-// The offline review page (index.html) of a delivered evidence package.
-//
-// The page is a pure function of the package's retained evidence: delivery
-// writes it once, and verification renders it again and requires the same
-// bytes. It therefore reads no clock, no environment and no file beyond the
-// model it is given. It opens from file:// under a policy that admits one
-// script, the arrow-key navigation below, by its hash, and forbids every
-// network request. Everything else is a plain link, an anchor or <details>.
-// The visual design is specified in docs/ux-design.md §6.10.
-
-import { createHash } from "node:crypto";
+// The review page of a delivered evidence package, rendered in the browser by
+// the review app (src/review-app/) from the model the review server builds
+// out of the package. It is a pure function of that model: it reads no clock,
+// no environment and no file. Selection works without script, through links,
+// anchors and <details>; the app adds the keys, the lightbox motion, the local
+// time and the file windows. The visual design is specified in
+// docs/ux-design.md §6.10.
 
 export interface CommandOutput {
   exit?: number | null;
@@ -54,11 +50,15 @@ export interface ReviewPageModel {
   reasons: { snapshots: Reason[]; execution: Reason[] };
   steps: ReviewPageStep[];
   details: ReadonlyMap<string, StepDetail>;
-  /** Declared extractions, by package path, with the text of those the page shows. */
-  outputs: { path: string; bytes: number; text?: string }[];
-  /** The texts of the package's summary.json and trajectory.json, when the page shows them. */
-  generated?: { summary?: string; trajectory?: string };
+  /** Declared extractions, by package path. */
+  outputs: { path: string; bytes: number }[];
+  /** The package's own files the Overview lists, by package path. */
+  files: { path: string; bytes: number }[];
 }
+
+/** The model as the review server sends it: JSON, with the details keyed by step id. */
+export type ReviewData = Omit<ReviewPageModel, "details"> & { details: Record<string, StepDetail> };
+export const reviewModelOf = (data: ReviewData): ReviewPageModel => ({ ...data, details: new Map(Object.entries(data.details)) });
 
 /** Files a window can show as text. */
 export const textFile = /\.(json|jsonl|ndjson|log|txt|md|csv|tsv|ya?ml|xml|toml)$/i;
@@ -295,76 +295,6 @@ function thumb(step: ReviewPageStep, detail: StepDetail | undefined, number: str
   return `<li class="${tone(step.execution)}${step.inputMode === "diagnostic" ? " diagnostic" : ""}${erred(step) ? " err" : ""}"><div class="faces">${faces}</div><span class="cap"><span class="n">${number}</span><i class="dot" aria-hidden="true"></i><span class="t">${escapeHtml(headline)}</span>${span ? `<span class="took">${span}</span>` : ""}</span><span class="sr">${escapeHtml(step.execution)}</span></li>`;
 }
 
-// The left and right arrow keys move to the previous and next view, or to
-// those of steps with errors while "Focus on errors" is checked; in the
-// Overview they do nothing unless a lightbox is open. The track keeps the
-// selected thumbnail in view, and the Trajectory tab returns to the view last
-// shown. Space opens the selected view's lightbox (a step's own fragment
-// selects its before view; in the Overview, the focused image's), and closes
-// any open lightbox wherever the focus is. While a lightbox is open, the
-// arrow keys and its arrows move through its sequence, and the page follows
-// to the item's step. The run's time is shown in the reader's own time zone. Links
-// alone cannot bind keys or read the reader's time zone.
-const keys = `(()=>{const views=()=>[...document.querySelectorAll(".center .view")];`
-  + `const still=()=>matchMedia("(prefers-reduced-motion: reduce)").matches,body=box=>box.querySelector(".lb-body>*");`
-  + `const sourceOf=box=>{for(const o of document.querySelectorAll(".zoom,.enlarge,.gthumb")){if(o.getAttribute("popovertarget")!==box.id)continue;`
-  + `const s=o.classList.contains("enlarge")?o.closest(".term"):o.querySelector("img");if(s&&s.getBoundingClientRect().width)return s}return null};`
-  // A contained image shows its picture inside its box, not across it.
-  + `const shown=s=>{const r=s.getBoundingClientRect();if(s.tagName!=="IMG"||getComputedStyle(s).objectFit!=="contain"||!s.naturalWidth||!s.naturalHeight)return r;`
-  + `const k=Math.min(r.width/s.naturalWidth,r.height/s.naturalHeight),w=s.naturalWidth*k,h=s.naturalHeight*k;return{left:r.left+(r.width-w)/2,top:r.top+(r.height-h)/2,width:w,height:h}};`
-  // The transform that lays an element over the source's rectangle, measured
-  // from the element's own untransformed place; the element keeps its current
-  // (possibly mid-flight) look until the caller animates it.
-  + `const from=(el,src)=>{const now=getComputedStyle(el).transform;el.style.transition="none";el.style.transform="none";`
-  + `const b=el.getBoundingClientRect(),a=shown(src);el.style.transform=now==="none"?"":now;el.getBoundingClientRect();el.style.transition="";`
-  + `if(!b.width)return"";const k=a.width/b.width;return"translate("+(a.left+a.width/2-b.left-b.width*k/2)+"px,"+(a.top+a.height/2-b.top-b.height*k/2)+"px) scale("+k+")"};`
-  + `let hidden=null,token=0;const unhide=()=>{if(hidden)hidden.style.visibility="";hidden=null};`
-  + `const open=box=>{token++;unhide();const src=still()?null:sourceOf(box);box.toggleAttribute("data-flip",!!src);box.showPopover();const el=body(box);`
-  + `if(src&&el){const f=from(el,src);el.style.transition="none";el.style.transform=f;el.getBoundingClientRect();el.style.transition="";el.style.transform="";src.style.visibility="hidden";hidden=src}};`
-  + `const leave=box=>{if(box.hasAttribute("data-instant"))return;const el=body(box),src=hidden,n=++token;`
-  + `if(src&&el&&!still()&&src.getBoundingClientRect().width){box.setAttribute("data-flip","");el.style.transform=from(el,src);`
-  + `el.addEventListener("transitionend",()=>{if(n===token)unhide()},{once:true});setTimeout(()=>{if(n===token)unhide()},450)}else{box.removeAttribute("data-flip");unhide()}`
-  + `setTimeout(()=>{if(n===token&&!box.matches(":popover-open")&&el)el.style.transform=""},520)};`
-  + `document.querySelectorAll(".lightbox").forEach(b=>b.addEventListener("beforetoggle",e=>{if(e.newState==="closed")leave(b)}));`
-  + `const go=b=>{const box=b.closest(".lightbox"),next=document.getElementById(b.getAttribute("popovertarget"));if(!next)return;`
-  + `const instant=[box,next].filter(Boolean);instant.forEach(x=>x.setAttribute("data-instant",""));token++;unhide();`
-  + `if(box)box.hidePopover();const s=next.dataset.step;if(s&&decodeURIComponent(location.hash.slice(1))!==s)location.hash=encodeURIComponent(s);`
-  + `const el=body(next);if(el)el.style.transform="";next.showPopover();const src=sourceOf(next);if(src){src.style.visibility="hidden";hidden=src}`
-  + `setTimeout(()=>instant.forEach(x=>x.removeAttribute("data-instant")),60)};`
-  // A page opened from disk cannot download the file beside it (the browser
-  // opens it instead), so the window downloads the text it holds; a framed
-  // file offers to open in a tab instead.
-  + `const save=dl=>{const p=dl.closest(".fwin").querySelector(".fw-body"),raw=dl.dataset.raw??(p.querySelector(".quiet")?"":p.textContent);`
-  + `const u=URL.createObjectURL(new Blob([raw],{type:"text/plain"})),a=document.createElement("a");a.href=u;a.download=dl.getAttribute("download");document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1e3)};`
-  + `if(location.protocol==="file:")document.querySelectorAll(".fw-dl[data-framed]").forEach(a=>{a.removeAttribute("download");a.target="_blank";a.rel="noopener";a.lastElementChild.textContent="Open"});`
-  + `document.addEventListener("click",e=>{const t=e.target instanceof Element?e.target:null;const b=t&&t.closest(".lb-nav");if(b){e.preventDefault();go(b);return}`
-  + `const dl=t&&t.closest(".fw-dl");if(dl&&!dl.hasAttribute("data-framed")){e.preventDefault();save(dl);return}`
-  + `const o=t&&t.closest(".zoom,.enlarge,.gthumb"),lb=o&&document.getElementById(o.getAttribute("popovertarget"));if(lb){e.preventDefault();open(lb);return}`
-  + `if(t&&(t.classList.contains("lightbox")||t.classList.contains("fwin")))t.hidePopover()});`
-  + `try{document.querySelectorAll("time[data-local]").forEach(t=>{const d=new Date(t.dateTime);if(isNaN(d.getTime())||!d.getTimezoneOffset())return;`
-  + `t.textContent=new Intl.DateTimeFormat(undefined,{...(d.getFullYear()!==d.getUTCFullYear()?{year:"numeric"}:{}),month:"short",day:"numeric",hour:"numeric",minute:"2-digit",timeZoneName:"short"}).format(d);const li=t.closest("[hidden]");if(li)li.hidden=false})}catch{}`
-  + `const current=()=>{let el=null;try{el=document.getElementById(decodeURIComponent(location.hash.slice(1)))}catch{}if(!el)return 0;`
-  + `const v=el.classList.contains("step")?el.querySelector(".view.first"):el.closest(".view");return v?views().indexOf(v):-1};`
-  + `const focused=()=>{const f=document.getElementById("focus-errors");return!!(f&&f.checked)};let last="";`
-  + `const reveal=()=>{const i=current();if(i<0)return;last=location.hash;const a=document.querySelector('.track a[data-t="'+i+'"]');if(a)a.scrollIntoView({block:"nearest",inline:"nearest"})};`
-  + `document.addEventListener("keydown",e=>{if(e.defaultPrevented||e.altKey||e.ctrlKey||e.metaKey||e.shiftKey)return;`
-  + `const t=e.target;if(t instanceof HTMLElement&&(t.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)))return;`
-  + `let box=null;try{box=document.querySelector(".lightbox:popover-open")}catch{}`
-  + `if(e.key===" "){if(box){e.preventDefault();if(!e.repeat)box.hidePopover();return}`
-  + `const opener=t instanceof Element?t.closest(".zoom,.enlarge,.gthumb"):null;`
-  + `if(t instanceof Element&&!opener&&(t.closest("summary")||t.closest("button")))return;e.preventDefault();if(e.repeat)return;`
-  + `if(opener&&opener.classList.contains("gthumb")){const g=document.getElementById(opener.getAttribute("popovertarget"));if(g)open(g);return}`
-  + `const i=current(),v=i<0?null:views()[i];const lb=v&&document.getElementById(v.id.replace(/^step-/,"lightbox-"));if(lb)open(lb);return}`
-  + `const d=e.key==="ArrowRight"?1:e.key==="ArrowLeft"?-1:0;if(!d)return;`
-  + `if(box){e.preventDefault();const b=box.querySelector(d<0?".lb-nav.prev":".lb-nav.next");if(b)go(b);return}`
-  + `const all=views();let j=current();if(j<0)return;`
-  + `do j+=d;while(j>=0&&j<all.length&&focused()&&!all[j].closest(".step").classList.contains("err"));`
-  + `if(j<0||j>=all.length)return;e.preventDefault();location.hash=encodeURIComponent(all[j].id)});`
-  + `const tab=document.querySelector(".tabs .t-traj");if(tab)tab.addEventListener("click",e=>{if(last){e.preventDefault();location.hash=last}});`
-  + `addEventListener("hashchange",()=>{let id="";try{id=decodeURIComponent(location.hash.slice(1))}catch{}`
-  + `try{document.querySelectorAll(":popover-open").forEach(p=>{if(p.dataset.step!==id)p.hidePopover()})}catch{}reveal()});reveal()})();`;
-const keysPolicy = `'sha256-${createHash("sha256").update(keys).digest("base64")}'`;
-
 // Without script, the selected view is the :target; a step's own fragment
 // selects its first view, and no fragment selects the first view of all. Each
 // view's index ties it to its thumbnail, and each step's position to its group
@@ -378,25 +308,20 @@ const selection = (steps: number, firsts: number[], views: number) => !steps ? "
     `.app:not(:has(.center :target)) .track [data-t="0"] .face`].join(",")
   + "{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--accent),0 0 18px var(--ring)}";
 
-type FileItem = { href: string; label: string; name: string; bytes?: number; text?: string };
-// A file's window shows the text the page holds and offers the original for
-// download; JSON is laid out for reading when that changes it, and then the
-// original rides along for the download. The text starts after a newline,
-// which the parser drops, so a leading newline of the file survives. A file
-// whose text the page does not hold is shown in a frame, read from the file.
+type FileItem = { href: string; label: string; name: string; bytes: number };
+// A file's window is filled by the app when it opens: it reads the file from
+// the package and shows its text; the download is the file itself.
 function fileWindow(id: string, f: FileItem) {
-  let text = f.text, formatted = false;
-  if (f.text !== undefined && /\.json$/i.test(f.name)) try { const pretty = JSON.stringify(JSON.parse(f.text), null, 2); formatted = pretty !== f.text.trimEnd(); if (formatted) text = pretty; } catch { formatted = false; }
-  const framed = text === undefined, label = escapeHtml(f.label);
-  return `<div class="fwin" id="${id}" data-step="overview" popover aria-label="${label}"><div class="fw-card${framed ? " framed" : ""}"><div class="fw-bar"><span class="fw-name" title="${label}">${label}</span>`
-    + `${formatted ? `<span class="fw-note" title="The download is the original file">Formatted</span>` : ""}${f.bytes !== undefined ? `<span class="size">${size(f.bytes)}</span>` : ""}`
-    + `<a class="fw-dl" href="${f.href}" download="${escapeHtml(f.name)}"${formatted ? ` data-raw="${escapeHtml(f.text)}"` : ""}${framed ? " data-framed" : ""}>${downloadIcon}<span>Download</span></a>`
+  const label = escapeHtml(f.label);
+  return `<div class="fwin" id="${id}" data-step="overview" data-src="${f.href}" popover aria-label="${label}"><div class="fw-card"><div class="fw-bar"><span class="fw-name" title="${label}">${label}</span>`
+    + `<span class="fw-note" title="The download is the original file" hidden>Formatted</span><span class="size">${size(f.bytes)}</span>`
+    + `<a class="fw-dl" href="${f.href}" download="${escapeHtml(f.name)}">${downloadIcon}<span>Download</span></a>`
     + `<button type="button" class="close" popovertarget="${id}" popovertargetaction="hide" aria-label="Close">×</button></div>`
-    + (framed ? `<iframe class="fw-frame" src="${f.href}" title="${label}" loading="lazy" sandbox></iframe>` : `<pre class="fw-body">\n${text ? escapeHtml(text) : `<span class="quiet">Empty file.</span>`}</pre>`)
-    + `</div></div>`;
+    + `<pre class="fw-body"><span class="quiet">Reading the file…</span></pre></div></div>`;
 }
 
-export function renderReviewPage(model: ReviewPageModel): string {
+/** The page: its title, its body, and the rules that tie each selected view to its thumbnail. */
+export function renderReview(model: ReviewPageModel): { title: string; html: string; selection: string } {
   const steps = chronological(model);
   const numbers = new Map(steps.map((step, i) => [step.id, String(i + 1).padStart(2, "0")]));
   const views = viewsOf(steps);
@@ -411,7 +336,7 @@ export function renderReviewPage(model: ReviewPageModel): string {
   // name. The transfer id is the relay's own bookkeeping, so a file reads as
   // its guest path under that name.
   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-  const byName = new Map<string, { path: string; bytes: number; text?: string; label: string }[]>();
+  const byName = new Map<string, { path: string; bytes: number; label: string }[]>();
   for (const output of model.outputs) {
     const [, declared = "", ...rest] = output.path.split("/");
     byName.set(declared, [...(byName.get(declared) ?? []), { ...output, label: rest.filter(part => !uuid.test(part)).join("/") || output.path.split("/").at(-1)! }]);
@@ -422,9 +347,9 @@ export function renderReviewPage(model: ReviewPageModel): string {
     return `<button type="button" class="fopen" popovertarget="${id}" title="View ${escapeHtml(f.name)}">${escapeHtml(f.label)}</button>`;
   };
   // A text output opens in a window; any other output is a link to the file.
-  const file = (f: { path: string; bytes: number; text?: string; label: string }) => f.text === undefined && !textFile.test(f.path)
+  const file = (f: { path: string; bytes: number; label: string }) => !textFile.test(f.path)
     ? `<a href="${src(f.path)}">${escapeHtml(f.label)}</a>`
-    : opener(`window-output-${windows.length + 1}`, { href: src(f.path), label: f.label, name: f.label.split("/").at(-1)!, bytes: f.bytes, text: f.text });
+    : opener(`window-output-${windows.length + 1}`, { href: src(f.path), label: f.label, name: f.label.split("/").at(-1)!, bytes: f.bytes });
   const outputs = [...byName].map(([declared, files]) => {
     const images = files.filter(f => /\.(png|jpe?g|webp|gif)$/i.test(f.path)), others = files.filter(f => !images.includes(f));
     const total = files.reduce((sum, f) => sum + f.bytes, 0);
@@ -435,9 +360,8 @@ export function renderReviewPage(model: ReviewPageModel): string {
       return `<button type="button" class="gthumb" popovertarget="${id}" title="Enlarge ${escapeHtml(name)}"><img loading="lazy" alt="${escapeHtml(f.label)}" src="${src(f.path)}"><span>${escapeHtml(name)}<small>${size(f.bytes)}</small></span></button>`;
     }).join("")}</div>` : ""}</details>`;
   }).join("");
-  // manifest.json records this page's checksum, so the page cannot hold it and frames it instead.
-  const generated = ([["manifest.json", "Checksums of every artifact", undefined], ["summary.json", "Verdicts and findings", model.generated?.summary], ["trajectory.json", "Steps as recorded", model.generated?.trajectory]] as const)
-    .map(([name, note, text]) => `<li>${opener(`window-${name.replace(".json", "")}`, { href: name, label: name, name, ...(text !== undefined ? { bytes: Buffer.byteLength(text), text } : {}) })}<span>${note}</span></li>`).join("");
+  const notes: Record<string, string> = { "manifest.json": "Checksums of every artifact", "summary.json": "Verdicts and findings", "trajectory.json": "Steps as recorded" };
+  const generated = model.files.map(f => `<li>${opener(`window-${f.path.replace(/\W+/g, "-")}`, { href: src(f.path), label: f.path, name: f.path.split("/").at(-1)!, bytes: f.bytes })}${notes[f.path] ? `<span>${notes[f.path]}</span>` : ""}</li>`).join("");
   const stat = (label: string, value: string) => `<li><b>${value}</b>${label ? ` <span>${label}</span>` : ""}</li>`;
   // Reasons with the same words are one reason for all their steps.
   const merged = (reasons: Reason[]) => [...reasons.reduce((all, r) => all.set(r.text, [...new Set([...(all.get(r.text) ?? []), ...r.stepIds])]), new Map<string, string[]>())]
@@ -456,8 +380,7 @@ export function renderReviewPage(model: ReviewPageModel): string {
 <section class="block"><h3>Declared outputs <span class="count">${model.outputs.length}</span></h3>${outputs ? `<div class="outputs">${outputs}</div>` : `<p class="quiet">No declared outputs were delivered.</p>`}</section>
 <section class="block"><h3>Package</h3><div class="package"><dl class="ids"><div><dt>Package</dt><dd>${escapeHtml(model.packageId)}</dd></div><div><dt>Task</dt><dd>${escapeHtml(model.taskId)}</dd></div><div><dt>Session</dt><dd>${escapeHtml(model.sessionId)}</dd></div>${started ? `<div><dt>Started</dt><dd>${utcStamp(started, true)}</dd></div>` : ""}</dl>
 <ul class="files">${generated}</ul></div></section></div></section></article>`;
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' file:; frame-src 'self' file:; style-src 'unsafe-inline'; script-src ${keysPolicy}; base-uri 'none'; form-action 'none'"><title>Relay review: ${escapeHtml(model.packageId)}</title><style>${css}${selection(steps.length, views.filter(v => v.first).map(v => v.index), views.length)}</style></head><body>
-<div class="app">
+  return { title: `Relay review: ${model.packageId}`, selection: selection(steps.length, views.filter(v => v.first).map(v => v.index), views.length), html: `<div class="app">
 <header class="top"><div class="brand"><span class="mark" aria-hidden="true">${relayMark}</span><h1 title="${escapeHtml(model.packageId)}">Relay</h1>
 <ul class="stats">${stat(noun(steps.length, "step"), String(steps.length))}${stat(noun(actions, "action"), String(actions))}${stat(noun(diagnostics, "diagnostic"), String(diagnostics))}${started ? `<li class="at"><time datetime="${started}" title="Started ${started}">${utcStamp(started)}</time><span class="local" hidden><span class="sep" aria-hidden="true">·</span><time datetime="${started}" data-local title="Started, in your time zone"></time></span></li>` : ""}${times.length ? stat("", duration(Math.max(...times) - Math.min(...times))) : ""}</ul></div>
 <nav class="tabs mid" aria-label="View"><a class="t-traj" href="${steps[0] ? escapeHtml(link(steps[0])) : "#"}">Trajectory</a><a class="t-over" href="#overview">Overview<span class="${model.findings.length ? "has" : ""}">${model.findings.length}</span></a></nav>
@@ -471,16 +394,14 @@ ${overview}</main>
 <footer class="track" aria-label="Steps"><ol>${steps.map(step => thumb(step, model.details.get(step.id), numbers.get(step.id)!, concerns.has(step.id), views.filter(v => v.step === step))).join("")}</ol></footer>
 </div>
 ${lightboxes(trajectoryBoxes(steps, model, numbers))}
-${lightboxes(outputBoxes)}${windows.join("")}
-<script>${keys}</script></body></html>
-`;
+${lightboxes(outputBoxes)}${windows.join("")}` };
 }
 
 // Design (docs/ux-design.md §6.10): light, warm, minimal and vivid. A warm
 // ivory canvas with white surfaces on soft warm shadows, one vermilion-to-
 // marigold accent, round shapes, and separation by space and tone rather than
 // borders. Status uses four vivid tones, each with its word.
-const css = `:root{color-scheme:light;--bg:#fbf6ef;--s1:#ffffff;--s2:#f7efe5;--s3:#efe3d5;--hair:rgba(90,50,20,.08);--text:#2a1d15;--dim:#5e4b3e;--faint:#7d6a5c;
+export const reviewCss = `:root{color-scheme:light;--bg:#fbf6ef;--s1:#ffffff;--s2:#f7efe5;--s3:#efe3d5;--hair:rgba(90,50,20,.08);--text:#2a1d15;--dim:#5e4b3e;--faint:#7d6a5c;
 --accent:#f0502a;--accent2:#ff9f1a;--grad:linear-gradient(135deg,var(--accent),var(--accent2));--on:#fff;--ring:rgba(240,80,42,.28);
 --ok:#0e9f62;--bad:#e23744;--warn:#b87700;--warn-ink:#8a5a00;--shadow:0 1px 2px rgba(90,50,20,.06),0 12px 32px rgba(90,50,20,.10);
 --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;--round:ui-rounded,"SF Pro Rounded",var(--sans);--mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
@@ -656,7 +577,6 @@ kbd{display:inline-grid;place-items:center;min-width:1.3rem;height:1.3rem;paddin
 .fw-dl{flex:none;display:inline-flex;align-items:center;gap:.4rem;padding:.4rem .85rem .4rem .7rem;border-radius:999px;background:var(--grad);color:var(--on);font-size:12.5px;font-weight:600}
 .fw-dl:hover{text-decoration:none;filter:brightness(1.05)}
 .fw-dl:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.fw-card.framed{height:min(42rem,100%)}.fw-frame{display:block;width:100%;height:100%;border:0;background:#fff}
 .fw-body{margin:0;padding:1rem 1.15rem 1.25rem;overflow:auto;background:var(--bg);font:12.5px/1.6 var(--mono);color:var(--text);white-space:pre-wrap;overflow-wrap:anywhere;tab-size:2}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 @media print{.app{height:auto;display:block}.track,.arrow,.mid,.lightbox,.enlarge{display:none}.center{display:block}.step{display:block!important;break-inside:avoid;margin-bottom:1rem}.view{display:flex!important}.stage{background:none}}`;

@@ -1502,37 +1502,37 @@ var require_dataType = __commonJS({
       DataType2[DataType2["Wrong"] = 1] = "Wrong";
     })(DataType || (exports.DataType = DataType = {}));
     function getSchemaTypes(schema) {
-      const types = getJSONTypes(schema.type);
-      const hasNull = types.includes("null");
+      const types2 = getJSONTypes(schema.type);
+      const hasNull = types2.includes("null");
       if (hasNull) {
         if (schema.nullable === false)
           throw new Error("type: null contradicts nullable: false");
       } else {
-        if (!types.length && schema.nullable !== void 0) {
+        if (!types2.length && schema.nullable !== void 0) {
           throw new Error('"nullable" cannot be used without "type"');
         }
         if (schema.nullable === true)
-          types.push("null");
+          types2.push("null");
       }
-      return types;
+      return types2;
     }
     exports.getSchemaTypes = getSchemaTypes;
     function getJSONTypes(ts) {
-      const types = Array.isArray(ts) ? ts : ts ? [ts] : [];
-      if (types.every(rules_1.isJSONType))
-        return types;
-      throw new Error("type must be JSONType or JSONType[]: " + types.join(","));
+      const types2 = Array.isArray(ts) ? ts : ts ? [ts] : [];
+      if (types2.every(rules_1.isJSONType))
+        return types2;
+      throw new Error("type must be JSONType or JSONType[]: " + types2.join(","));
     }
     exports.getJSONTypes = getJSONTypes;
-    function coerceAndCheckDataType(it, types) {
+    function coerceAndCheckDataType(it, types2) {
       const { gen, data, opts } = it;
-      const coerceTo = coerceToTypes(types, opts.coerceTypes);
-      const checkTypes = types.length > 0 && !(coerceTo.length === 0 && types.length === 1 && (0, applicability_1.schemaHasRulesForType)(it, types[0]));
+      const coerceTo = coerceToTypes(types2, opts.coerceTypes);
+      const checkTypes = types2.length > 0 && !(coerceTo.length === 0 && types2.length === 1 && (0, applicability_1.schemaHasRulesForType)(it, types2[0]));
       if (checkTypes) {
-        const wrongType = checkDataTypes(types, data, opts.strictNumbers, DataType.Wrong);
+        const wrongType = checkDataTypes(types2, data, opts.strictNumbers, DataType.Wrong);
         gen.if(wrongType, () => {
           if (coerceTo.length)
-            coerceData(it, types, coerceTo);
+            coerceData(it, types2, coerceTo);
           else
             reportTypeError(it);
         });
@@ -1541,15 +1541,15 @@ var require_dataType = __commonJS({
     }
     exports.coerceAndCheckDataType = coerceAndCheckDataType;
     var COERCIBLE = /* @__PURE__ */ new Set(["string", "number", "integer", "boolean", "null"]);
-    function coerceToTypes(types, coerceTypes) {
-      return coerceTypes ? types.filter((t) => COERCIBLE.has(t) || coerceTypes === "array" && t === "array") : [];
+    function coerceToTypes(types2, coerceTypes) {
+      return coerceTypes ? types2.filter((t) => COERCIBLE.has(t) || coerceTypes === "array" && t === "array") : [];
     }
-    function coerceData(it, types, coerceTo) {
+    function coerceData(it, types2, coerceTo) {
       const { gen, data, opts } = it;
       const dataType = gen.let("dataType", (0, codegen_1._)`typeof ${data}`);
       const coerced = gen.let("coerced", (0, codegen_1._)`undefined`);
       if (opts.coerceTypes === "array") {
-        gen.if((0, codegen_1._)`${dataType} == 'object' && Array.isArray(${data}) && ${data}.length == 1`, () => gen.assign(data, (0, codegen_1._)`${data}[0]`).assign(dataType, (0, codegen_1._)`typeof ${data}`).if(checkDataTypes(types, data, opts.strictNumbers), () => gen.assign(coerced, data)));
+        gen.if((0, codegen_1._)`${dataType} == 'object' && Array.isArray(${data}) && ${data}.length == 1`, () => gen.assign(data, (0, codegen_1._)`${data}[0]`).assign(dataType, (0, codegen_1._)`typeof ${data}`).if(checkDataTypes(types2, data, opts.strictNumbers), () => gen.assign(coerced, data)));
       }
       gen.if((0, codegen_1._)`${coerced} !== undefined`);
       for (const t of coerceTo) {
@@ -1625,19 +1625,19 @@ var require_dataType = __commonJS({
         return checkDataType(dataTypes[0], data, strictNums, correct);
       }
       let cond;
-      const types = (0, util_1.toHash)(dataTypes);
-      if (types.array && types.object) {
+      const types2 = (0, util_1.toHash)(dataTypes);
+      if (types2.array && types2.object) {
         const notObj = (0, codegen_1._)`typeof ${data} != "object"`;
-        cond = types.null ? notObj : (0, codegen_1._)`!${data} || ${notObj}`;
-        delete types.null;
-        delete types.array;
-        delete types.object;
+        cond = types2.null ? notObj : (0, codegen_1._)`!${data} || ${notObj}`;
+        delete types2.null;
+        delete types2.array;
+        delete types2.object;
       } else {
         cond = codegen_1.nil;
       }
-      if (types.number)
-        delete types.integer;
-      for (const t in types)
+      if (types2.number)
+        delete types2.integer;
+      for (const t in types2)
         cond = (0, codegen_1.and)(cond, checkDataType(t, data, strictNums, correct));
       return cond;
     }
@@ -2048,7 +2048,7 @@ var require_fast_deep_equal = __commonJS({
       if (a === b) return true;
       if (a && b && typeof a == "object" && typeof b == "object") {
         if (a.constructor !== b.constructor) return false;
-        var length, i, keys2;
+        var length, i, keys;
         if (Array.isArray(a)) {
           length = a.length;
           if (length != b.length) return false;
@@ -2059,13 +2059,13 @@ var require_fast_deep_equal = __commonJS({
         if (a.constructor === RegExp) return a.source === b.source && a.flags === b.flags;
         if (a.valueOf !== Object.prototype.valueOf) return a.valueOf() === b.valueOf();
         if (a.toString !== Object.prototype.toString) return a.toString() === b.toString();
-        keys2 = Object.keys(a);
-        length = keys2.length;
+        keys = Object.keys(a);
+        length = keys.length;
         if (length !== Object.keys(b).length) return false;
         for (i = length; i-- !== 0; )
-          if (!Object.prototype.hasOwnProperty.call(b, keys2[i])) return false;
+          if (!Object.prototype.hasOwnProperty.call(b, keys[i])) return false;
         for (i = length; i-- !== 0; ) {
-          var key = keys2[i];
+          var key = keys[i];
           if (!equal(a[key], b[key])) return false;
         }
         return true;
@@ -2442,9 +2442,9 @@ var require_validate = __commonJS({
     function typeAndKeywords(it, errsCount) {
       if (it.opts.jtd)
         return schemaKeywords(it, [], false, errsCount);
-      const types = (0, dataType_1.getSchemaTypes)(it.schema);
-      const checkedTypes = (0, dataType_1.coerceAndCheckDataType)(it, types);
-      schemaKeywords(it, types, !checkedTypes, errsCount);
+      const types2 = (0, dataType_1.getSchemaTypes)(it.schema);
+      const checkedTypes = (0, dataType_1.coerceAndCheckDataType)(it, types2);
+      schemaKeywords(it, types2, !checkedTypes, errsCount);
     }
     function checkRefsAndKeywords(it) {
       const { schema, errSchemaPath, opts, self } = it;
@@ -2494,7 +2494,7 @@ var require_validate = __commonJS({
       if (items instanceof codegen_1.Name)
         gen.assign((0, codegen_1._)`${evaluated}.items`, items);
     }
-    function schemaKeywords(it, types, typeErrors, errsCount) {
+    function schemaKeywords(it, types2, typeErrors, errsCount) {
       const { gen, schema, data, allErrors, opts, self } = it;
       const { RULES } = self;
       if (schema.$ref && (opts.ignoreKeywordsWithRef || !(0, util_1.schemaHasRulesButRef)(schema, RULES))) {
@@ -2502,7 +2502,7 @@ var require_validate = __commonJS({
         return;
       }
       if (!opts.jtd)
-        checkStrictTypes(it, types);
+        checkStrictTypes(it, types2);
       gen.block(() => {
         for (const group of RULES.rules)
           groupKeywords(group);
@@ -2514,7 +2514,7 @@ var require_validate = __commonJS({
         if (group.type) {
           gen.if((0, dataType_2.checkDataType)(group.type, data, opts.strictNumbers));
           iterateKeywords(it, group);
-          if (types.length === 1 && types[0] === group.type && typeErrors) {
+          if (types2.length === 1 && types2[0] === group.type && typeErrors) {
             gen.else();
             (0, dataType_2.reportTypeError)(it);
           }
@@ -2538,27 +2538,27 @@ var require_validate = __commonJS({
         }
       });
     }
-    function checkStrictTypes(it, types) {
+    function checkStrictTypes(it, types2) {
       if (it.schemaEnv.meta || !it.opts.strictTypes)
         return;
-      checkContextTypes(it, types);
+      checkContextTypes(it, types2);
       if (!it.opts.allowUnionTypes)
-        checkMultipleTypes(it, types);
+        checkMultipleTypes(it, types2);
       checkKeywordTypes(it, it.dataTypes);
     }
-    function checkContextTypes(it, types) {
-      if (!types.length)
+    function checkContextTypes(it, types2) {
+      if (!types2.length)
         return;
       if (!it.dataTypes.length) {
-        it.dataTypes = types;
+        it.dataTypes = types2;
         return;
       }
-      types.forEach((t) => {
+      types2.forEach((t) => {
         if (!includesType(it.dataTypes, t)) {
           strictTypesError(it, `type "${t}" not allowed by context "${it.dataTypes.join(",")}"`);
         }
       });
-      narrowSchemaTypes(it, types);
+      narrowSchemaTypes(it, types2);
     }
     function checkMultipleTypes(it, ts) {
       if (ts.length > 1 && !(ts.length === 2 && ts.includes("null"))) {
@@ -2984,7 +2984,7 @@ var require_compile = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve11.call(this, root, ref);
+      let _sch = resolve12.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a3 = root.localRefs) === null || _a3 === void 0 ? void 0 : _a3[ref];
         const { schemaId } = this.opts;
@@ -3011,7 +3011,7 @@ var require_compile = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve11(root, ref) {
+    function resolve12(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -3841,7 +3841,7 @@ var require_fast_uri = __commonJS({
       }
       return uri;
     }
-    function resolve11(baseURI, relativeURI, options2) {
+    function resolve12(baseURI, relativeURI, options2) {
       const schemelessOptions = options2 ? Object.assign({ scheme: "null" }, options2) : { scheme: "null" };
       const {
         parsed: baseParsed,
@@ -4209,7 +4209,7 @@ var require_fast_uri = __commonJS({
     var fastUri = {
       SCHEMES,
       normalize: normalize2,
-      resolve: resolve11,
+      resolve: resolve12,
       resolveComponent,
       equal,
       serialize,
@@ -6978,7 +6978,7 @@ var require_formats = __commonJS({
     }
     var TIME2 = /^(\d\d):(\d\d):(\d\d(?:\.\d+)?)(z|([+-])(\d\d)(?::?(\d\d))?)?$/i;
     function getTime(strictTimeZone) {
-      return function time4(str) {
+      return function time3(str) {
         const matches = TIME2.exec(str);
         if (!matches)
           return false;
@@ -7024,10 +7024,10 @@ var require_formats = __commonJS({
     }
     var DATE_TIME_SEPARATOR = /t|\s/i;
     function getDateTime(strictTimeZone) {
-      const time4 = getTime(strictTimeZone);
+      const time3 = getTime(strictTimeZone);
       return function date_time(str) {
         const dateTime = str.split(DATE_TIME_SEPARATOR);
-        return dateTime.length === 2 && date3(dateTime[0]) && time4(dateTime[1]);
+        return dateTime.length === 2 && date3(dateTime[0]) && time3(dateTime[1]);
       };
     }
     function compareDateTime(dt1, dt2) {
@@ -7172,8 +7172,8 @@ var require_dist = __commonJS({
         return ajv;
       }
       const [formats2, exportName] = opts.mode === "fast" ? [formats_1.fastFormats, fastName] : [formats_1.fullFormats, fullName];
-      const list = opts.formats || formats_1.formatNames;
-      addFormats2(ajv, list, formats2, exportName);
+      const list2 = opts.formats || formats_1.formatNames;
+      addFormats2(ajv, list2, formats2, exportName);
       if (opts.keywords)
         (0, limit_1.default)(ajv);
       return ajv;
@@ -7185,11 +7185,11 @@ var require_dist = __commonJS({
         throw new Error(`Unknown format "${name}"`);
       return f;
     };
-    function addFormats2(ajv, list, fs, exportName) {
+    function addFormats2(ajv, list2, fs, exportName) {
       var _a3;
       var _b;
       (_a3 = (_b = ajv.opts.code).formats) !== null && _a3 !== void 0 ? _a3 : _b.formats = (0, codegen_1._)`require("ajv-formats/dist/formats").${exportName}`;
-      for (const f of list)
+      for (const f of list2)
         ajv.addFormat(f, fs[f]);
     }
     module.exports = exports = formatsPlugin;
@@ -7213,7 +7213,7 @@ function toPosix(p) {
   return p.split("\\").join("/").replace(/^\.\//, "");
 }
 async function probeMedia(path) {
-  return new Promise((resolve11) => {
+  return new Promise((resolve12) => {
     const child = spawn("ffprobe", [
       "-v",
       "error",
@@ -7228,21 +7228,21 @@ async function probeMedia(path) {
     child.stdout.on("data", (c) => stdout += c);
     child.stderr.on("data", (c) => stderr += c);
     child.on("error", (err) => {
-      resolve11({ decode: "unchecked", decodeDiagnostic: `ffprobe unavailable: ${err.message}` });
+      resolve12({ decode: "unchecked", decodeDiagnostic: `ffprobe unavailable: ${err.message}` });
     });
     child.on("close", (code) => {
       if (code !== 0) {
-        resolve11({ decode: "damaged", decodeDiagnostic: stderr.trim().slice(0, 500) });
+        resolve12({ decode: "damaged", decodeDiagnostic: stderr.trim().slice(0, 500) });
         return;
       }
       try {
         const parsed = JSON.parse(stdout);
         const video = parsed.streams?.find((s) => s.codec_name);
         if (!video) {
-          resolve11({ decode: "damaged", decodeDiagnostic: "no decodable stream" });
+          resolve12({ decode: "damaged", decodeDiagnostic: "no decodable stream" });
           return;
         }
-        resolve11({
+        resolve12({
           decode: "playable",
           media: {
             durationSeconds: parsed.format?.duration ? Number(parsed.format.duration) : void 0,
@@ -7252,7 +7252,7 @@ async function probeMedia(path) {
           }
         });
       } catch (err) {
-        resolve11({ decode: "damaged", decodeDiagnostic: `probe parse failure: ${String(err)}` });
+        resolve12({ decode: "damaged", decodeDiagnostic: `probe parse failure: ${String(err)}` });
       }
     });
   });
@@ -8726,11 +8726,10 @@ var require__2 = __commonJS({
 
 // src/server.ts
 import { randomUUID as randomUUID9 } from "node:crypto";
-import { execFile } from "node:child_process";
-import { realpath as realpath2 } from "node:fs/promises";
-import { join as join17, resolve as resolve10 } from "node:path";
-import { pathToFileURL } from "node:url";
-import { promisify } from "node:util";
+import { execFile as execFile2 } from "node:child_process";
+import { realpath as realpath3 } from "node:fs/promises";
+import { resolve as resolve11 } from "node:path";
+import { promisify as promisify2 } from "node:util";
 
 // node_modules/zod/v4/core/util.js
 var util_exports = {};
@@ -8931,9 +8930,9 @@ function putProp(target2, key, value) {
   else
     target2[key] = value;
 }
-function mirrorShape(target2, source, keys2, wrap) {
+function mirrorShape(target2, source, keys, wrap) {
   const raw = sourceShape(source);
-  for (const key of keys2) {
+  for (const key of keys) {
     const desc = Object.getOwnPropertyDescriptor(raw, key);
     if (!desc.enumerable)
       continue;
@@ -8974,12 +8973,12 @@ function getElementAtPath(obj, path) {
   return path.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
-  const keys2 = Object.keys(promisesObj);
-  const promises = keys2.map((key) => promisesObj[key]);
+  const keys = Object.keys(promisesObj);
+  const promises = keys.map((key) => promisesObj[key]);
   return Promise.all(promises).then((results) => {
     const resolvedObj = {};
-    for (let i = 0; i < keys2.length; i++) {
-      resolvedObj[keys2[i]] = results[i];
+    for (let i = 0; i < keys.length; i++) {
+      resolvedObj[keys[i]] = results[i];
     }
     return resolvedObj;
   });
@@ -9201,15 +9200,15 @@ function pick(schema, mask) {
 }
 function maskedKeys(schema, mask) {
   const raw = sourceShape(schema);
-  const keys2 = [];
+  const keys = [];
   for (const key of Reflect.ownKeys(mask)) {
     if (!Object.getOwnPropertyDescriptor(raw, key)?.enumerable) {
       throw new Error(`Unrecognized key: "${String(key)}"`);
     }
     if (mask[key])
-      keys2.push(key);
+      keys.push(key);
   }
-  return keys2;
+  return keys;
 }
 function omit(schema, mask) {
   const currDef = schema._zod.def;
@@ -11032,10 +11031,10 @@ function handlePropertyResult(result2, final, key, input, optin, optout) {
 }
 var NO_SYMBOL_KEYS = [];
 function normalizeDef(def) {
-  const keys2 = Object.keys(def.shape);
+  const keys = Object.keys(def.shape);
   const ownSymbols = Object.getOwnPropertySymbols(def.shape);
   const symbolKeys = ownSymbols.length ? ownSymbols : NO_SYMBOL_KEYS;
-  const allKeys = symbolKeys.length ? [...keys2, ...symbolKeys] : keys2;
+  const allKeys = symbolKeys.length ? [...keys, ...symbolKeys] : keys;
   for (const k of allKeys) {
     if (!def.shape?.[k]?._zod?.traits?.has("$ZodType")) {
       throw new Error(`Invalid element at key "${String(k)}": expected a Zod schema`);
@@ -11047,8 +11046,8 @@ function normalizeDef(def) {
     allKeys,
     symbolKeys,
     // string-only: handleCatchall matches it against `for...in`, which never yields a symbol
-    keySet: new Set(keys2),
-    numKeys: keys2.length,
+    keySet: new Set(keys),
+    numKeys: keys.length,
     optionalKeys: new Set(okeys)
   };
 }
@@ -11521,19 +11520,19 @@ function handleIntersectionResults(result2, left, right) {
   let unrecIssue;
   const keyIssues = /* @__PURE__ */ new Map();
   const collect = (iss, side) => {
-    let keys2;
+    let keys;
     if (iss.code === "unrecognized_keys" && !iss.path?.length) {
       unrecIssue ?? (unrecIssue = iss);
-      keys2 = iss.keys;
+      keys = iss.keys;
     } else if (iss.code === "invalid_key" && iss.origin === "record" && iss.path?.length === 1) {
       const k = String(iss.path[0]);
       if (!keyIssues.has(k))
         keyIssues.set(k, iss);
-      keys2 = [k];
+      keys = [k];
     } else {
       return false;
     }
-    for (const k of keys2) {
+    for (const k of keys) {
       if (!unrecKeys.has(k))
         unrecKeys.set(k, {});
       unrecKeys.get(k)[side] = true;
@@ -12046,7 +12045,7 @@ var recursive = /* @__PURE__ */ new WeakMap();
 var NONE = 0;
 var ASSUMED = 1;
 var PROVEN = 2;
-function isRecursive(inst, stack, resolve11) {
+function isRecursive(inst, stack, resolve12) {
   const cached2 = recursive.get(inst);
   if (cached2 !== void 0)
     return cached2 ? PROVEN : NONE;
@@ -12056,7 +12055,7 @@ function isRecursive(inst, stack, resolve11) {
   let result2 = NONE;
   const check = (child) => {
     if (result2 !== PROVEN && child?._zod) {
-      const answer = isRecursive(child, stack, resolve11);
+      const answer = isRecursive(child, stack, resolve12);
       if (answer > result2)
         result2 = answer;
     }
@@ -12067,7 +12066,7 @@ function isRecursive(inst, stack, resolve11) {
       const desc = Object.getOwnPropertyDescriptor(sh, key);
       if (spread && !desc.enumerable)
         continue;
-      const child = desc.get ? ASSUMED : desc.value?._zod ? isRecursive(desc.value, stack, resolve11) : NONE;
+      const child = desc.get ? ASSUMED : desc.value?._zod ? isRecursive(desc.value, stack, resolve12) : NONE;
       if (child > answer)
         answer = child;
     }
@@ -12131,7 +12130,7 @@ function isRecursive(inst, stack, resolve11) {
       break;
     // `$ZodLazy` caches its inner on the def, so a resolved edge is followed exactly
     case "lazy": {
-      const inner = def._cachedInner ?? (resolve11 ? inst._zod.innerType : void 0);
+      const inner = def._cachedInner ?? (resolve12 ? inst._zod.innerType : void 0);
       merge2(inner ? isRecursive(inner, stack, false) : ASSUMED);
       break;
     }
@@ -13202,24 +13201,24 @@ function compactTypeUnion(schema) {
   const options2 = schema.anyOf;
   if (!Array.isArray(options2) || options2.length === 0 || schema.type !== void 0)
     return;
-  const types = [];
+  const types2 = [];
   for (const option of options2) {
     if (!option || typeof option !== "object")
       return;
     compactTypeUnion(option);
-    const keys2 = Object.keys(option);
-    if (keys2.length !== 1 || keys2[0] !== "type")
+    const keys = Object.keys(option);
+    if (keys.length !== 1 || keys[0] !== "type")
       return;
     const type = option.type;
     for (const member of Array.isArray(type) ? type : [type]) {
       if (typeof member !== "string")
         return;
-      if (!types.includes(member))
-        types.push(member);
+      if (!types2.includes(member))
+        types2.push(member);
     }
   }
   delete schema.anyOf;
-  schema.type = types.length === 1 ? types[0] : types;
+  schema.type = types2.length === 1 ? types2[0] : types2;
 }
 var FOLDABLE_KEYS = /* @__PURE__ */ new Set(["type", "properties", "required", "additionalProperties"]);
 var UNION_KEYS = ["oneOf", "anyOf"];
@@ -13595,8 +13594,8 @@ var contributors = {
 function aggregateChecks(schema) {
   const agg = {};
   const def = schema._zod.def;
-  const list = schema._zod.traits.has("$ZodCheck") ? [schema, ...def.checks ?? []] : def.checks ?? [];
-  for (const ch of list)
+  const list2 = schema._zod.traits.has("$ZodCheck") ? [schema, ...def.checks ?? []] : def.checks ?? [];
+  for (const ch of list2)
     contributors[ch._zod.def.check]?.(agg, ch._zod.def);
   const bag = schema._zod.bag;
   if (bag.minimum !== void 0)
@@ -13895,8 +13894,8 @@ function stringifyKeyNames(bySchema, json2, visited) {
     if (mapped.some((branch, i) => branch !== branches[i]))
       json2 = { ...json2, [keyword]: mapped };
   }
-  const types = Array.isArray(json2.type) ? json2.type : [json2.type];
-  const numericType = !types.includes("string") && types.some((t) => t === "number" || t === "integer");
+  const types2 = Array.isArray(json2.type) ? json2.type : [json2.type];
+  const numericType = !types2.includes("string") && types2.some((t) => t === "number" || t === "integer");
   const values = json2.enum ?? (json2.const !== void 0 ? [json2.const] : void 0);
   if (!numericType && !values?.some((v) => typeof v === "number"))
     return json2;
@@ -13909,7 +13908,7 @@ function stringifyKeyNames(bySchema, json2, visited) {
     return rest;
   rest.type = "string";
   if (!values)
-    rest.pattern = (types.includes("number") ? number : integer).source;
+    rest.pattern = (types2.includes("number") ? number : integer).source;
   return rest;
 }
 var pendingRecords = /* @__PURE__ */ new WeakMap();
@@ -14887,11 +14886,11 @@ var ZodEnum = /* @__PURE__ */ $constructor("ZodEnum", (inst, def) => {
   inst._zod.processJSONSchema = (ctx, json2, params) => enumProcessor(inst, ctx, json2, params);
   inst.enum = def.entries;
   inst.options = [...inst._zod.values];
-  const keys2 = new Set(Object.keys(def.entries));
+  const keys = new Set(Object.keys(def.entries));
   inst.extract = (values, params) => {
     const newEntries = {};
     for (const value of values) {
-      if (keys2.has(value)) {
+      if (keys.has(value)) {
         newEntries[value] = def.entries[value];
       } else
         throw new Error(`Key ${value} not found in enum`);
@@ -14906,7 +14905,7 @@ var ZodEnum = /* @__PURE__ */ $constructor("ZodEnum", (inst, def) => {
   inst.exclude = (values, params) => {
     const newEntries = { ...def.entries };
     for (const value of values) {
-      if (keys2.has(value)) {
+      if (keys.has(value)) {
         delete newEntries[value];
       } else
         throw new Error(`Key ${value} not found in enum`);
@@ -17211,7 +17210,7 @@ var Protocol = class {
           return;
         }
         const pollInterval = task2.pollInterval ?? this._options?.defaultTaskPollInterval ?? 1e3;
-        await new Promise((resolve11) => setTimeout(resolve11, pollInterval));
+        await new Promise((resolve12) => setTimeout(resolve12, pollInterval));
         options2?.signal?.throwIfAborted();
       }
     } catch (error2) {
@@ -17228,7 +17227,7 @@ var Protocol = class {
    */
   request(request, resultSchema, options2) {
     const { relatedRequestId, resumptionToken, onresumptiontoken, task, relatedTask } = options2 ?? {};
-    return new Promise((resolve11, reject) => {
+    return new Promise((resolve12, reject) => {
       const earlyReject = (error2) => {
         reject(error2);
       };
@@ -17306,7 +17305,7 @@ var Protocol = class {
           if (!parseResult.success) {
             reject(parseResult.error);
           } else {
-            resolve11(parseResult.data);
+            resolve12(parseResult.data);
           }
         } catch (error2) {
           reject(error2);
@@ -17567,12 +17566,12 @@ var Protocol = class {
       }
     } catch {
     }
-    return new Promise((resolve11, reject) => {
+    return new Promise((resolve12, reject) => {
       if (signal.aborted) {
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
         return;
       }
-      const timeoutId = setTimeout(resolve11, interval2);
+      const timeoutId = setTimeout(resolve12, interval2);
       signal.addEventListener("abort", () => {
         clearTimeout(timeoutId);
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
@@ -18448,12 +18447,12 @@ var StdioServerTransport = class {
     this.onclose?.();
   }
   send(message2) {
-    return new Promise((resolve11) => {
+    return new Promise((resolve12) => {
       const json2 = serializeMessage(message2);
       if (this._stdout.write(json2)) {
-        resolve11();
+        resolve12();
       } else {
-        this._stdout.once("drain", resolve11);
+        this._stdout.once("drain", resolve12);
       }
     });
   }
@@ -18461,7 +18460,7 @@ var StdioServerTransport = class {
 
 // src/manager.ts
 import { randomUUID as randomUUID7 } from "node:crypto";
-import { mkdir as mkdir10, readFile as readFile11, cp, access, statfs } from "node:fs/promises";
+import { mkdir as mkdir10, readFile as readFile11, cp, access } from "node:fs/promises";
 import { dirname as dirname9, join as join15, resolve as resolve9 } from "node:path";
 
 // src/config.ts
@@ -18715,12 +18714,12 @@ var SubmissionStore = class {
 // node_modules/@wezzard/relay-driver-core/dist/src/identity.js
 var SUFFIX_ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz";
 function allocateSuffix(now = Date.now(), random = Math.random) {
-  const time4 = now.toString(36).padStart(9, "0");
+  const time3 = now.toString(36).padStart(9, "0");
   let rand = "";
   for (let i = 0; i < 8; i++) {
     rand += SUFFIX_ALPHABET[Math.floor(random() * SUFFIX_ALPHABET.length)];
   }
-  return `${time4}${rand}`;
+  return `${time3}${rand}`;
 }
 function allocateId(kind, now = Date.now(), random = Math.random) {
   return { kind, suffix: allocateSuffix(now, random) };
@@ -18853,10 +18852,10 @@ var Session = class {
    * transmission; the same outcome states as exec() apply (D14/D17).
    */
   async runScript(localPath, remotePath, language2, options2 = {}) {
-    const { createHash: createHash8 } = await import("node:crypto");
-    const { readFile: readFile12 } = await import("node:fs/promises");
-    const bytes = await readFile12(localPath);
-    const scriptSha256 = createHash8("sha256").update(bytes).digest("hex");
+    const { createHash: createHash7 } = await import("node:crypto");
+    const { readFile: readFile13 } = await import("node:fs/promises");
+    const bytes = await readFile13(localPath);
+    const scriptSha256 = createHash7("sha256").update(bytes).digest("hex");
     const upload = await this.transport.upload(localPath, { remotePath });
     const executionId = formatId(allocateId("execution"));
     const interpreter = language2 === "python" ? "python3" : language2 === "typescript" ? "tsx" : "node";
@@ -18904,8 +18903,8 @@ var Session = class {
    * remote after receipt. Same outcome states as exec() (D14/D17).
    */
   async runCode(code, language2, options2 = {}) {
-    const { createHash: createHash8 } = await import("node:crypto");
-    const codeSha256 = createHash8("sha256").update(code, "utf8").digest("hex");
+    const { createHash: createHash7 } = await import("node:crypto");
+    const codeSha256 = createHash7("sha256").update(code, "utf8").digest("hex");
     const executionId = formatId(allocateId("execution"));
     const interpreter = language2 === "python" ? "python3" : language2 === "typescript" ? "tsx" : "node";
     const submission = {
@@ -19238,7 +19237,7 @@ var VmService = class {
       });
       const reader = response.body?.getReader();
       const chunks = [];
-      let size2 = 0;
+      let size = 0;
       const bound = response.ok ? this.maxResponseBytes : Math.min(4096, this.maxResponseBytes);
       let truncated = false;
       if (reader) {
@@ -19246,9 +19245,9 @@ var VmService = class {
           for (; ; ) {
             const { value, done } = await reader.read();
             if (done) break;
-            const remaining = bound - size2;
+            const remaining = bound - size;
             chunks.push(value.subarray(0, remaining));
-            size2 += Math.min(value.byteLength, remaining);
+            size += Math.min(value.byteLength, remaining);
             if (value.byteLength > remaining) {
               truncated = true;
               await reader.cancel();
@@ -19606,25 +19605,9 @@ import { randomUUID as randomUUID3 } from "node:crypto";
 // src/util.ts
 import { spawn as spawn3 } from "node:child_process";
 import { createHash as createHash3, randomUUID as randomUUID2 } from "node:crypto";
-import { mkdir as mkdir3, rename as rename3, lstat as lstat2, readdir as readdir3, open as open3 } from "node:fs/promises";
+import { mkdir as mkdir3, readFile as readFile5, rename as rename3, lstat as lstat2, readdir as readdir3, open as open3 } from "node:fs/promises";
 import { dirname as dirname4, join as join7, resolve as resolve4, relative as relative3, isAbsolute as isAbsolute3 } from "node:path";
 var hash = (bytes) => createHash3("sha256").update(bytes).digest("hex");
-async function hashFile(path) {
-  const file = await open3(path, "r");
-  try {
-    const digest = createHash3("sha256"), chunk = Buffer.alloc(8 * 1024 * 1024);
-    let bytes = 0;
-    for (; ; ) {
-      const { bytesRead } = await file.read(chunk, 0, chunk.length, null);
-      if (!bytesRead) break;
-      digest.update(chunk.subarray(0, bytesRead));
-      bytes += bytesRead;
-    }
-    return { sha256: digest.digest("hex"), bytes };
-  } finally {
-    await file.close();
-  }
-}
 async function jsonFile(path, value) {
   await mkdir3(dirname4(path), { recursive: true, mode: 448 });
   const tmp = `${path}.${randomUUID2()}.tmp`;
@@ -19658,8 +19641,8 @@ async function inventory(root) {
     if (info.isDirectory()) {
       for (const name of (await readdir3(path)).sort()) await walk(join7(path, name));
     } else if (info.isFile()) {
-      const { sha256, bytes } = await hashFile(path);
-      result2.push({ path: relative3(root, path), sha256, bytes });
+      const bytes = await readFile5(path);
+      result2.push({ path: relative3(root, path), sha256: hash(bytes), bytes: bytes.length });
     } else throw new Error(`Not a regular file: ${path}`);
   }
   await walk(root);
@@ -19667,17 +19650,17 @@ async function inventory(root) {
 }
 async function command(argv2, options2 = {}) {
   options2.signal?.throwIfAborted();
-  return new Promise((resolve11, reject) => {
+  return new Promise((resolve12, reject) => {
     const child = spawn3(argv2[0], argv2.slice(1), { cwd: options2.cwd, env: options2.env, stdio: ["ignore", "pipe", "pipe"], signal: options2.signal });
-    let stdout = "", stderr = "", size2 = 0;
+    let stdout = "", stderr = "", size = 0;
     let failure2;
     const timer = setTimeout(() => {
       failure2 = new Error(`Command timed out: ${argv2[0]}`);
       child.kill("SIGKILL");
     }, options2.timeoutMs ?? 1e4);
     const consume = (channel, chunk) => {
-      size2 += chunk.length;
-      if (size2 > (options2.maxBytes ?? 128 * 1024)) {
+      size += chunk.length;
+      if (size > (options2.maxBytes ?? 128 * 1024)) {
         failure2 = new Error(`Command output exceeded limit: ${argv2[0]}`);
         child.kill("SIGKILL");
         return;
@@ -19694,14 +19677,13 @@ async function command(argv2, options2 = {}) {
     child.on("close", (code) => {
       clearTimeout(timer);
       if (failure2) reject(failure2);
-      else resolve11({ stdout, stderr, code: code ?? -1 });
+      else resolve12({ stdout, stderr, code: code ?? -1 });
     });
   });
 }
 
 // src/transfer.ts
-var STAGING_MAX_BYTES = 512 * 1024 * 1024;
-var STAGING_MAX_FILES = 1e4;
+var MAX_BYTES = 512 * 1024 * 1024;
 var MAX_IMAGE_BYTES = 64 * 1024 * 1024;
 var MAX_IMAGE_METADATA_BYTES = 4 * 1024 * 1024;
 var ImageTransferError = class extends Error {
@@ -19750,11 +19732,9 @@ async function assertHostPath(root, target2, allowMissing = false) {
   }
 }
 var GUEST_PATH = `function check(root,target,missing=false){root=p.resolve(root);target=p.resolve(target);const rel=p.relative(root,target);if(rel==='..'||rel.startsWith('../')||p.isAbsolute(rel))throw Error('Path must be inside '+root+': '+target);let f=root;for(const part of ['',...(rel?rel.split('/'):[])]){if(part)f=p.join(f,part);try{if(fs.lstatSync(f).isSymbolicLink())throw Error('symlink ancestor '+f);}catch(e){if(missing&&e.code==='ENOENT')return;throw e;}}}`;
-var GUEST_DIGEST = `function digest(f,size){const fd=fs.openSync(f,'r');try{const h=c.createHash('sha256'),b=Buffer.alloc(8388608);let n=0,r;while((r=fs.readSync(fd,b,0,b.length,null))>0){h.update(b.subarray(0,r));n+=r;}if(n!==size)throw Error('Source changed during inventory');return h.digest('hex');}finally{fs.closeSync(fd);}}`;
 var PREPARE = `const fs=require('fs'),p=require('path');${GUEST_PATH}const [root,target]=process.argv.slice(1);check(root,target,true);fs.mkdirSync(p.dirname(target),{recursive:true,mode:448});check(root,target,true);`;
-var SCAN = `const fs=require('fs'),p=require('path'),c=require('crypto');${GUEST_PATH}${GUEST_DIGEST}const [root,approved,frame,frameRoot]=process.argv.slice(1),out=[];check(approved,root);function walk(f){let s=fs.lstatSync(f);if(s.isSymbolicLink())throw Error('symlink '+f);if(s.isDirectory()){for(const n of fs.readdirSync(f).sort())walk(p.join(f,n));}else if(s.isFile()){out.push({path:p.relative(root,f),sha256:digest(f,s.size),bytes:s.size});}else throw Error('special file '+f);}walk(root);check(approved,root);check(frameRoot,frame,true);fs.mkdirSync(p.dirname(frame),{recursive:true,mode:448});check(frameRoot,frame,true);const b=Buffer.from(JSON.stringify(out));fs.writeFileSync(frame,b,{flag:'wx',mode:384});console.log(JSON.stringify({path:frame,sha256:c.createHash('sha256').update(b).digest('hex'),bytes:b.length}));`;
-var FILE_FACT = `const fs=require('fs'),p=require('path'),c=require('crypto');${GUEST_PATH}${GUEST_DIGEST}const [root,file]=process.argv.slice(1);check(root,file);const s=fs.lstatSync(file);if(!s.isFile())throw Error('Invalid frame file');const sha256=digest(file,s.size);check(root,file);console.log(JSON.stringify({path:file,sha256,bytes:s.size}));`;
-var SIZE = `const fs=require('fs'),p=require('path');${GUEST_PATH}const [root,approved]=process.argv.slice(1);check(approved,root);let bytes=0,files=0;function walk(f){const s=fs.lstatSync(f);if(s.isSymbolicLink())throw Error('symlink '+f);if(s.isDirectory()){for(const n of fs.readdirSync(f))walk(p.join(f,n));}else if(s.isFile()){bytes+=s.size;files++;}else throw Error('special file '+f);}walk(root);console.log(JSON.stringify({bytes,files}));`;
+var SCAN = `const fs=require('fs'),p=require('path'),c=require('crypto');${GUEST_PATH}const [root,approved,frame,frameRoot]=process.argv.slice(1),out=[];let total=0;check(approved,root);function walk(f){let s=fs.lstatSync(f);if(s.isSymbolicLink())throw Error('symlink '+f);if(s.isDirectory()){for(const n of fs.readdirSync(f).sort())walk(p.join(f,n));}else if(s.isFile()){total+=s.size;if(total>536870912||out.length>=10000)throw Error('extraction exceeds 512MiB / 10000 files');const b=fs.readFileSync(f);if(b.length!==s.size)throw Error('Source changed during inventory');out.push({path:p.relative(root,f),sha256:c.createHash('sha256').update(b).digest('hex'),bytes:b.length});}else throw Error('special file '+f);}walk(root);check(approved,root);check(frameRoot,frame,true);fs.mkdirSync(p.dirname(frame),{recursive:true,mode:448});check(frameRoot,frame,true);const b=Buffer.from(JSON.stringify(out));fs.writeFileSync(frame,b,{flag:'wx',mode:384});console.log(JSON.stringify({path:frame,sha256:c.createHash('sha256').update(b).digest('hex'),bytes:b.length}));`;
+var FILE_FACT = `const fs=require('fs'),p=require('path'),c=require('crypto');${GUEST_PATH}const [root,file]=process.argv.slice(1);check(root,file);const s=fs.lstatSync(file);if(!s.isFile()||s.size>536870912)throw Error('Invalid frame file');const b=fs.readFileSync(file);if(b.length!==s.size)throw Error('Source changed during inventory');check(root,file);console.log(JSON.stringify({path:file,sha256:c.createHash('sha256').update(b).digest('hex'),bytes:b.length}));`;
 var REMOVE_FRAME = `const fs=require('fs'),p=require('path');${GUEST_PATH}const [root,file]=process.argv.slice(1);check(root,file,true);fs.rmSync(file,{force:true});`;
 var IMAGE_FACT = `const fs=require('fs'),p=require('path'),c=require('crypto');${GUEST_PATH}
 const [root,file,limit='67108864',kind='image']=process.argv.slice(1);
@@ -19777,14 +19757,9 @@ try {
   if(identity(fs.lstatSync(file))!==identity(s))fail('integrity-failed','Source changed after image hash');
   console.log(JSON.stringify({path:file,sha256:c.createHash('sha256').update(b).digest('hex'),bytes:b.length,identity:identity(s)}));
 }catch(e){console.log(JSON.stringify({error:e.imageCode||(e.code==='ENOENT'?'image-missing':/symlink|Path must be inside|ELOOP|ENOTDIR/.test(e.message)?'unsafe-path':'transfer-failed'),message:e.message}));}`;
-var SCAN_BASE_MS = 12e4;
-var SCAN_MS_PER_MIB = 125;
-function scanTimeoutMs(bytes) {
-  return SCAN_BASE_MS + Math.ceil(bytes / 1048576) * SCAN_MS_PER_MIB;
-}
 function validFact(value) {
   const f = value;
-  return !!f && typeof f === "object" && typeof f.path === "string" && typeof f.sha256 === "string" && /^[a-f0-9]{64}$/.test(f.sha256) && Number.isSafeInteger(f.bytes) && f.bytes >= 0;
+  return !!f && typeof f === "object" && typeof f.path === "string" && typeof f.sha256 === "string" && /^[a-f0-9]{64}$/.test(f.sha256) && Number.isSafeInteger(f.bytes) && f.bytes >= 0 && f.bytes <= MAX_BYTES;
 }
 var Transfer = class {
   constructor(vm, name, node2, options2 = {}) {
@@ -19807,7 +19782,7 @@ var Transfer = class {
         } catch (retentionError) {
           throw new AggregateError([error2, retentionError], `${diagnostic}; transfer retry evidence failed: ${String(retentionError)}`);
         }
-        await new Promise((resolve11) => setTimeout(resolve11, attempt * 250));
+        await new Promise((resolve12) => setTimeout(resolve12, attempt * 250));
       }
     }
   }
@@ -19819,14 +19794,14 @@ var Transfer = class {
       const diagnostic = `Guest setup/transfer command failed (${result2.code}): ${result2.stderr.slice(0, 1e3)}`;
       if (attempt >= 3 || result2.code !== 255 || !/Permission denied \((?:publickey,)?password(?:,keyboard-interactive)?\)/.test(result2.stderr)) throw new Error(diagnostic);
       await this.options.onRetry?.({ operation: "metadata", attempt, diagnostic });
-      await new Promise((resolve11) => setTimeout(resolve11, attempt * 250));
+      await new Promise((resolve12) => setTimeout(resolve12, attempt * 250));
     }
   }
   async pushFile(local, remote, approvedLocalRoot = dirname5(local)) {
     await assertHostPath(approvedLocalRoot, local);
     const info = await lstat3(local);
     if (!info.isFile()) throw new Error(`Expected regular file: ${local}`);
-    if (info.size > STAGING_MAX_BYTES) throw new Error("Staging exceeds 512 MiB");
+    if (info.size > MAX_BYTES) throw new Error("Staging exceeds 512 MiB");
     const bytes = await readFile6(local), before = hash(bytes);
     const guestRoot = this.options.guestRoot ?? dirname5(remote);
     await this.checked([this.node, "-e", PREPARE, guestRoot, remote]);
@@ -19837,14 +19812,14 @@ var Transfer = class {
     await assertHostPath(approvedLocalRoot, local);
     const after = await readFile6(local);
     if (hash(after) !== before || after.length !== bytes.length) throw new Error(`Staging source changed: ${local}`);
-    const facts = await this.scan(remote, guestRoot, bytes.length);
+    const facts = await this.scan(remote, guestRoot);
     if (facts.length !== 1 || facts[0].sha256 !== before || facts[0].bytes !== bytes.length) throw new Error(`Staging checksum mismatch: ${local}`);
     return { local, remote, sha256: before, bytes: facts[0].bytes };
   }
   async pushTree(local, remote, approvedLocalRoot = local) {
     await assertHostPath(approvedLocalRoot, local);
     const files = await inventory(local);
-    if (files.length > STAGING_MAX_FILES || files.reduce((sum, file) => sum + file.bytes, 0) > STAGING_MAX_BYTES) throw new Error("Staging exceeds 512MiB / 10000 files");
+    if (files.length > 1e4 || files.reduce((sum, file) => sum + file.bytes, 0) > MAX_BYTES) throw new Error("Staging exceeds 512MiB / 10000 files");
     const result2 = [];
     for (const file of files) {
       const staged = await this.pushFile(within(local, file.path), within(remote, file.path), approvedLocalRoot);
@@ -20112,18 +20087,8 @@ var Transfer = class {
       options2.signal?.removeEventListener("abort", abort);
     }
   }
-  /** The total bytes of a guest tree, from a stat-only walk. */
-  async size(remote, approvedRoot) {
-    const size = JSON.parse(await this.checked([this.node, "-e", SIZE, remote, approvedRoot], SCAN_BASE_MS));
-    const bytes = size?.bytes;
-    if (typeof bytes !== "number" || !Number.isSafeInteger(bytes) || bytes < 0) throw new Error("Invalid remote inventory size");
-    return bytes;
-  }
-  /** `expectedBytes`, when the caller knows the size (a staged file, or the inventory
-   * before a pull), sets the timeout without the stat-only size walk. */
-  async scan(remote, approvedRoot = remote, expectedBytes) {
+  async scan(remote, approvedRoot = remote) {
     const guestRoot = this.options.guestRoot ?? dirname5(remote);
-    const timeoutMs2 = scanTimeoutMs(expectedBytes ?? await this.size(remote, approvedRoot));
     const frame = join8(guestRoot, `.inventory-${randomUUID3()}.json`);
     const tempRoot = this.options.hostTempRoot ?? tmpdir();
     await assertHostPath(tempRoot, tempRoot, true);
@@ -20131,17 +20096,20 @@ var Transfer = class {
     await assertHostPath(tempRoot, tempRoot);
     const hostDirectory = await mkdtemp(join8(tempRoot, "relay-inventory-"));
     try {
-      const fact = JSON.parse(await this.checked([this.node, "-e", SCAN, remote, approvedRoot, frame, guestRoot], timeoutMs2));
+      const fact = JSON.parse(await this.checked([this.node, "-e", SCAN, remote, approvedRoot, frame, guestRoot], 12e4));
       if (!validFact(fact) || fact.path !== frame) throw new Error("Invalid remote inventory frame");
       const result2 = JSON.parse((await this.pullFrame(frame, join8(hostDirectory, "inventory.json"), guestRoot, tempRoot, fact)).toString("utf8"));
-      if (!Array.isArray(result2)) throw new Error("Invalid remote inventory");
+      if (!Array.isArray(result2) || result2.length > 1e4) throw new Error("Invalid remote inventory");
+      let total = 0;
       const paths2 = /* @__PURE__ */ new Set();
       for (const file of result2) {
         if (!validFact(file) || paths2.has(file.path)) throw new Error("Invalid remote file fact");
         if (file.path) within("/inventory", file.path);
         else if (result2.length !== 1) throw new Error("Invalid remote inventory root file");
         paths2.add(file.path);
+        total += file.bytes;
       }
+      if (total > MAX_BYTES) throw new Error("Extraction exceeds 512 MiB");
       return result2;
     } finally {
       try {
@@ -20152,11 +20120,9 @@ var Transfer = class {
       }
     }
   }
-  /** Capture source hashes before pull, compare host bytes, then source inventory again.
-   * `beforePull` sees the source inventory before any byte is pulled and may refuse the pull. */
-  async pullVerified(remote, local, approvedRoot = remote, localRoot = dirname5(local), options2 = {}) {
+  /** Capture source hashes before pull, compare host bytes, then source inventory again. */
+  async pullVerified(remote, local, approvedRoot = remote, localRoot = dirname5(local)) {
     const before = await this.scan(remote, approvedRoot);
-    await options2.beforePull?.(before);
     await assertHostPath(localRoot, local, true);
     await mkdir4(dirname5(local), { recursive: true, mode: 448 });
     await assertHostPath(localRoot, local, true);
@@ -20169,8 +20135,8 @@ var Transfer = class {
       await this.guestPath(approvedRoot, remote);
       await assertHostPath(localRoot, local);
       if (!(await lstat3(local)).isFile()) throw new Error("Invalid extraction file");
-      const pulled = await hashFile(local);
-      if (pulled.sha256 !== before[0].sha256 || pulled.bytes !== before[0].bytes) throw new Error(`Extraction checksum mismatch: ${remote}`);
+      const bytes = await readFile6(local);
+      if (hash(bytes) !== before[0].sha256 || bytes.length !== before[0].bytes) throw new Error(`Extraction checksum mismatch: ${remote}`);
     } else {
       await mkdir4(local, { recursive: true, mode: 448 });
       for (const file of before) {
@@ -20190,7 +20156,7 @@ var Transfer = class {
       await assertHostPath(localRoot, local);
       if (JSON.stringify(await inventory(local)) !== JSON.stringify(before)) throw new Error(`Extraction inventory mismatch: ${remote}`);
     }
-    if (JSON.stringify(await this.scan(remote, approvedRoot, before.reduce((sum, file) => sum + file.bytes, 0))) !== JSON.stringify(before)) throw new Error(`Source changed during extraction: ${remote}`);
+    if (JSON.stringify(await this.scan(remote, approvedRoot)) !== JSON.stringify(before)) throw new Error(`Source changed during extraction: ${remote}`);
     await assertHostPath(localRoot, local);
     return before;
   }
@@ -20216,8 +20182,6 @@ var VmTransport = class {
   because = "";
   timeoutMs = 12e4;
   diagnostic = false;
-  /** The current run's cancellation: a cancelled dispatch stops waiting for the receiver and is reported as uncertain. */
-  signal;
   response;
   async send(request) {
     if (!this.because.trim()) throw new Error("Run execution intent is required");
@@ -20242,7 +20206,7 @@ var VmTransport = class {
         INVOKE,
         join9(this.guestRoot, "receiver.mjs"),
         remote
-      ], this.timeoutMs + 18e4 + wait, { signal: this.signal });
+      ], this.timeoutMs + 18e4 + wait);
       if (result2.code !== 0) throw new Error(`Receiver exit ${result2.code}: ${result2.stderr.slice(0, 1e3)}`);
       const guestReceipt = join9(this.guestRoot, "state", "receiver", "receipts", `${request.executionId}.json`);
       const originalReceipt = join9(this.hostRoot, "receiver-receipts", `${request.executionId}.json`);
@@ -20272,458 +20236,12 @@ var VmTransport = class {
 };
 
 // src/package.ts
-import { createHash as createHash5 } from "node:crypto";
+import { createHash as createHash4 } from "node:crypto";
 import { lstat as lstat4, readFile as readFile7, readdir as readdir4, mkdir as mkdir5, writeFile as writeFile3, rm as rm2 } from "node:fs/promises";
 import { dirname as dirname6, join as join10, resolve as resolve6, parse as parse4 } from "node:path";
-
-// src/review-page.ts
-import { createHash as createHash4 } from "node:crypto";
-var textFile = /\.(json|jsonl|ndjson|log|txt|md|csv|tsv|ya?ml|xml|toml)$/i;
-var escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-var src = (path) => escapeHtml(path.split("/").map(encodeURIComponent).join("/"));
-var link2 = (step2) => `#step-${encodeURIComponent(step2.id)}`;
-var time3 = (iso) => iso && Number.isFinite(Date.parse(iso)) ? new Date(iso).toISOString().slice(11, 19) : void 0;
-var preciseTime = (iso) => iso && Number.isFinite(Date.parse(iso)) ? new Date(iso).toISOString().slice(11, 23) : void 0;
-var duration3 = (ms) => ms < 6e4 ? `${(ms / 1e3).toFixed(1)} s` : `${Math.floor(ms / 6e4)} min ${Math.round(ms % 6e4 / 1e3)} s`;
-var months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-var utcStamp = (iso, year = false) => {
-  const d = new Date(iso), two = (n) => String(n).padStart(2, "0");
-  return `${months[d.getUTCMonth()]} ${d.getUTCDate()}, ${year ? `${d.getUTCFullYear()}, ` : ""}${two(d.getUTCHours())}:${two(d.getUTCMinutes())} UTC`;
-};
-var relayMark = `<svg viewBox="0 0 24 24" width="32" height="32" aria-hidden="true"><rect x="3.5" y="4" width="12" height="9.5" rx="2.6" fill="none" stroke="#fff" stroke-width="2" opacity=".75"/><rect x="8.5" y="10" width="12" height="9.5" rx="2.6" fill="#f7862a" stroke="#fff" stroke-width="2.1"/><path d="M12 14.8h5M15.2 12.9l1.9 1.9-1.9 1.9" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-var size = (bytes) => bytes >= 1e6 ? `${(bytes / 1e6).toFixed(1)} MB` : bytes >= 1e3 ? `${(bytes / 1e3).toFixed(1)} kB` : `${bytes} B`;
-var noun = (count, word) => count === 1 ? word : `${word}s`;
-var plural = (count, word) => `${count} ${noun(count, word)}`;
-var erred = (step2) => tone(step2.execution) !== "ok";
-var tone = (value) => ["passed", "complete", "completed"].includes(value) ? "ok" : ["failed", "refused"].includes(value) ? "bad" : "warn";
-var verdict = (value) => `<span class="verdict ${tone(value)}"><i aria-hidden="true"></i>${escapeHtml(value)}</span>`;
-var shellWord = (word) => /^[\w@%+=:,./-]+$/.test(word) ? word : `'${word.replace(/'/g, `'\\''`)}'`;
-function chronological(model) {
-  const at = (step2) => Date.parse(model.details.get(step2.id)?.at ?? "");
-  return model.steps.map((step2, index) => ({ step: step2, index })).sort((a, b) => (Number.isFinite(at(a.step)) ? at(a.step) : Infinity) - (Number.isFinite(at(b.step)) ? at(b.step) : Infinity) || a.index - b.index).map(({ step: step2 }) => step2);
-}
-function groupFindings(findings) {
-  const groups = /* @__PURE__ */ new Map();
-  for (const finding of findings) {
-    const match = /^(diagnostic|request|action) (\S+) (.*)$/.exec(finding);
-    const key = match ? `${match[1]} ${match[3]}` : finding;
-    const group = groups.get(key) ?? { sentence: finding, ids: [] };
-    if (match) group.ids.push(match[2]);
-    groups.set(key, group);
-  }
-  const sentence = (text4) => text4.replace(/^./, (c) => c.toUpperCase());
-  return [...groups.entries()].map(([key, group]) => {
-    if (group.ids.length < 2) return { text: sentence(group.sentence), ids: [] };
-    const [noun2, ...rest] = key.split(" ");
-    const verb = rest.join(" ").replace(/^has /, "have ").replace(/^is /, "are ").replace(/^lacks /, "lack ");
-    return { text: `${group.ids.length} ${noun2}s ${verb}`, ids: group.ids };
-  });
-}
-function describe2(step2, detail) {
-  const argv2 = detail?.argv?.length ? detail.argv.map(shellWord).join(" ") : void 0;
-  const generic = !!argv2 && (step2.title === "Diagnostic command" || step2.title.startsWith("exec "));
-  const title = generic && step2.because ? step2.because : step2.title;
-  const first = title.split("\n")[0].trimEnd();
-  const headline = first.length > 140 ? `${first.slice(0, 139).trimEnd()}\u2026` : first === title ? title : `${first} \u2026`;
-  const kind = step2.inputMode === "diagnostic" ? "Diagnostic" : argv2 && !step2.snapshots ? "Command" : "Action";
-  return { headline, command: argv2 ?? (headline === title ? void 0 : title), reasonShown: !(generic && step2.because), kind };
-}
-function receipts(observed2) {
-  const match = /^Authoritative receipt outcomes: (\[.*\])$/m.exec(observed2 ?? "");
-  if (!match) return void 0;
-  try {
-    const seen = /* @__PURE__ */ new Set();
-    return JSON.parse(match[1]).filter((r) => {
-      const key = JSON.stringify(r);
-      return seen.has(key) ? false : (seen.add(key), true);
-    });
-  } catch {
-    return void 0;
-  }
-}
-var exitBadge = (exit, timedOut) => `<span class="exit ${exit.code === 0 && !timedOut ? "ok" : "bad"}">exit ${escapeHtml(exit.code ?? "none")}${exit.signal ? ` \xB7 ${escapeHtml(exit.signal)}` : ""}${timedOut ? " \xB7 timed out" : ""}</span>`;
-function observed(step2, output, streams = true) {
-  const recorded = escapeHtml(step2.observed ?? "No confirmed result");
-  const raw = `<details class="raw"><summary>Receipt as recorded</summary><pre>${recorded}</pre></details>`;
-  if (output) {
-    const status = output.exit === void 0 ? "" : exitBadge({ code: output.exit, signal: output.signal }, output.timedOut);
-    const shown = streams ? streamsOf(output) : "";
-    return `${status}${shown || (streams ? `<p class="quiet">No output.</p>` : "")}${raw}`;
-  }
-  const list = receipts(step2.observed);
-  if (!list?.length) return `<pre class="plain">${recorded}</pre>`;
-  return `<ul class="receipts">${list.map((r) => `<li>${verdict(r.execution ?? r.outcome?.kind ?? "unknown")}${r.outcome?.exitStatus ? exitBadge(r.outcome.exitStatus) : ""}${r.outcome?.diagnostic ? `<span class="diag">${escapeHtml(r.outcome.diagnostic)}</span>` : ""}</li>`).join("")}</ul>${raw}`;
-}
-var streamsOf = (output) => ["stdout", "stderr"].filter((name) => output[name]?.trim()).map((name) => `<div class="stream"><span class="label">${name}</span><pre>${escapeHtml(output[name].trimEnd())}</pre></div>`).join("");
-function took(detail) {
-  const ms = Date.parse(detail?.afterAt ?? "") - Date.parse(detail?.beforeAt ?? "");
-  return Number.isFinite(ms) && ms >= 0 ? duration3(ms) : void 0;
-}
-var boxId = (step2, role) => `lightbox-${step2.id}--${role}`;
-var labelHtml = (label) => escapeHtml(label).replace(/^Step (\d+)/, `Step <span class="d">$1</span>`);
-var expandIcon = `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M9.5 2.5h4v4M6.5 13.5h-4v-4M13.5 2.5 9 7M2.5 13.5 7 9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-function lightboxes(boxes) {
-  const nav = (target2, side) => target2 ? `<button type="button" class="lb-nav ${side}" popovertarget="${escapeHtml(target2.id)}" aria-label="${side === "prev" ? "Previous" : "Next"}: ${escapeHtml(target2.label)}, ${escapeHtml(target2.title)}"><span class="dir" aria-hidden="true">${side === "prev" ? "\u2039" : "\u203A"}</span><span class="role">${labelHtml(target2.nav ?? target2.label)}</span></button>` : "";
-  return boxes.map((box, i) => `<div class="lightbox" id="${escapeHtml(box.id)}" data-step="${escapeHtml(box.step)}" popover><div class="lb-body">${box.body}</div>${nav(boxes[i - 1], "prev")}<p class="lb-cap"><span class="label">${labelHtml(box.label)}</span>${box.caption}<button type="button" class="close" popovertarget="${escapeHtml(box.id)}" popovertargetaction="hide" aria-label="Close">\xD7</button></p>${nav(boxes[i + 1], "next")}</div>`).join("\n");
-}
-function trajectoryBoxes(steps, model, numbers) {
-  return steps.flatMap((step2) => {
-    const detail = model.details.get(step2.id), number3 = numbers.get(step2.id), { headline, command: command2 } = describe2(step2, detail), view = (role) => `step-${step2.id}--${role}`;
-    if (!step2.snapshots) {
-      const at = time3(detail?.at);
-      return [{
-        id: boxId(step2, "command"),
-        step: view("command"),
-        label: `Step ${number3} \xB7 ${step2.inputMode === "diagnostic" ? "Diagnostic" : "Command"}`,
-        title: headline,
-        body: `<div class="lb-term"><pre class="lb-cmd"><span class="prompt" aria-hidden="true">$</span>${escapeHtml(command2 ?? headline)}</pre>${detail?.output ? streamsOf(detail.output) || `<p class="quiet">No output.</p>` : ""}</div>`,
-        caption: at ? `<time>${at} UTC</time>` : ""
-      }];
-    }
-    return ["before", "after"].filter((role) => step2.snapshots?.[role]).map((role) => {
-      const path = step2.snapshots[role], name = role === "before" ? "Before" : "After", at = preciseTime(role === "before" ? detail?.beforeAt : detail?.afterAt);
-      return {
-        id: boxId(step2, role),
-        step: view(role),
-        label: `Step ${number3} \xB7 ${name}`,
-        title: headline,
-        body: `<img loading="lazy" alt="${name} dispatch snapshot, enlarged" src="${src(path)}">`,
-        caption: `${at ? `<time>${at}</time>` : ""}<a href="${src(path)}">Open the original</a>`
-      };
-    });
-  });
-}
-function viewsOf(steps) {
-  const views = [];
-  for (const step2 of steps) (step2.snapshots ? ["before", "after"] : ["command"]).forEach((role, i) => views.push({ step: step2, role, id: `step-${step2.id}--${role}`, index: views.length, first: i === 0 }));
-  return views;
-}
-var viewLink = (view) => `#${encodeURIComponent(view.id)}`;
-var roleName = (view) => view.role === "before" ? "Before" : view.role === "after" ? "After" : view.step.inputMode === "diagnostic" ? "Diagnostic" : "Command";
-function stage(view, detail, numbers, around) {
-  const step2 = view.step, { headline, command: command2 } = describe2(step2, detail), number3 = numbers.get(step2.id);
-  const numberOf = (target2) => numbers.get(target2.step.id);
-  const arrow = (target2, side, set) => target2 ? `<a class="arrow ${side} ${set}" href="${escapeHtml(viewLink(target2))}" aria-label="${side === "prev" ? "Previous" : "Next"}${set === "errs" ? " with errors" : ""}: step ${numberOf(target2)}, ${roleName(target2).toLowerCase()}">${side === "prev" ? "\u2039" : "\u203A"}</a>` : "";
-  const arrows = arrow(around.previous, "prev", "all") + arrow(around.next, "next", "all") + arrow(around.previousError, "prev", "errs") + arrow(around.nextError, "next", "errs");
-  const span = took(detail);
-  const at = view.role === "command" ? time3(detail?.at) ? `${time3(detail?.at)} UTC` : void 0 : preciseTime(view.role === "before" ? detail?.beforeAt : detail?.afterAt);
-  const label = `<div class="vlabel"><span class="badge" data-role="${view.role}"><span class="role">${roleName(view)}</span>${at ? `<time>${at}</time>` : ""}</span></div>`;
-  const title = `<h2 class="sname" title="${escapeHtml(headline)}"><span class="d">${number3}</span><span class="h">${escapeHtml(headline)}</span>${span ? `<span class="took" title="Time from the before snapshot to the after snapshot">${span}</span>` : ""}</h2>`;
-  const open7 = `<section class="stage view${view.role === "command" ? " terminal" : ""}${view.first ? " first" : ""}" id="${escapeHtml(view.id)}" data-v="${view.index}" aria-label="Step ${number3}, ${roleName(view).toLowerCase()}">${arrows}${title}`;
-  if (view.role === "command") {
-    return `${open7}<div class="term"><div class="term-bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span>${step2.inputMode === "diagnostic" ? "Diagnostic command" : "Command"} \xB7 no snapshots</span><button type="button" class="enlarge" popovertarget="${escapeHtml(boxId(step2, "command"))}" title="Enlarge the command">${expandIcon}Enlarge</button></div>
-<pre class="term-cmd"><span class="prompt" aria-hidden="true">$</span>${escapeHtml(command2 ?? headline)}</pre>${detail?.output ? streamsOf(detail.output) || `<p class="quiet">No output.</p>` : ""}
-<p class="term-note">${step2.inputMode === "diagnostic" ? "Screenshots were not requested for this diagnostic." : "No snapshots were captured for this step."}</p></div>${label}</section>`;
-  }
-  const path = step2.snapshots?.[view.role];
-  const picture = path ? `<button type="button" class="zoom" popovertarget="${escapeHtml(boxId(step2, view.role))}" title="Enlarge the ${view.role} snapshot"><img alt="${roleName(view)} dispatch snapshot" src="${src(path)}"></button>` : `<div class="void">${roleName(view)}: unavailable \u2014 incomplete evidence</div>`;
-  return `${open7}<div class="solo">${picture}</div>${label}</section>`;
-}
-function panel(step2, detail, number3, total, concerns) {
-  const { headline, command: command2, reasonShown, kind } = describe2(step2, detail);
-  const interval2 = step2.snapshots?.declaredAfterIntervalMs;
-  const at = time3(detail?.at);
-  const fact = (term, value) => `<div><dt>${term}</dt><dd>${value}</dd></div>`;
-  return `<aside class="panel" aria-label="Step ${number3} details"><div class="panel-scroll">
-<div class="stephead"><h2 class="stepno"><span class="n">Step <span class="d">${number3}</span></span> <span class="of">of <span class="d">${String(total).padStart(2, "0")}</span></span></h2><a class="permalink" href="${escapeHtml(link2(step2))}" title="Stable link to this step" aria-label="Stable link to step ${number3}">${linkIcon}</a></div>
-<p class="meta"><span>${kind}</span>${at ? `<time>${at} UTC</time>` : ""}<span class="state"><span class="sr">Execution: </span>${verdict(step2.execution)}</span></p>
-${concerns.length ? `<section class="concern"><h3>Why this step affects the verdicts</h3><ul>${concerns.map((c) => `<li><span class="label">${escapeHtml(c.verdict)}</span><p>${escapeHtml(c.text)}</p></li>`).join("")}</ul></section>` : ""}
-${reasonShown ? `<section class="block"><h3>Reason</h3><p>${escapeHtml(step2.because ?? "Not present in retained host metadata")}</p></section>` : ""}
-${command2 && step2.snapshots ? `<section class="block"><h3>Command</h3><pre class="command">${escapeHtml(command2)}</pre></section>` : ""}
-<section class="block"><h3>Expected</h3><p>${escapeHtml(step2.expected || "Not supplied")}</p></section>
-<section class="block"><h3>Observed</h3>${observed(step2, detail?.output, !!step2.snapshots)}</section>
-<dl class="facts">${fact("State", escapeHtml(step2.state))}${fact("Input", escapeHtml(step2.inputMode))}${fact("After interval", interval2 === void 0 ? "unavailable" : `${interval2} ms`)}${took(detail) ? fact("Before to after", took(detail)) : ""}${step2.snapshots?.groupId ? fact("Group", escapeHtml(step2.snapshots.groupId)) : ""}</dl>
-</div></aside>`;
-}
-var linkIcon = `<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M6.6 9.4l2.8-2.8M7.2 4.6l.9-.9a2.8 2.8 0 0 1 4 4l-.9.9M8.8 11.4l-.9.9a2.8 2.8 0 0 1-4-4l.9-.9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
-var downloadIcon = `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7.2 8 10.4l3.2-3.2M3 13h10" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-function thumb(step2, detail, number3, flagged, views) {
-  const { headline, command: command2 } = describe2(step2, detail);
-  const span = took(detail);
-  const faces = views.map((view, i) => {
-    const image = view.role === "command" ? void 0 : step2.snapshots?.[view.role];
-    const face = view.role === "command" ? `<pre aria-hidden="true"><span class="prompt">$</span>${escapeHtml(command2 ?? headline)}</pre>` : image ? `<img loading="lazy" alt="" src="${src(image)}">` : `<span class="none">No ${view.role} snapshot</span>`;
-    return `<a data-t="${view.index}" href="${escapeHtml(viewLink(view))}" title="${escapeHtml(`Step ${number3} \xB7 ${roleName(view)} \xB7 ${headline}`)}"><span class="face${view.role === "command" ? " text" : ""}">${face}${view.role === "command" ? "" : `<span class="role">${roleName(view)}</span>`}${flagged && i === 0 ? `<span class="flag" title="This step affects the verdicts">!</span>` : ""}</span></a>`;
-  }).join("");
-  return `<li class="${tone(step2.execution)}${step2.inputMode === "diagnostic" ? " diagnostic" : ""}${erred(step2) ? " err" : ""}"><div class="faces">${faces}</div><span class="cap"><span class="n">${number3}</span><i class="dot" aria-hidden="true"></i><span class="t">${escapeHtml(headline)}</span>${span ? `<span class="took">${span}</span>` : ""}</span><span class="sr">${escapeHtml(step2.execution)}</span></li>`;
-}
-var keys = `(()=>{const views=()=>[...document.querySelectorAll(".center .view")];const still=()=>matchMedia("(prefers-reduced-motion: reduce)").matches,body=box=>box.querySelector(".lb-body>*");const sourceOf=box=>{for(const o of document.querySelectorAll(".zoom,.enlarge,.gthumb")){if(o.getAttribute("popovertarget")!==box.id)continue;const s=o.classList.contains("enlarge")?o.closest(".term"):o.querySelector("img");if(s&&s.getBoundingClientRect().width)return s}return null};const shown=s=>{const r=s.getBoundingClientRect();if(s.tagName!=="IMG"||getComputedStyle(s).objectFit!=="contain"||!s.naturalWidth||!s.naturalHeight)return r;const k=Math.min(r.width/s.naturalWidth,r.height/s.naturalHeight),w=s.naturalWidth*k,h=s.naturalHeight*k;return{left:r.left+(r.width-w)/2,top:r.top+(r.height-h)/2,width:w,height:h}};const from=(el,src)=>{const now=getComputedStyle(el).transform;el.style.transition="none";el.style.transform="none";const b=el.getBoundingClientRect(),a=shown(src);el.style.transform=now==="none"?"":now;el.getBoundingClientRect();el.style.transition="";if(!b.width)return"";const k=a.width/b.width;return"translate("+(a.left+a.width/2-b.left-b.width*k/2)+"px,"+(a.top+a.height/2-b.top-b.height*k/2)+"px) scale("+k+")"};let hidden=null,token=0;const unhide=()=>{if(hidden)hidden.style.visibility="";hidden=null};const open=box=>{token++;unhide();const src=still()?null:sourceOf(box);box.toggleAttribute("data-flip",!!src);box.showPopover();const el=body(box);if(src&&el){const f=from(el,src);el.style.transition="none";el.style.transform=f;el.getBoundingClientRect();el.style.transition="";el.style.transform="";src.style.visibility="hidden";hidden=src}};const leave=box=>{if(box.hasAttribute("data-instant"))return;const el=body(box),src=hidden,n=++token;if(src&&el&&!still()&&src.getBoundingClientRect().width){box.setAttribute("data-flip","");el.style.transform=from(el,src);el.addEventListener("transitionend",()=>{if(n===token)unhide()},{once:true});setTimeout(()=>{if(n===token)unhide()},450)}else{box.removeAttribute("data-flip");unhide()}setTimeout(()=>{if(n===token&&!box.matches(":popover-open")&&el)el.style.transform=""},520)};document.querySelectorAll(".lightbox").forEach(b=>b.addEventListener("beforetoggle",e=>{if(e.newState==="closed")leave(b)}));const go=b=>{const box=b.closest(".lightbox"),next=document.getElementById(b.getAttribute("popovertarget"));if(!next)return;const instant=[box,next].filter(Boolean);instant.forEach(x=>x.setAttribute("data-instant",""));token++;unhide();if(box)box.hidePopover();const s=next.dataset.step;if(s&&decodeURIComponent(location.hash.slice(1))!==s)location.hash=encodeURIComponent(s);const el=body(next);if(el)el.style.transform="";next.showPopover();const src=sourceOf(next);if(src){src.style.visibility="hidden";hidden=src}setTimeout(()=>instant.forEach(x=>x.removeAttribute("data-instant")),60)};const save=dl=>{const p=dl.closest(".fwin").querySelector(".fw-body"),raw=dl.dataset.raw??(p.querySelector(".quiet")?"":p.textContent);const u=URL.createObjectURL(new Blob([raw],{type:"text/plain"})),a=document.createElement("a");a.href=u;a.download=dl.getAttribute("download");document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1e3)};if(location.protocol==="file:")document.querySelectorAll(".fw-dl[data-framed]").forEach(a=>{a.removeAttribute("download");a.target="_blank";a.rel="noopener";a.lastElementChild.textContent="Open"});document.addEventListener("click",e=>{const t=e.target instanceof Element?e.target:null;const b=t&&t.closest(".lb-nav");if(b){e.preventDefault();go(b);return}const dl=t&&t.closest(".fw-dl");if(dl&&!dl.hasAttribute("data-framed")){e.preventDefault();save(dl);return}const o=t&&t.closest(".zoom,.enlarge,.gthumb"),lb=o&&document.getElementById(o.getAttribute("popovertarget"));if(lb){e.preventDefault();open(lb);return}if(t&&(t.classList.contains("lightbox")||t.classList.contains("fwin")))t.hidePopover()});try{document.querySelectorAll("time[data-local]").forEach(t=>{const d=new Date(t.dateTime);if(isNaN(d.getTime())||!d.getTimezoneOffset())return;t.textContent=new Intl.DateTimeFormat(undefined,{...(d.getFullYear()!==d.getUTCFullYear()?{year:"numeric"}:{}),month:"short",day:"numeric",hour:"numeric",minute:"2-digit",timeZoneName:"short"}).format(d);const li=t.closest("[hidden]");if(li)li.hidden=false})}catch{}const current=()=>{let el=null;try{el=document.getElementById(decodeURIComponent(location.hash.slice(1)))}catch{}if(!el)return 0;const v=el.classList.contains("step")?el.querySelector(".view.first"):el.closest(".view");return v?views().indexOf(v):-1};const focused=()=>{const f=document.getElementById("focus-errors");return!!(f&&f.checked)};let last="";const reveal=()=>{const i=current();if(i<0)return;last=location.hash;const a=document.querySelector('.track a[data-t="'+i+'"]');if(a)a.scrollIntoView({block:"nearest",inline:"nearest"})};document.addEventListener("keydown",e=>{if(e.defaultPrevented||e.altKey||e.ctrlKey||e.metaKey||e.shiftKey)return;const t=e.target;if(t instanceof HTMLElement&&(t.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)))return;let box=null;try{box=document.querySelector(".lightbox:popover-open")}catch{}if(e.key===" "){if(box){e.preventDefault();if(!e.repeat)box.hidePopover();return}const opener=t instanceof Element?t.closest(".zoom,.enlarge,.gthumb"):null;if(t instanceof Element&&!opener&&(t.closest("summary")||t.closest("button")))return;e.preventDefault();if(e.repeat)return;if(opener&&opener.classList.contains("gthumb")){const g=document.getElementById(opener.getAttribute("popovertarget"));if(g)open(g);return}const i=current(),v=i<0?null:views()[i];const lb=v&&document.getElementById(v.id.replace(/^step-/,"lightbox-"));if(lb)open(lb);return}const d=e.key==="ArrowRight"?1:e.key==="ArrowLeft"?-1:0;if(!d)return;if(box){e.preventDefault();const b=box.querySelector(d<0?".lb-nav.prev":".lb-nav.next");if(b)go(b);return}const all=views();let j=current();if(j<0)return;do j+=d;while(j>=0&&j<all.length&&focused()&&!all[j].closest(".step").classList.contains("err"));if(j<0||j>=all.length)return;e.preventDefault();location.hash=encodeURIComponent(all[j].id)});const tab=document.querySelector(".tabs .t-traj");if(tab)tab.addEventListener("click",e=>{if(last){e.preventDefault();location.hash=last}});addEventListener("hashchange",()=>{let id="";try{id=decodeURIComponent(location.hash.slice(1))}catch{}try{document.querySelectorAll(":popover-open").forEach(p=>{if(p.dataset.step!==id)p.hidePopover()})}catch{}reveal()});reveal()})();`;
-var keysPolicy = `'sha256-${createHash4("sha256").update(keys).digest("base64")}'`;
-var selection = (steps, firsts, views) => !steps ? "" : Array.from({ length: steps }, (_, i) => `.app:has(.center>.step:nth-of-type(${i + 1}):target) .track li:nth-child(${i + 1}),.app:has(.center>.step:nth-of-type(${i + 1}) :target) .track li:nth-child(${i + 1})`).join(",") + ",.app:not(:has(.center :target)) .track li:first-child{background:var(--s2)}" + [
-  ...Array.from({ length: views }, (_, k) => `.app:has([data-v="${k}"]:target) .track [data-t="${k}"] .face`),
-  ...firsts.map((k) => `.app:has(.center>.step[data-first="${k}"]:target) .track [data-t="${k}"] .face`),
-  `.app:not(:has(.center :target)) .track [data-t="0"] .face`
-].join(",") + "{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--accent),0 0 18px var(--ring)}";
-function fileWindow(id2, f) {
-  let text4 = f.text, formatted = false;
-  if (f.text !== void 0 && /\.json$/i.test(f.name)) try {
-    const pretty = JSON.stringify(JSON.parse(f.text), null, 2);
-    formatted = pretty !== f.text.trimEnd();
-    if (formatted) text4 = pretty;
-  } catch {
-    formatted = false;
-  }
-  const framed = text4 === void 0, label = escapeHtml(f.label);
-  return `<div class="fwin" id="${id2}" data-step="overview" popover aria-label="${label}"><div class="fw-card${framed ? " framed" : ""}"><div class="fw-bar"><span class="fw-name" title="${label}">${label}</span>${formatted ? `<span class="fw-note" title="The download is the original file">Formatted</span>` : ""}${f.bytes !== void 0 ? `<span class="size">${size(f.bytes)}</span>` : ""}<a class="fw-dl" href="${f.href}" download="${escapeHtml(f.name)}"${formatted ? ` data-raw="${escapeHtml(f.text)}"` : ""}${framed ? " data-framed" : ""}>${downloadIcon}<span>Download</span></a><button type="button" class="close" popovertarget="${id2}" popovertargetaction="hide" aria-label="Close">\xD7</button></div>` + (framed ? `<iframe class="fw-frame" src="${f.href}" title="${label}" loading="lazy" sandbox></iframe>` : `<pre class="fw-body">
-${text4 ? escapeHtml(text4) : `<span class="quiet">Empty file.</span>`}</pre>`) + `</div></div>`;
-}
-function renderReviewPage(model) {
-  const steps = chronological(model);
-  const numbers = new Map(steps.map((step2, i) => [step2.id, String(i + 1).padStart(2, "0")]));
-  const views = viewsOf(steps);
-  const times = steps.map((s) => Date.parse(model.details.get(s.id)?.at ?? "")).filter(Number.isFinite);
-  const diagnostics = steps.filter((s) => s.inputMode === "diagnostic").length, actions = steps.length - diagnostics;
-  const errors = steps.filter(erred).length;
-  const started = times.length ? new Date(Math.min(...times)).toISOString() : void 0;
-  const concerns = /* @__PURE__ */ new Map();
-  for (const [key, label] of [["snapshots", `Snapshots ${model.completeness}`], ["execution", `Execution ${model.execution}`]])
-    for (const reason2 of model.reasons[key]) for (const id2 of reason2.stepIds) concerns.set(id2, [...concerns.get(id2) ?? [], { verdict: label, text: reason2.text }]);
-  const uuid2 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-  const byName = /* @__PURE__ */ new Map();
-  for (const output of model.outputs) {
-    const [, declared = "", ...rest] = output.path.split("/");
-    byName.set(declared, [...byName.get(declared) ?? [], { ...output, label: rest.filter((part) => !uuid2.test(part)).join("/") || output.path.split("/").at(-1) }]);
-  }
-  const outputBoxes = [], windows = [];
-  const opener = (id2, f) => {
-    windows.push(fileWindow(id2, f));
-    return `<button type="button" class="fopen" popovertarget="${id2}" title="View ${escapeHtml(f.name)}">${escapeHtml(f.label)}</button>`;
-  };
-  const file = (f) => f.text === void 0 && !textFile.test(f.path) ? `<a href="${src(f.path)}">${escapeHtml(f.label)}</a>` : opener(`window-output-${windows.length + 1}`, { href: src(f.path), label: f.label, name: f.label.split("/").at(-1), bytes: f.bytes, text: f.text });
-  const outputs = [...byName].map(([declared, files]) => {
-    const images = files.filter((f) => /\.(png|jpe?g|webp|gif)$/i.test(f.path)), others = files.filter((f) => !images.includes(f));
-    const total = files.reduce((sum, f) => sum + f.bytes, 0);
-    return `<details class="group"${model.outputs.length <= 12 ? " open" : ""}><summary><span class="where">${escapeHtml(declared)}</span><span class="count">${plural(files.length, "file")} \xB7 ${size(total)}</span></summary>${others.length ? `<ul class="flist">${others.map((f) => `<li>${file(f)}<span>${size(f.bytes)}</span></li>`).join("")}</ul>` : ""}${images.length ? `<div class="gallery">${images.map((f) => {
-      const id2 = `lightbox-output-${outputBoxes.length + 1}`, name = f.label.split("/").at(-1);
-      outputBoxes.push({ id: id2, step: "overview", label: declared, title: f.label, nav: name, body: `<img loading="lazy" alt="${escapeHtml(f.label)}, enlarged" src="${src(f.path)}">`, caption: `<span class="file">${escapeHtml(f.label)}</span><span class="size">${size(f.bytes)}</span><a href="${src(f.path)}">Open the original</a>` });
-      return `<button type="button" class="gthumb" popovertarget="${id2}" title="Enlarge ${escapeHtml(name)}"><img loading="lazy" alt="${escapeHtml(f.label)}" src="${src(f.path)}"><span>${escapeHtml(name)}<small>${size(f.bytes)}</small></span></button>`;
-    }).join("")}</div>` : ""}</details>`;
-  }).join("");
-  const generated2 = [["manifest.json", "Checksums of every artifact", void 0], ["summary.json", "Verdicts and findings", model.generated?.summary], ["trajectory.json", "Steps as recorded", model.generated?.trajectory]].map(([name, note, text4]) => `<li>${opener(`window-${name.replace(".json", "")}`, { href: name, label: name, name, ...text4 !== void 0 ? { bytes: Buffer.byteLength(text4), text: text4 } : {} })}<span>${note}</span></li>`).join("");
-  const stat2 = (label, value) => `<li><b>${value}</b>${label ? ` <span>${label}</span>` : ""}</li>`;
-  const merged = (reasons) => [...reasons.reduce((all, r) => all.set(r.text, [.../* @__PURE__ */ new Set([...all.get(r.text) ?? [], ...r.stepIds])]), /* @__PURE__ */ new Map())].map(([text4, stepIds]) => ({ text: text4, stepIds }));
-  const stepLinks = (ids) => ids.map((id2) => `<a href="${escapeHtml(`#step-${encodeURIComponent(id2)}`)}">Step <span class="d">${numbers.get(id2) ?? "?"}</span></a>`).join("");
-  const reasonList = (reasons) => `<ul class="reasons">${merged(reasons).map((r) => `<li><p>${escapeHtml(r.text)}</p>${r.stepIds.length ? `<p class="steps">${stepLinks(r.stepIds)}</p>` : ""}</li>`).join("")}</ul>`;
-  const why = (key, value) => key === "snapshots" ? `Why snapshots are ${value}` : value === "failed" ? "Why execution failed" : `Why execution is ${value}`;
-  const pill = (key, label, value) => model.reasons[key].length ? `<li class="pill ${tone(value)}"><button type="button" popovertarget="why-${key}" title="${why(key, value)}"><span>${label}</span>${verdict(value)}<span class="q" aria-hidden="true">?</span></button><div class="why" id="why-${key}" popover><h3>${why(key, value)}</h3>${reasonList(model.reasons[key])}</div></li>` : `<li class="pill ${tone(value)}"><span>${label}</span>${verdict(value)}</li>`;
-  const verdictBlock = (key, label, value, fine) => `<div class="vblock"><h4>${label} ${verdict(value)}</h4>${model.reasons[key].length ? `<p class="vwhy">${why(key, value)}:</p>${reasonList(model.reasons[key])}` : `<p class="quiet">${fine}</p>`}</div>`;
-  const overview = `<article class="step overview" id="overview"><section class="stage doc" aria-label="Package overview"><div class="doc-in">
-<h2>Overview</h2><p class="lede">Delivery integrity is separate from execution success. Snapshots are dispatch-time evidence, not continuous video: each shows the screen just before a step was sent and shortly after it returned.</p>
-<section class="block"><h3>Verdicts</h3>${verdictBlock("snapshots", "Snapshots", model.completeness, "Every snapshot the steps declared is present and tied to its step.")}${verdictBlock("execution", "Execution", model.execution, "Every step completed, and every retained receipt confirms it.")}</section>
-<section class="block"><h3>Findings as recorded <span class="count">${model.findings.length}</span></h3>${model.findings.length ? `<ul class="findings">${groupFindings(model.findings).map((g) => `<li>${g.ids.length ? `<details><summary>${escapeHtml(g.text)}</summary><code>${g.ids.map(escapeHtml).join("<br>")}</code></details>` : escapeHtml(g.text)}</li>`).join("")}</ul>` : `<p class="quiet">No findings.</p>`}</section>
-<section class="block"><h3>Declared outputs <span class="count">${model.outputs.length}</span></h3>${outputs ? `<div class="outputs">${outputs}</div>` : `<p class="quiet">No declared outputs were delivered.</p>`}</section>
-<section class="block"><h3>Package</h3><div class="package"><dl class="ids"><div><dt>Package</dt><dd>${escapeHtml(model.packageId)}</dd></div><div><dt>Task</dt><dd>${escapeHtml(model.taskId)}</dd></div><div><dt>Session</dt><dd>${escapeHtml(model.sessionId)}</dd></div>${started ? `<div><dt>Started</dt><dd>${utcStamp(started, true)}</dd></div>` : ""}</dl>
-<ul class="files">${generated2}</ul></div></section></div></section></article>`;
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' file:; frame-src 'self' file:; style-src 'unsafe-inline'; script-src ${keysPolicy}; base-uri 'none'; form-action 'none'"><title>Relay review: ${escapeHtml(model.packageId)}</title><style>${css}${selection(steps.length, views.filter((v) => v.first).map((v) => v.index), views.length)}</style></head><body>
-<div class="app">
-<header class="top"><div class="brand"><span class="mark" aria-hidden="true">${relayMark}</span><h1 title="${escapeHtml(model.packageId)}">Relay</h1>
-<ul class="stats">${stat2(noun(steps.length, "step"), String(steps.length))}${stat2(noun(actions, "action"), String(actions))}${stat2(noun(diagnostics, "diagnostic"), String(diagnostics))}${started ? `<li class="at"><time datetime="${started}" title="Started ${started}">${utcStamp(started)}</time><span class="local" hidden><span class="sep" aria-hidden="true">\xB7</span><time datetime="${started}" data-local title="Started, in your time zone"></time></span></li>` : ""}${times.length ? stat2("", duration3(Math.max(...times) - Math.min(...times))) : ""}</ul></div>
-<nav class="tabs mid" aria-label="View"><a class="t-traj" href="${steps[0] ? escapeHtml(link2(steps[0])) : "#"}">Trajectory</a><a class="t-over" href="#overview">Overview<span class="${model.findings.length ? "has" : ""}">${model.findings.length}</span></a></nav>
-<ul class="pills"><li class="keys" title="Keyboard shortcuts"><kbd aria-label="Left arrow">\u2190</kbd><kbd aria-label="Right arrow">\u2192</kbd><span>Steps</span><kbd>Space</kbd><span>Enlarge</span></li>${pill("snapshots", "Snapshots", model.completeness)}${pill("execution", "Execution", model.execution)}</ul></header>
-<main class="center">${errors ? `<label class="focus" title="Highlight the steps with errors, and move between them with the arrows"><input type="checkbox" id="focus-errors">Focus on errors</label>` : ""}${steps.map((step2) => {
-    const own2 = views.filter((v) => v.step === step2);
-    return `<article id="step-${escapeHtml(step2.id)}" data-first="${own2[0].index}" class="step ${tone(step2.execution)}${erred(step2) ? " err" : ""}">${own2.map((v) => stage(v, model.details.get(step2.id), numbers, {
-      previous: views[v.index - 1],
-      next: views[v.index + 1],
-      previousError: views.slice(0, v.index).findLast((w) => erred(w.step)),
-      nextError: views.slice(v.index + 1).find((w) => erred(w.step))
-    })).join("")}${panel(step2, model.details.get(step2.id), numbers.get(step2.id), steps.length, concerns.get(step2.id) ?? [])}</article>`;
-  }).join("\n")}
-${overview}</main>
-<footer class="track" aria-label="Steps"><ol>${steps.map((step2) => thumb(step2, model.details.get(step2.id), numbers.get(step2.id), concerns.has(step2.id), views.filter((v) => v.step === step2))).join("")}</ol></footer>
-</div>
-${lightboxes(trajectoryBoxes(steps, model, numbers))}
-${lightboxes(outputBoxes)}${windows.join("")}
-<script>${keys}</script></body></html>
-`;
-}
-var css = `:root{color-scheme:light;--bg:#fbf6ef;--s1:#ffffff;--s2:#f7efe5;--s3:#efe3d5;--hair:rgba(90,50,20,.08);--text:#2a1d15;--dim:#5e4b3e;--faint:#7d6a5c;
---accent:#f0502a;--accent2:#ff9f1a;--grad:linear-gradient(135deg,var(--accent),var(--accent2));--on:#fff;--ring:rgba(240,80,42,.28);
---ok:#0e9f62;--bad:#e23744;--warn:#b87700;--warn-ink:#8a5a00;--shadow:0 1px 2px rgba(90,50,20,.06),0 12px 32px rgba(90,50,20,.10);
---sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;--round:ui-rounded,"SF Pro Rounded",var(--sans);--mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
-*{box-sizing:border-box}html,body{height:100%}
-body{margin:0;background:var(--bg);color:var(--text);font:14.5px/1.55 var(--sans);-webkit-font-smoothing:antialiased}
-a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline;text-underline-offset:3px}
-:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:999px}
-pre{font:12.5px/1.6 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere;margin:0}
-b,time,.n,.exit,dd,.took{font-variant-numeric:tabular-nums}.d{font-family:var(--mono);font-weight:600;letter-spacing:0}
-.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
-.label,h3,dt{font:600 11px/1.3 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
-.quiet{color:var(--faint);margin:0}
-.ok{--tone:var(--ok)}.bad{--tone:var(--bad)}.warn{--tone:var(--warn)}
-.verdict{display:inline-flex;align-items:center;gap:.45rem;font:600 12.5px/1 var(--sans);color:var(--tone,var(--dim));text-transform:capitalize}
-.verdict i{flex:none;width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 0 3px color-mix(in srgb,currentColor 18%,transparent)}
-.app{height:100vh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;grid-template-columns:minmax(0,1fr);overflow:clip}.track{min-width:0;position:relative;z-index:0;display:grid}
-.top{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:1rem .75rem;padding:1.1rem 1.25rem;position:relative;z-index:2}
-.brand{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:.3rem .8rem;min-width:0}.brand .mark{grid-row:1/3}.brand h1,.brand .stats{grid-column:2;margin:0}
-.mark{flex:none;display:grid;place-items:center;width:2.85rem;height:2.85rem;border-radius:14px;background:linear-gradient(145deg,#ffb23d,var(--accent) 70%);box-shadow:inset 0 1px 0 rgba(255,255,255,.4),inset 0 -2px 6px rgba(160,40,10,.18),0 6px 18px var(--ring)}
-h1{display:flex;align-items:baseline;gap:.6rem;font:700 1.3rem/1.15 var(--round);letter-spacing:-.015em;margin:0}
-.stats .at time{font:600 12px var(--round);color:var(--text)}.stats .at .sep{margin:0 .35rem}
-.stats{display:flex;flex-wrap:wrap;gap:.15rem .7rem;list-style:none;margin:.3rem 0 0;padding:0;font-size:12px;color:var(--faint)}.stats b{font:700 12px var(--round);color:var(--text)}
-.pills{justify-self:end;display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:.3rem;list-style:none;margin:0;padding:0}.pills>li,.stats>li{white-space:nowrap}
-.pill{display:flex;align-items:center;gap:.4rem;padding:.42rem .7rem;border-radius:999px;background:color-mix(in srgb,var(--tone) 12%,transparent);font-size:12px;color:var(--dim)}
-.mid{justify-self:center}
-.tabs{display:flex;gap:.2rem;padding:.25rem;border-radius:999px;background:var(--s2)}
-.tabs a{display:inline-flex;align-items:center;gap:.5rem;padding:.4rem 1rem;border-radius:999px;color:var(--dim);font-size:13px;font-weight:600}.tabs a:hover{text-decoration:none;color:var(--text)}
-.tabs a span{display:grid;place-items:center;min-width:1.35rem;height:1.35rem;padding:0 .35rem;font:700 11px/1 var(--round);border-radius:999px;background:var(--s3);color:var(--dim)}.tabs a span.has{background:var(--grad);color:var(--on)}
-.app:not(:has(#overview:target)) .t-traj,.app:has(#overview:target) .t-over{background:var(--s1);color:var(--text);box-shadow:var(--shadow)}
-.pill button{all:unset;display:flex;align-items:center;gap:.4rem;cursor:pointer}.pill:has(button){padding-right:.4rem}.pill:has(button):hover{background:color-mix(in srgb,var(--tone) 20%,transparent)}
-.pill button:focus-visible{outline:2px solid var(--accent);outline-offset:6px;border-radius:999px}
-.q{display:grid;place-items:center;width:1.1rem;height:1.1rem;border-radius:50%;background:var(--tone);color:var(--on);font:700 10.5px/1 var(--round)}
-.why{white-space:normal;text-align:left;position:fixed;inset:auto;top:4.6rem;right:1.75rem;margin:0;width:min(26rem,calc(100vw - 2rem));max-height:calc(100vh - 6rem);overflow:auto;padding:1.1rem 1.25rem 1.2rem;border:0;border-radius:18px;background:var(--s1);color:var(--text);box-shadow:0 2px 6px rgba(90,50,20,.08),0 24px 60px rgba(90,50,20,.22)}
-.why h3{margin:0 0 .8rem;font:700 15px/1.3 var(--round);letter-spacing:0;text-transform:none;color:var(--text)}
-.reasons{list-style:none;margin:0;padding:0;display:grid;gap:.75rem}.reasons li{display:grid;gap:.4rem}.reasons p{margin:0;color:var(--dim);font-size:13.5px;line-height:1.5}
-.reasons .steps{display:flex;flex-wrap:wrap;gap:.3rem}.reasons .steps a{padding:.15rem .55rem;border-radius:999px;background:var(--s2);font:600 11.5px var(--round)}.reasons .steps a:hover{background:var(--grad);color:var(--on);text-decoration:none}
-.concern{margin-top:1.25rem;padding:1rem 1.1rem;border-radius:16px;background:color-mix(in srgb,var(--warn) 9%,var(--bg))}.concern h3{margin:0 0 .7rem;color:var(--warn-ink)}
-.concern ul{list-style:none;margin:0;padding:0;display:grid;gap:.6rem}.concern li{display:grid;gap:.2rem}.concern .label{color:var(--warn-ink)}.concern p{margin:0;color:var(--text);font-size:14px;line-height:1.55}
-.vblock{padding:.95rem 1.1rem;border-radius:14px;background:var(--s1);box-shadow:var(--shadow)}.vblock+.vblock{margin-top:.6rem}
-.vblock h4{display:flex;align-items:center;gap:.7rem;margin:0 0 .5rem;font:700 14px var(--round)}.vwhy{margin:0 0 .6rem;font-size:12.5px;color:var(--faint)}.vblock>.quiet{font-size:13.5px}
-.face{position:relative}.flag{position:absolute;top:.35rem;right:.35rem;display:grid;place-items:center;width:1.1rem;height:1.1rem;border-radius:50%;background:var(--warn);color:#fff;font:800 11px/1 var(--round);box-shadow:0 2px 6px rgba(0,0,0,.2)}
-.focus{position:absolute;left:1.5rem;bottom:1rem;z-index:4;display:flex;align-items:center;gap:.45rem;padding:.35rem .7rem .35rem .5rem;border-radius:999px;background:var(--bg);font-size:12px;font-weight:600;color:var(--dim);cursor:pointer;user-select:none}
-.focus:hover{background:var(--s2)}.focus input{appearance:none;margin:0;width:1.05rem;height:1.05rem;border-radius:6px;background:var(--s1);box-shadow:inset 0 0 0 1.5px var(--faint);display:grid;place-items:center;cursor:pointer}
-.focus input:checked{background:var(--bad);box-shadow:none}.focus input:checked::after{content:"";width:.28rem;height:.55rem;border:solid #fff;border-width:0 2px 2px 0;rotate:45deg;translate:0 -1px}
-
-.app:has(#focus-errors:checked) .track li:not(.err){opacity:.35;filter:grayscale(1)}
-.app:has(#focus-errors:checked) .track li.err .face{box-shadow:0 0 0 2px var(--bad),0 6px 16px color-mix(in srgb,var(--bad) 25%,transparent)}
-.app:has(#focus-errors:checked) .track li.err .t{color:var(--bad)}
-.app:has(#overview:target) .track{display:none}.app:has(#overview:target) .focus{display:none}.app:has(#overview:target) .keys{display:none}
-.keys{display:flex;align-items:center;gap:.25rem;margin-right:.4rem;font-size:11px;color:var(--faint)}.keys span{margin:0 .35rem 0 .1rem}.keys span:last-child{margin-right:0}
-kbd{display:inline-grid;place-items:center;min-width:1.3rem;height:1.3rem;padding:0 .3rem;border-radius:6px;background:var(--s1);box-shadow:0 0 0 1px var(--hair),0 1.5px 0 var(--s3);font:600 10.5px/1 var(--sans);color:var(--dim)}.overview>.doc{grid-area:auto;grid-column:1/-1;grid-row:1}
-.center{display:grid;grid-template-columns:minmax(0,1fr) minmax(20rem,25rem);grid-template-areas:"stage panel";gap:0 .75rem;padding:0 .75rem;min-height:0;position:relative;z-index:1}
-.step{display:none}.step:is(:target,:has(:target)){display:contents}.center:not(:has(:target))>.step:first-of-type{display:contents}
-.step>.view{display:none}.step>.view:target,.step:target>.view.first,.center:not(:has(:target))>.step:first-of-type>.view.first{display:flex}
-.stage{grid-area:stage;position:relative;min-width:0;min-height:0;background:var(--bg);display:grid;grid-template-rows:minmax(0,1fr);overflow:clip}
-.view{flex-direction:column;align-items:center;justify-content:center;gap:1rem;padding:1.5rem 4.75rem 1.25rem}
-.solo{flex:0 1 auto;min-height:0;max-width:100%;display:flex;justify-content:center}
-.zoom{all:unset;display:flex;min-height:0;max-height:100%;max-width:100%;cursor:zoom-in;border-radius:12px}.zoom:focus-visible{outline:none}
-.solo img{max-width:100%;max-height:100%;object-fit:contain;border-radius:12px;box-shadow:0 2px 4px rgba(60,30,10,.08),0 18px 44px rgba(60,30,10,.16);background:#fff;transition:box-shadow .15s}
-.zoom:hover img,.zoom:focus-visible img{box-shadow:0 0 0 2px var(--accent),0 18px 44px rgba(60,30,10,.18)}
-.vlabel{display:grid;justify-items:center;gap:.55rem;min-width:0}
-.badge{display:inline-flex;align-items:center;gap:.65rem;padding:.32rem .85rem;border-radius:999px;background:var(--s1);box-shadow:0 0 0 1px var(--hair),0 1px 3px rgba(90,50,20,.07)}
-.badge .role{font:600 11px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--dim)}.badge[data-role="after"] .role{color:var(--accent)}.badge time{font:12px/1 var(--mono);color:var(--faint)}
-.sname{flex:none;display:flex;align-items:baseline;gap:.6rem;max-width:100%;margin:0;font:700 17px/1.35 var(--round);letter-spacing:-.005em;color:var(--text)}
-.sname .d{flex:none;font-size:13px;color:var(--faint)}.sname .h{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.sname .took{flex:none;align-self:center;padding:.18rem .5rem;border-radius:999px;background:color-mix(in srgb,var(--accent) 11%,transparent);font:700 11.5px/1 var(--round);color:var(--accent)}
-.lightbox{position:fixed;inset:0;width:auto;height:auto;max-width:none;max-height:none;margin:0;padding:1.5rem 1.5rem 1.25rem;border:0;background:none;color:var(--text);overflow:hidden;transition:overlay .36s allow-discrete,display .36s allow-discrete}
-.lb-body>*{transform-origin:0 0;transition:transform .36s cubic-bezier(.3,.9,.3,1),opacity .24s ease}
-.lightbox:not([data-flip]):not(:popover-open) .lb-body>*{opacity:0}@starting-style{.lightbox:popover-open:not([data-flip]) .lb-body>*{opacity:0}}
-.lightbox>:not(.lb-body){translate:0 calc(100% + 2.5rem);transition:translate .36s cubic-bezier(.3,.9,.3,1)}.lightbox:popover-open>:not(.lb-body){translate:0}@starting-style{.lightbox:popover-open>:not(.lb-body){translate:0 calc(100% + 2.5rem)}}
-.lightbox{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto;gap:1rem 1.25rem;align-items:center}.lightbox:popover-open{display:grid}
-.lightbox::backdrop{background:rgba(22,15,10,0);backdrop-filter:blur(0);transition:background .32s ease,backdrop-filter .32s ease,overlay .36s allow-discrete,display .36s allow-discrete}
-.lightbox:popover-open::backdrop{background:rgba(22,15,10,.9);backdrop-filter:blur(10px)}@starting-style{.lightbox:popover-open::backdrop{background:rgba(22,15,10,0);backdrop-filter:blur(0)}}
-.lightbox[data-instant],.lightbox[data-instant]::backdrop,.lightbox[data-instant]>*,.lightbox[data-instant] .lb-body>*{transition:none}
-.lb-body{grid-column:1/-1;grid-row:1;display:grid;place-items:center;min-height:0;height:100%;pointer-events:none}.lb-body>*{pointer-events:auto}
-.lb-body img{display:block;max-width:100%;max-height:calc(100vh - 7.5rem);object-fit:contain;border-radius:14px;background:#fff;box-shadow:0 30px 90px rgba(0,0,0,.5)}
-.lb-term{width:min(100%,72rem);max-height:calc(100vh - 7.5rem);overflow:auto;padding:2rem 2.25rem;border-radius:22px;background:var(--s1);color:var(--text);box-shadow:0 30px 90px rgba(0,0,0,.5)}
-.lb-cmd{font-size:18px;line-height:1.65;color:var(--text)}.lb-term .stream{margin:1.25rem 0 0}.lb-term .stream pre{font-size:15px;max-height:none}.lb-term .quiet{margin-top:1.25rem;font-size:15px}
-.lb-cap{grid-row:2;grid-column:2;display:flex;align-items:center;gap:.9rem;margin:0;padding:.35rem .45rem .35rem 1rem;border-radius:999px;background:var(--s1);box-shadow:0 8px 28px rgba(0,0,0,.35);font-size:12.5px;white-space:nowrap}
-.lb-cap time,.lb-cap .size{font:12px var(--mono);color:var(--faint)}.lb-cap a{font-weight:600}.lb-cap .file{font:12px var(--mono);color:var(--text)}
-.lb-nav{all:unset;box-sizing:border-box;grid-row:2;display:flex;align-items:center;gap:.7rem;min-width:0;max-width:22rem;padding:.35rem 1rem .35rem .35rem;border-radius:999px;background:var(--s1);box-shadow:0 8px 28px rgba(0,0,0,.35);cursor:pointer}
-.lb-nav.prev{grid-column:1;justify-self:start}.lb-nav.next{grid-column:3;justify-self:end;flex-direction:row-reverse;padding:.35rem .35rem .35rem 1rem;text-align:right}
-.lb-nav .dir{flex:none;display:grid;place-items:center;width:2.1rem;height:2.1rem;border-radius:50%;background:var(--s2);font-size:1.3rem;line-height:1;color:var(--text)}
-.lb-nav:hover .dir{background:var(--grad);color:var(--on)}.lb-nav:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
-.lb-nav .role{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 10.5px/1.4 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
-.enlarge{all:unset;margin-left:auto;display:flex;align-items:center;gap:.4rem;padding:.3rem .7rem;border-radius:999px;font-weight:600;color:var(--dim);cursor:zoom-in}.enlarge:hover{background:var(--s2);color:var(--accent)}.enlarge:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.close{all:unset;display:grid;place-items:center;width:1.8rem;height:1.8rem;border-radius:50%;background:var(--s2);color:var(--dim);font:600 1.1rem/1 var(--sans);cursor:pointer}.close:hover{background:var(--grad);color:var(--on)}.close:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.void{display:grid;place-items:center;border-radius:14px;background:var(--s1);color:var(--faint);padding:2rem;text-align:center;aspect-ratio:16/9}
-.arrow{position:absolute;top:50%;translate:0 -50%;z-index:3;display:grid;place-items:center;width:2.75rem;height:2.75rem;border-radius:50%;background:rgba(255,255,255,.85);backdrop-filter:blur(8px);color:var(--text);font-size:1.5rem;line-height:1;box-shadow:var(--shadow)}
-.arrow.errs,.app:has(#focus-errors:checked) .arrow.all{display:none}.app:has(#focus-errors:checked) .arrow.errs{display:grid}
-.arrow:hover{text-decoration:none;background:var(--grad);color:var(--on)}.arrow.prev{left:1rem}.arrow.next{right:1rem}
-.terminal .term{flex:0 1 auto;min-height:0}
-.term{width:min(100%,56rem);max-height:100%;overflow:auto;background:var(--s1);border-radius:18px;box-shadow:var(--shadow)}
-.term-bar{display:flex;align-items:center;gap:1rem;padding:.8rem 1.1rem;font-size:12px;color:var(--faint);position:sticky;top:0;background:var(--s1)}
-.dots{display:flex;gap:.35rem}.dots i{width:10px;height:10px;border-radius:50%;background:var(--s3)}.dots i:first-child{background:var(--grad)}
-.term-cmd{padding:.4rem 1.2rem 1.1rem;font-size:13px;color:var(--text)}.prompt{color:var(--accent);margin-right:.6em;user-select:none}
-.term .stream{margin:0 1.2rem 1rem}.term .quiet,.term-note{margin:0 1.2rem 1.1rem;font-size:12.5px;color:var(--faint)}
-.stream .label{display:block;margin-bottom:.35rem}.stream pre,.plain,.command{background:var(--s2);border-radius:12px;padding:.75rem .9rem;max-height:14rem;overflow:auto;color:var(--text)}
-.panel{grid-area:panel;min-height:0;display:grid;grid-template-rows:minmax(0,1fr)}
-.panel-scroll{overflow:auto;padding:1.25rem .5rem 2.5rem 1rem;scrollbar-width:thin;scrollbar-color:var(--s3) transparent;--fade:linear-gradient(transparent,#000 1.25rem,#000 calc(100% - 2.5rem),transparent);-webkit-mask-image:var(--fade);mask-image:var(--fade)}
-.panel .stream pre,.panel .plain,.panel .command{background:var(--s1);box-shadow:0 0 0 1px var(--hair),0 1px 2px rgba(90,50,20,.05);padding:.8rem .95rem}
-.stephead{display:flex;align-items:center;gap:.75rem}.stepno{margin:0;font:700 1.45rem/1.2 var(--round);letter-spacing:-.015em;color:var(--faint)}
-.stepno .n{color:var(--text)}.stepno .of{font-size:1rem;font-weight:600}
-.meta{display:flex;flex-wrap:wrap;align-items:center;gap:.3rem .9rem;margin:.45rem 0 0;font-size:12.5px;color:var(--faint)}.meta time{font-family:var(--mono)}
-.permalink{margin-left:auto;display:grid;place-items:center;width:1.9rem;height:1.9rem;margin-block:-.4rem;border-radius:999px;color:var(--faint)}.permalink:hover{background:var(--s3);color:var(--text)}
-.panel h2{font:700 1.35rem/1.3 var(--round);letter-spacing:-.012em;margin:.55rem 0 .6rem;overflow-wrap:anywhere}
-.meta .state{margin-left:auto}
-.block{margin-top:1.5rem}.block h3{margin:0 0 .45rem}.block p{margin:0;color:var(--dim)}.panel .block{margin-top:1.75rem}.panel .block h3{margin-bottom:.55rem}.panel .block p{font-size:14px;line-height:1.6}
-.command{font-size:12px;max-height:9rem}
-.receipts{list-style:none;margin:0 0 .4rem;padding:0;display:grid;gap:.45rem}.receipts li{display:flex;flex-wrap:wrap;gap:.4rem .8rem;align-items:center}.diag{font-size:13px;color:var(--dim)}
-.exit{display:inline-block;font:700 11.5px var(--mono);padding:.25rem .6rem;border-radius:999px;margin-bottom:.55rem}
-.exit.ok{color:var(--ok);background:color-mix(in srgb,var(--ok) 15%,transparent)}.exit.bad{color:var(--bad);background:color-mix(in srgb,var(--bad) 15%,transparent)}
-.receipts .exit{margin:0}.stream{margin-bottom:.6rem}
-.raw summary{cursor:pointer;font-size:12px;color:var(--faint);width:max-content}.raw summary:hover{color:var(--dim)}.raw pre{margin-top:.5rem;color:var(--faint);font-size:11.5px;max-height:12rem;overflow:auto}
-.facts{display:grid;grid-template-columns:1fr 1fr;gap:1rem 1.25rem;margin:1.75rem 0 0;padding:0}.facts dd{margin:.2rem 0 0;font:12.5px var(--mono);color:var(--dim);overflow-wrap:anywhere}
-.facts.stack{grid-template-columns:1fr}
-.files{list-style:none;margin:0;padding:0;display:grid;gap:.6rem}.files li{display:grid;justify-items:start}.files .fopen{font:12.5px var(--mono)}.files span{font-size:12px;color:var(--faint)}
-.doc{display:block;overflow:auto;font-size:1rem;line-height:1.6}.doc-in{width:100%;max-width:56rem;margin:0 auto;padding:2.75rem 2.75rem 4rem}
-.doc h2{font:700 2.25rem/1.15 var(--round);letter-spacing:-.02em;margin:0}.lede{color:var(--dim);margin:.85rem 0 0;font-size:1.125rem;line-height:1.6}
-.doc .block{margin-top:2.75rem}.doc .block>h3{display:flex;align-items:baseline;gap:.6rem;margin:0 0 1rem;font:700 1.25rem/1.3 var(--round);letter-spacing:-.005em;text-transform:none;color:var(--text)}
-.doc h3 .count{font:600 .875rem var(--round);color:var(--faint)}
-.doc .vblock{padding:1.2rem 1.4rem;border-radius:18px}.doc .vblock+.vblock{margin-top:.75rem}.doc .vblock h4{font-size:1.0625rem;margin-bottom:.6rem}.doc .verdict{font-size:.875rem}
-.doc .vwhy{font-size:.875rem;margin-bottom:.7rem}.doc .reasons{gap:1rem}.doc .reasons p{font-size:1rem;line-height:1.6}.doc .reasons .steps a{font-size:.8125rem;padding:.2rem .65rem}
-.doc .quiet,.doc .vblock>.quiet{font-size:1rem}
-.doc .findings{gap:.6rem}.doc .findings li{padding:1rem 1.25rem;border-radius:18px;font-size:1rem}.doc .findings code{font-size:.8125rem}
-.doc .group{padding:1rem 1.25rem;border-radius:18px}.doc .group summary{font-size:1.0625rem}.doc .group .count{font-size:.875rem}.doc .group[open] summary{margin-bottom:1rem}
-.doc .flist{font-size:.875rem;gap:.4rem}.doc .gallery{grid-template-columns:repeat(auto-fill,minmax(11rem,1fr));gap:1rem}.doc .gthumb{font-size:.8125rem}
-.package{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:1.5rem;padding:1.25rem 1.4rem;border-radius:18px;background:var(--s1);box-shadow:var(--shadow)}
-.package .ids{display:grid;gap:.9rem;margin:0}.package dt{font-size:.75rem}.package dd{margin:.2rem 0 0;font:.875rem var(--mono);color:var(--dim);overflow-wrap:anywhere}
-.doc .files{gap:.9rem}.doc .files .fopen{font-size:.875rem}.doc .files span{font-size:.8125rem}
-@media(max-width:960px){.package{grid-template-columns:minmax(0,1fr)}}
-.findings{list-style:none;margin:0;padding:0;display:grid;gap:.5rem}.findings li{padding:.8rem 1rem;border-radius:14px;background:var(--s1);box-shadow:var(--shadow)}
-.findings summary{cursor:pointer}.findings code{display:block;font:11.5px/1.6 var(--mono);color:var(--faint);margin-top:.4rem;overflow-wrap:anywhere}
-.outputs{display:grid;gap:.5rem}.group{background:var(--s1);border-radius:14px;padding:.75rem 1rem;box-shadow:var(--shadow)}
-.group summary{display:flex;justify-content:space-between;gap:1rem;cursor:pointer;font-size:13px;list-style:none}.group summary::-webkit-details-marker{display:none}
-.group summary{align-items:center}.group .where{display:inline-flex;align-items:center;gap:.7rem;font-weight:600}
-.group .where::before{content:"";flex:none;width:.4rem;height:.4rem;border:solid var(--accent);border-width:0 1.5px 1.5px 0;rotate:-45deg;transition:rotate .15s}.group[open] .where::before{rotate:45deg}.group .count{color:var(--faint);flex:none}
-.group[open] summary{margin-bottom:.75rem}
-.flist{list-style:none;margin:-6px;padding:6px;display:grid;gap:.3rem;font:12px var(--mono);max-height:16rem;overflow:auto}.flist li{display:flex;justify-content:space-between;gap:1rem}.flist a{overflow-wrap:anywhere;min-width:0}.flist span{color:var(--faint);flex:none}
-.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(8.5rem,1fr));gap:.75rem}.flist+.gallery{margin-top:.75rem}
-.gthumb{all:unset;box-sizing:border-box;cursor:zoom-in;display:grid;gap:.4rem;font:11.5px var(--mono);min-width:0;color:var(--dim)}.gthumb span{display:flex;justify-content:space-between;gap:.5rem;overflow:hidden;white-space:nowrap}.gthumb small{color:var(--faint);font-size:inherit;flex:none}
-.gthumb img{width:100%;aspect-ratio:16/9;object-fit:contain;border-radius:10px;display:block;background:var(--s2);box-shadow:inset 0 0 0 1px var(--hair);transition:box-shadow .15s}.gthumb:hover img,.gthumb:focus-visible img{box-shadow:0 0 0 2px var(--accent)}
-.track ol{min-width:0;list-style:none;margin:0;padding:.75rem 1.75rem 1rem;display:flex;gap:.6rem;overflow-x:auto;scrollbar-width:thin;scrollbar-color:var(--s3) transparent}
-.track li{flex:none;display:grid;gap:.45rem;padding:.35rem;border-radius:16px;transition:background .15s}
-.track li:hover{background:var(--s1)}
-.faces{display:flex;gap:.3rem}.faces a{display:block;width:8rem}.faces a:hover{text-decoration:none}
-.face{display:block;aspect-ratio:16/9;border-radius:11px;overflow:hidden;background:var(--s1);box-shadow:0 1px 2px rgba(90,50,20,.08),0 6px 16px rgba(90,50,20,.08)}
-.face img{width:100%;height:100%;object-fit:cover;display:block}
-.face.text pre{padding:.55rem .6rem;font-size:9.5px;line-height:1.45;color:var(--dim);height:100%;overflow:hidden;-webkit-mask-image:linear-gradient(#000 60%,transparent);mask-image:linear-gradient(#000 60%,transparent)}
-.cap{display:flex;align-items:center;gap:.4rem;width:0;min-width:100%;padding:0 .2rem;font-size:12px}.cap .took{flex:none;margin-left:auto;font:700 10.5px var(--round);color:var(--accent)}
-.face .role{position:absolute;left:.3rem;bottom:.3rem;padding:.14rem .4rem;border-radius:999px;background:rgba(255,255,255,.9);font:600 9px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--dim)}
-.face .none{display:grid;place-items:center;height:100%;font-size:10px;color:var(--faint)}
-.cap .n{font:600 11px var(--mono);color:var(--faint)}.dot{flex:none;width:7px;height:7px;border-radius:50%;background:var(--tone)}
-.cap .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dim)}
-.track li.bad .face{box-shadow:0 0 0 2px var(--bad)}
-@media(max-width:960px){.top{grid-template-columns:minmax(0,1fr)}.pills{justify-self:center;justify-content:center}.app{height:auto;min-height:100vh;overflow:visible}.center{grid-template-columns:minmax(0,1fr);grid-template-areas:"stage" "panel";gap:.75rem}
-.stage{min-height:60vh}.view{padding:.5rem 3.75rem 1rem}.track{position:sticky;bottom:0;background:var(--bg)}}
-@supports (corner-shape:squircle){*,*::before,*::after,::backdrop{corner-shape:squircle}.dot,.verdict i,.arrow,.q,.flag,.close,.dots i,.lb-nav .dir,
-:focus-visible,.pill,.tabs,.tabs a,.tabs a span,.reasons .steps a,.took,.badge,.face .role,.focus,.lb-cap,.lb-nav,.enlarge,.permalink,.exit,.fw-dl,.fopen{corner-shape:round}}
-.fopen{all:unset;cursor:pointer;color:var(--accent);overflow-wrap:anywhere;min-width:0}.fopen:hover{text-decoration:underline;text-underline-offset:3px}.fopen:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:999px}
-.fwin{position:fixed;inset:0;width:auto;height:auto;max-width:none;max-height:none;margin:0;padding:2rem;border:0;background:none;place-items:center;overflow:hidden;transition:overlay .28s allow-discrete,display .28s allow-discrete}
-.fwin:popover-open{display:grid}
-.fwin::backdrop{background:rgba(42,29,21,0);transition:background .28s ease,overlay .28s allow-discrete,display .28s allow-discrete}
-.fwin:popover-open::backdrop{background:rgba(42,29,21,.3)}
-@starting-style{.fwin:popover-open::backdrop{background:rgba(42,29,21,0)}}
-.fw-card{width:min(52rem,100%);max-height:min(42rem,100%);display:grid;grid-template-rows:auto minmax(0,1fr);background:var(--s1);border-radius:18px;box-shadow:0 1px 2px rgba(90,50,20,.08),0 24px 64px rgba(60,30,10,.24);overflow:hidden;opacity:0;scale:.96;translate:0 .75rem;transition:opacity .22s ease,scale .28s cubic-bezier(.3,.9,.3,1),translate .28s cubic-bezier(.3,.9,.3,1)}
-.fwin:popover-open .fw-card{opacity:1;scale:1;translate:0}
-@starting-style{.fwin:popover-open .fw-card{opacity:0;scale:.96;translate:0 .75rem}}
-.fw-bar{display:flex;align-items:center;gap:.75rem;padding:.7rem .7rem .7rem 1.15rem;border-bottom:1px solid var(--hair)}
-.fw-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 13px var(--mono);color:var(--text)}
-.fw-bar .size,.fw-note{flex:none;font:12px var(--mono);color:var(--faint)}
-.fw-note{font-family:var(--sans)}
-.fw-dl{flex:none;display:inline-flex;align-items:center;gap:.4rem;padding:.4rem .85rem .4rem .7rem;border-radius:999px;background:var(--grad);color:var(--on);font-size:12.5px;font-weight:600}
-.fw-dl:hover{text-decoration:none;filter:brightness(1.05)}
-.fw-dl:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.fw-card.framed{height:min(42rem,100%)}.fw-frame{display:block;width:100%;height:100%;border:0;background:#fff}
-.fw-body{margin:0;padding:1rem 1.15rem 1.25rem;overflow:auto;background:var(--bg);font:12.5px/1.6 var(--mono);color:var(--text);white-space:pre-wrap;overflow-wrap:anywhere;tab-size:2}
-@media(prefers-reduced-motion:reduce){*{transition:none!important}}
-@media print{.app{height:auto;display:block}.track,.arrow,.mid,.lightbox,.enlarge{display:none}.center{display:block}.step{display:block!important;break-inside:avoid;margin-bottom:1rem}.view{display:flex!important}.stage{background:none}}`;
-
-// src/package.ts
-var textLimit = 256 * 1024;
-var textBudget = 2 * 1024 * 1024;
-var generated = /* @__PURE__ */ new Set(["manifest.json", "summary.json", "trajectory.json", "index.html", "OPENING.txt", "journal/session-events.jsonl"]);
+var generated = /* @__PURE__ */ new Set(["manifest.json", "summary.json", "trajectory.json", "OPENING.txt", "journal/session-events.jsonl"]);
 var legacyTrajectoryFile = "walkthrough.json";
-var hash2 = (bytes) => createHash5("sha256").update(bytes).digest("hex");
+var hash2 = (bytes) => createHash4("sha256").update(bytes).digest("hex");
 var json = (value) => JSON.stringify(value, null, 2) + "\n";
 function object3(value, label) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`invalid ${label}`);
@@ -20798,8 +20316,8 @@ function receiptOutcome(receipt) {
   if (typeof exit?.code === "number" && exit.code !== 0 || exit?.signal) return "failed";
   return Number.isSafeInteger(exit?.code) && exit.code === 0 && exit.signal === null ? "completed" : "uncertain";
 }
-function reconcileOutcome(original, receipts2) {
-  const outcomes = [original, ...receipts2.map(receiptOutcome)];
+function reconcileOutcome(original, receipts) {
+  const outcomes = [original, ...receipts.map(receiptOutcome)];
   if (outcomes.includes("refused")) return "refused";
   if (outcomes.includes("failed")) return "failed";
   return original === "completed" && outcomes.includes("uncertain") ? "uncertain" : original;
@@ -20910,7 +20428,7 @@ async function analyze(root, options2, files) {
       if (value && typeof value === "object") hostRecords.push(value);
     }
   }
-  const receipts2 = [];
+  const receipts = [];
   const retainReceipt = (raw, envelope) => {
     const receipt = object3(raw, "execution receipt");
     for (const key of ["executionId", "actionId", "sessionId"]) {
@@ -20921,7 +20439,7 @@ async function analyze(root, options2, files) {
     const executionId = receipt.executionId ?? envelope?.executionId;
     const actionId = receipt.actionId ?? envelope?.actionId;
     if (executionId === void 0 && actionId === void 0) throw new Error("receipt lacks execution/action identity");
-    receipts2.push({ ...receipt, executionId, actionId });
+    receipts.push({ ...receipt, executionId, actionId });
   };
   for (const event of events.filter((e) => e.kind === "execution-completion")) retainReceipt(event.response, event);
   for (const path of files.filter((p) => /^(?:host\/(?:receipts|receiver-receipts)|state\/receiver\/receipts)\/[^/]+\.json$/.test(p) || /^host\/diagnostics\/[^/]+\.receipt\.json$/.test(p))) retainReceipt(await readJson(root, path));
@@ -20938,7 +20456,7 @@ async function analyze(root, options2, files) {
   for (const id2 of /* @__PURE__ */ new Set([...starts.keys(), ...refusals.keys(), ...actionRecords.keys()])) {
     const start = starts.get(id2), record3 = actionRecords.get(id2), refusal = refusals.get(id2);
     const source = start ?? refusal ?? record3;
-    if (receipts2.some((r) => r.evidenceMode === "diagnostic" && r.executionId === (source.executionId ?? record3?.executionId))) continue;
+    if (receipts.some((r) => r.evidenceMode === "diagnostic" && r.executionId === (source.executionId ?? record3?.executionId))) continue;
     const plan = start?.snapshotPlan, groupId = plan?.group?.groupId;
     const pair = snapshots2.filter((s) => groupId ? s.groupId === groupId : s.actionId === id2);
     if (pair.filter((s) => s.role === "before").length > 1 || pair.filter((s) => s.role === "after").length > 1) throw new Error(`duplicate action snapshot role: ${id2}`);
@@ -20962,7 +20480,7 @@ async function analyze(root, options2, files) {
     const candidate = fallbackIdentities.size === 1 ? fallback[0] : void 0;
     const host = exactHost ?? (candidate && (!candidate.actionId || candidate.actionId === id2) && (!executionId || !(candidate.executionId ?? candidate.request?.executionId) || (candidate.executionId ?? candidate.request?.executionId) === executionId) ? candidate : void 0);
     const because = source.because ?? host?.because ?? host?.request?.because;
-    const actionReceipts = receipts2.filter((r) => (r.actionId === id2 || executionId && r.executionId === executionId) && (r.actionId === void 0 || r.actionId === id2) && (r.executionId === void 0 || executionId === void 0 || r.executionId === executionId));
+    const actionReceipts = receipts.filter((r) => (r.actionId === id2 || executionId && r.executionId === executionId) && (r.actionId === void 0 || r.actionId === id2) && (r.executionId === void 0 || executionId === void 0 || r.executionId === executionId));
     execution2 = reconcileOutcome(execution2, actionReceipts);
     const completion = completions.get(id2);
     const argv2 = events.find((e) => e.kind === "execution-start" && executionId && e.executionId === executionId && Array.isArray(e.argv))?.argv;
@@ -20974,7 +20492,7 @@ async function analyze(root, options2, files) {
       output: commandOutput(actionReceipts.find((r) => commandOutput(r)) ?? completion?.toolOutcome?.value)
     });
     const originalObserved = refusal?.diagnostic ?? completion?.diagnostic ?? (completion?.toolOutcome ? JSON.stringify(completion.toolOutcome) : void 0);
-    const observed2 = actionReceipts.length ? `Authoritative receipt outcomes: ${JSON.stringify(actionReceipts.map((r) => ({ executionId: r.executionId, actionId: r.actionId, execution: receiptOutcome(r), outcome: r.outcome })))}
+    const observed = actionReceipts.length ? `Authoritative receipt outcomes: ${JSON.stringify(actionReceipts.map((r) => ({ executionId: r.executionId, actionId: r.actionId, execution: receiptOutcome(r), outcome: r.outcome })))}
 Original subprocess/action evidence (not an authoritative input-success verdict): ${JSON.stringify({ refusal: refusal?.diagnostic, state: completion?.state, diagnostic: completion?.diagnostic, toolOutcome: completion?.toolOutcome })}` : originalObserved;
     if (executionId) stepsByExecution.set(executionId, [...stepsByExecution.get(executionId) ?? [], stepId]);
     steps.push({
@@ -20986,13 +20504,13 @@ Original subprocess/action evidence (not an authoritative input-success verdict)
       execution: execution2,
       state: record3?.state ?? source.state ?? "unknown",
       expected: host?.step?.expected ?? host?.request?.step?.expected,
-      observed: observed2,
+      observed,
       ...typeof because === "string" ? { because } : {},
       ...pair.length ? { snapshots: { before: before?.path, after: after?.path, groupId, declaredAfterIntervalMs: after?.declaredAfterIntervalMs } } : {}
     });
   }
   const diagnostics = /* @__PURE__ */ new Map();
-  for (const receipt of receipts2.filter((r) => r.evidenceMode === "diagnostic")) diagnostics.set(text(receipt.executionId, "diagnostic execution id"), receipt);
+  for (const receipt of receipts.filter((r) => r.evidenceMode === "diagnostic")) diagnostics.set(text(receipt.executionId, "diagnostic execution id"), receipt);
   for (const [executionId, receipt] of diagnostics) {
     const request = hostRecords.find((h) => h.executionId === executionId && (h.diagnostic === true || h.evidenceMode === "diagnostic") && h.argv);
     const stepId = `diagnostic-${executionId}`;
@@ -21021,20 +20539,20 @@ Original subprocess/action evidence (not an authoritative input-success verdict)
   if (events.some((e) => ["evidence-failure", "capture-status", "resource-stop"].includes(e.kind) && ["incomplete", "uncertain"].includes(e.state))) findings.push("journal records incomplete evidence or a resource stop");
   if (files.some((p) => p.startsWith("state/snapshots/") && p.endsWith(".part"))) findings.push("unfinished snapshot originals retained");
   for (const request of hostRecords.filter((h) => typeof h.because === "string" && typeof h.executionId === "string")) {
-    if (![...starts.values()].some((s) => s.executionId === request.executionId) && !events.some((e) => e.kind === "execution-completion" && e.executionId === request.executionId) && !receipts2.some((r) => r.executionId === request.executionId && r.outcome?.kind === "refused")) {
+    if (![...starts.values()].some((s) => s.executionId === request.executionId) && !events.some((e) => e.kind === "execution-completion" && e.executionId === request.executionId) && !receipts.some((r) => r.executionId === request.executionId && r.outcome?.kind === "refused")) {
       findings.push(`request ${request.executionId} has no retained guest execution`);
     }
   }
   const completeness = findings.length ? "incomplete" : "complete";
   const snapshotReasons = findings.map((finding) => explainFinding(finding, steps, stepsByExecution));
-  const receiptFailed = receipts2.some((r) => ["refused", "failed"].includes(receiptOutcome(r)));
-  const receiptUncertain = receipts2.some((r) => receiptOutcome(r) === "uncertain");
+  const receiptFailed = receipts.some((r) => ["refused", "failed"].includes(receiptOutcome(r)));
+  const receiptUncertain = receipts.some((r) => receiptOutcome(r) === "uncertain");
   const execution = receiptFailed || steps.some((s) => s.execution === "failed" || s.execution === "refused") ? "failed" : receiptUncertain || !steps.length || completeness === "incomplete" || steps.some((s) => s.execution !== "completed") ? "uncertain" : "passed";
   if (receiptFailed) findings.push("retained execution receipt reports refusal or failure");
   if (receiptUncertain) findings.push("retained execution receipt reports uncertainty");
   const failedSteps = steps.filter((s) => s.execution === "failed" || s.execution === "refused").map((s) => s.id);
   const unsettled = steps.filter((s) => !["completed", "failed", "refused"].includes(s.execution)).map((s) => s.id);
-  const receiptSteps = (outcomes) => [...new Set(receipts2.filter((r) => outcomes.includes(receiptOutcome(r))).flatMap((r) => [...stepsByExecution.get(r.executionId) ?? [], ...steps.filter((s) => s.actionId === r.actionId).map((s) => s.id)]))];
+  const receiptSteps = (outcomes) => [...new Set(receipts.filter((r) => outcomes.includes(receiptOutcome(r))).flatMap((r) => [...stepsByExecution.get(r.executionId) ?? [], ...steps.filter((s) => s.actionId === r.actionId).map((s) => s.id)]))];
   const executionReasons = execution === "passed" ? [] : [
     ...failedSteps.length ? [{ text: "The guest refused or failed these steps.", stepIds: failedSteps }] : [],
     ...receiptFailed ? [{ text: "A retained receipt reports that the guest refused or failed an execution.", stepIds: receiptSteps(["refused", "failed"]) }] : [],
@@ -21044,21 +20562,7 @@ Original subprocess/action evidence (not an authoritative input-success verdict)
     ...execution === "uncertain" && unsettled.length ? [{ text: "These steps did not report a final execution outcome.", stepIds: unsettled }] : []
   ];
   const outputs = [];
-  let budget = textBudget;
-  for (const path of files.filter((p) => p.startsWith("extractions/")).sort()) {
-    const stat2 = await lstat4(join10(root, path));
-    let text4;
-    if (stat2.isFile() && textFile.test(path) && stat2.size <= Math.min(textLimit, budget)) {
-      try {
-        text4 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(await readFile7(join10(root, path)));
-      } catch {
-        text4 = void 0;
-      }
-      if (text4?.includes("\0")) text4 = void 0;
-      if (text4 !== void 0) budget -= stat2.size;
-    }
-    outputs.push({ path, bytes: stat2.size, ...text4 !== void 0 ? { text: text4 } : {} });
-  }
+  for (const path of files.filter((p) => p.startsWith("extractions/")).sort()) outputs.push({ path, bytes: (await lstat4(join10(root, path))).size });
   return { snapshots: snapshots2, steps, incompleteGroups, findings, completeness, execution, details, outputs, reasons: { snapshots: snapshotReasons, execution: executionReasons } };
 }
 function explainFinding(finding, steps, byExecution) {
@@ -21105,25 +20609,30 @@ async function buildReview(root, a) {
   const trajectory = await buildTrajectory(root, { steps: [...a.steps], execution: a.execution });
   return { ...trajectory, steps: a.steps, outcomes: { ...trajectory.outcomes, recording: a.completeness } };
 }
-function viewer(options2, a, generated2) {
-  const held = (text4) => text4 !== void 0 && Buffer.byteLength(text4) <= textLimit ? text4 : void 0;
-  return renderReviewPage({
+async function deliveredPackageRun(rootDir) {
+  const root = await rootPath(rootDir), m = await readJson(root, "manifest.json");
+  const options2 = { packageId: text(m.packageId, "package id"), sessionId: text(m.sessionId, "session id"), taskId: text(m.taskId, "task id") };
+  const times = [...(await analyze(root, options2, await filesUnder(root))).details.values()].map((d) => Date.parse(d.at ?? "")).filter(Number.isFinite);
+  return { taskId: options2.taskId, startedAt: times.length ? new Date(Math.min(...times)).toISOString() : text(m.createdAt, "creation time") };
+}
+var listedFiles = ["manifest.json", "summary.json", "trajectory.json"];
+async function reviewData(rootDir) {
+  const root = await rootPath(rootDir), m = await readJson(root, "manifest.json"), files = await filesUnder(root);
+  const options2 = { packageId: text(m.packageId, "package id"), sessionId: text(m.sessionId, "session id"), taskId: text(m.taskId, "task id") };
+  const a = await analyze(root, options2, files);
+  const listed = [];
+  for (const path of listedFiles.filter((p) => files.includes(p))) listed.push({ path, bytes: (await lstat4(join10(root, path))).size });
+  return {
     ...options2,
     completeness: a.completeness,
     execution: a.execution,
     findings: a.findings,
     reasons: a.reasons,
     steps: a.steps,
-    details: a.details,
+    details: Object.fromEntries(a.details),
     outputs: a.outputs,
-    generated: { summary: held(generated2.summary), trajectory: held(generated2.trajectory) }
-  });
-}
-function legacyViewer(options2, a) {
-  const link3 = (step2) => `#step-${encodeURIComponent(step2.id)}`;
-  const image = (path, role) => path ? `<figure><figcaption>${role}</figcaption><img alt="${role} dispatch snapshot" src="${escapeHtml(path.split("/").map(encodeURIComponent).join("/"))}"></figure>` : `<p>${role}: unavailable \u2014 incomplete evidence</p>`;
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' file:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>Relay review: ${escapeHtml(options2.packageId)}</title><style>body{font:16px system-ui;margin:2rem;color:#202020;background:#fff}main{display:grid;grid-template-columns:17rem 1fr;gap:2rem}nav{position:sticky;top:1rem;align-self:start}article{border:1px solid #aaa;padding:1rem;margin-bottom:2rem;scroll-margin-top:1rem}article:target{outline:4px solid #258}img{max-width:100%;height:auto}.pair{display:grid;grid-template-columns:1fr 1fr;gap:1rem}figure{margin:0}pre{white-space:pre-wrap;overflow-wrap:anywhere}a{color:#136} @media(max-width:700px){main,.pair{display:block}nav{position:static}}</style></head><body><h1>${escapeHtml(options2.packageId)}</h1><p>Snapshot completeness: ${a.completeness} \xB7 Execution: ${a.execution} \xB7 Human review: pending</p><p>Delivery integrity is separate from execution success. Snapshots are dispatch-time evidence, not continuous video.</p><main><nav aria-label="Review steps"><ol>${a.steps.map((s) => `<li><a href="${escapeHtml(link3(s))}">${escapeHtml(s.title)} \u2014 ${s.execution}</a></li>`).join("")}</ol><a href="manifest.json">Manifest</a> \xB7 <a href="summary.json">Summary</a></nav><section>${a.steps.map((s, i) => `<article id="step-${escapeHtml(s.id)}"><h2>${escapeHtml(s.title)}</h2><p>Execution: ${s.execution} \xB7 State: ${escapeHtml(s.state)} \xB7 Input mode: ${escapeHtml(s.inputMode)}</p><p>Routing reason: ${escapeHtml(s.because ?? "Not present in retained host metadata")}</p><p>Expected: ${escapeHtml(s.expected ?? "Not supplied")}</p><pre>Observed: ${escapeHtml(s.observed ?? "No confirmed result")}</pre><p>Declared after interval: ${s.snapshots?.declaredAfterIntervalMs ?? "unavailable"} ms${s.snapshots?.groupId ? ` \xB7 Group: ${escapeHtml(s.snapshots.groupId)}` : ""}</p><div class="pair">${image(s.snapshots?.before, "Before")}${image(s.snapshots?.after, "After")}</div><p>${i ? `<a href="${escapeHtml(link3(a.steps[i - 1]))}">Previous</a> \xB7 ` : ""}<a href="${escapeHtml(link3(s))}">Stable link</a>${i + 1 < a.steps.length ? ` \xB7 <a href="${escapeHtml(link3(a.steps[i + 1]))}">Next</a>` : ""}</p></article>`).join("")}</section></main></body></html>
-`;
+    files: listed
+  };
 }
 async function deliverPackage(rootDir, options2) {
   const root = await rootPath(rootDir), files = await filesUnder(root);
@@ -21155,12 +20664,10 @@ async function deliverPackage(rootDir, options2) {
         records: all.filter((p) => p !== "manifest.json" && !snapshotPaths.has(p) && !p.startsWith("extractions/")).map((p) => ({ absolutePath: join10(root, p), packagePath: p }))
       });
     };
+    await save("summary.json", json(summary(options2, a)));
+    await save("OPENING.txt", "Review this package with the relay's trajectory review command: /mcp-vm-relay:trajectory <this directory> in Claude Code, /mcp-vm-relay-trajectory <this directory> in pi, or the relay_trajectory tool. It verifies the package and opens the review app on it in the browser. Snapshot completeness and execution are separate verdicts, and the page explains each one that is not complete or passed. Originals are under state/, host metadata under host/, and declared extractions under extractions/. manifest.json checksums every artifact except itself.\n");
     await save("manifest.json", json(await build()));
-    const generated2 = { summary: json(summary(options2, a)), trajectory: json(await buildReview(root, a)) };
-    await save("summary.json", generated2.summary);
-    await save("index.html", viewer(options2, a, generated2));
-    await save("OPENING.txt", "Open index.html directly in a browser (file://); no server, network, or test machine is required. Select a step, or use the arrows or the left and right arrow keys. Snapshot completeness and execution are separate verdicts, and the page explains each one that is not complete or passed. Originals are under state/, host metadata under host/, and declared extractions under extractions/. manifest.json checksums every artifact except itself.\n");
-    await save("trajectory.json", generated2.trajectory);
+    await save("trajectory.json", json(await buildReview(root, a)));
     await writeFile3(join10(root, "manifest.json"), json(await build()));
     return await verifyDeliveredPackage(root);
   } catch (error2) {
@@ -21202,11 +20709,8 @@ async function verifyDeliveredPackage(rootDir) {
   if (!(await readFile7(join10(root, "state/journal/events.jsonl"))).equals(await readFile7(join10(root, "journal/session-events.jsonl")))) throw new Error("trajectory journal differs from original");
   const summaryText = await readFile7(join10(root, "summary.json"), "utf8");
   if (summaryText !== json(summary(options2, a)) && summaryText !== json(legacySummary(options2, a))) throw new Error("summary disagrees with original evidence");
-  const page = await readFile7(join10(root, "index.html"), "utf8");
-  const review = json(await buildReview(root, a));
-  if (page !== viewer(options2, a, { summary: json(summary(options2, a)), trajectory: review }) && page !== legacyViewer(options2, a)) throw new Error("viewer disagrees with original evidence");
   const trajectoryFile = !files.includes("trajectory.json") && files.includes(legacyTrajectoryFile) ? legacyTrajectoryFile : "trajectory.json";
-  if (await readFile7(join10(root, trajectoryFile), "utf8") !== review) throw new Error("trajectory disagrees with original evidence");
+  if (await readFile7(join10(root, trajectoryFile), "utf8") !== json(await buildReview(root, a))) throw new Error("trajectory disagrees with original evidence");
   const acceptance = await verifyPackage(manifest, root);
   const errors = acceptance.findings.filter((f) => f.code !== "ok" && !(f.code === "state-inconsistent" && [...a.incompleteGroups].some((g) => f.detail === `group ${g} does not carry exactly one before/after pair`)));
   if (errors.length) throw new Error(`package verification failed: ${errors.map((e) => e.detail).join("; ")}`);
@@ -21298,8 +20802,8 @@ async function acquireOwnerLock(path, options2 = {}) {
   }
   let ended = false;
   let resolveEnd;
-  const end = new Promise((resolve11) => {
-    resolveEnd = resolve11;
+  const end = new Promise((resolve12) => {
+    resolveEnd = resolve12;
   });
   const markEnded = () => {
     ended = true;
@@ -21674,8 +21178,8 @@ function Values(value) {
 function DeepEqualObject(left, right) {
   if (!IsObject(right))
     return false;
-  const keys2 = Keys(left);
-  return IsEqual(keys2.length, Keys(right).length) && keys2.every((key) => IsDeepEqual(left[key], right[key]));
+  const keys = Keys(left);
+  return IsEqual(keys.length, Keys(right).length) && keys.every((key) => IsDeepEqual(left[key], right[key]));
 }
 function DeepEqualArray(left, right) {
   return IsArray(right) && IsEqual(left.length, right.length) && left.every((_, index) => IsDeepEqual(left[index], right[index]));
@@ -22146,8 +21650,8 @@ function IsTypeScriptEnumLike(value) {
   return guard_exports.IsObjectNotArray(value);
 }
 function TypeScriptEnumToEnumValues(type) {
-  const keys2 = guard_exports.Keys(type).filter((key) => isNaN(key));
-  return keys2.reduce((result2, key) => [...result2, type[key]], []);
+  const keys = guard_exports.Keys(type).filter((key) => isNaN(key));
+  return keys.reduce((result2, key) => [...result2, type[key]], []);
 }
 
 // node_modules/typebox/build/type/types/enum.mjs
@@ -22163,8 +21667,8 @@ function IsEnum(value) {
 }
 
 // node_modules/typebox/build/type/types/intersect.mjs
-function Intersect(types, options2 = {}) {
-  return memory_exports.Create({ "~kind": "Intersect" }, { allOf: types }, options2);
+function Intersect(types2, options2 = {}) {
+  return memory_exports.Create({ "~kind": "Intersect" }, { allOf: types2 }, options2);
 }
 function IsIntersect(value) {
   return IsKind(value, "Intersect");
@@ -22620,18 +22124,18 @@ function ParsePatternIntoTypes(pattern) {
 function FromLiteral(_value) {
   return true;
 }
-function FromTypesReduce(types) {
-  return guard_exports.ShiftLeft(types, (left, right) => FromType(left) ? FromTypesReduce(right) : false, () => true);
+function FromTypesReduce(types2) {
+  return guard_exports.ShiftLeft(types2, (left, right) => FromType(left) ? FromTypesReduce(right) : false, () => true);
 }
-function FromTypes(types) {
-  const result2 = guard_exports.IsEqual(types.length, 0) ? false : FromTypesReduce(types);
+function FromTypes(types2) {
+  const result2 = guard_exports.IsEqual(types2.length, 0) ? false : FromTypesReduce(types2);
   return result2;
 }
 function FromType(type) {
   return IsUnion(type) ? FromTypes(type.anyOf) : IsLiteral(type) ? FromLiteral(type.const) : false;
 }
-function IsTemplateLiteralFinite(types) {
-  const result2 = FromTypes(types);
+function IsTemplateLiteralFinite(types2) {
+  const result2 = FromTypes(types2);
   return result2;
 }
 
@@ -22647,34 +22151,34 @@ function FromLiteralPush(variants, value, result2 = []) {
 function FromLiteral2(variants, value) {
   return guard_exports.IsEqual(variants.length, 0) ? [`${value}`] : FromLiteralPush(variants, value);
 }
-function FromUnion(variants, types, result2 = []) {
-  return guard_exports.ShiftLeft(types, (left, right) => FromUnion(variants, right, [...result2, ...FromType2(variants, left)]), () => result2);
+function FromUnion(variants, types2, result2 = []) {
+  return guard_exports.ShiftLeft(types2, (left, right) => FromUnion(variants, right, [...result2, ...FromType2(variants, left)]), () => result2);
 }
 function FromType2(variants, type) {
   const result2 = IsUnion(type) ? FromUnion(variants, type.anyOf) : IsLiteral(type) ? FromLiteral2(variants, type.const) : Unreachable();
   return result2;
 }
-function DecodeFromSpan(variants, types) {
-  return guard_exports.ShiftLeft(types, (left, right) => DecodeFromSpan(FromType2(variants, left), right), () => variants);
+function DecodeFromSpan(variants, types2) {
+  return guard_exports.ShiftLeft(types2, (left, right) => DecodeFromSpan(FromType2(variants, left), right), () => variants);
 }
 function VariantsToLiterals(variants) {
   return variants.map((variant) => Literal(variant));
 }
-function DecodeTypesAsUnion(types) {
-  const variants = DecodeFromSpan([], types);
+function DecodeTypesAsUnion(types2) {
+  const variants = DecodeFromSpan([], types2);
   const literals = VariantsToLiterals(variants);
   const result2 = Union(literals);
   return result2;
 }
-function DecodeTypes(types) {
-  return guard_exports.IsEqual(types.length, 0) ? Unreachable() : (
+function DecodeTypes(types2) {
+  return guard_exports.IsEqual(types2.length, 0) ? Unreachable() : (
     // Literal('') :
-    guard_exports.IsEqual(types.length, 1) && IsLiteral(types[0]) ? types[0] : DecodeTypesAsUnion(types)
+    guard_exports.IsEqual(types2.length, 1) && IsLiteral(types2[0]) ? types2[0] : DecodeTypesAsUnion(types2)
   );
 }
 function TemplateLiteralDecodeUnsafe(pattern) {
-  const types = ParsePatternIntoTypes(pattern);
-  const result2 = guard_exports.IsEqual(types.length, 0) ? String2() : IsTemplateLiteralFinite(types) ? DecodeTypes(types) : TemplateLiteralCreate(pattern);
+  const types2 = ParsePatternIntoTypes(pattern);
+  const result2 = guard_exports.IsEqual(types2.length, 0) ? String2() : IsTemplateLiteralFinite(types2) ? DecodeTypes(types2) : TemplateLiteralCreate(pattern);
   return result2;
 }
 function TemplateLiteralDecode(pattern) {
@@ -22701,8 +22205,8 @@ function FromBooleanKey(value) {
 }
 
 // node_modules/typebox/build/type/types/tuple.mjs
-function Tuple(types, options2 = {}) {
-  const [items, minItems, additionalItems] = [types, types.length, false];
+function Tuple(types2, options2 = {}) {
+  const [items, minItems, additionalItems] = [types2, types2.length, false];
   return memory_exports.Create({ ["~kind"]: "Tuple" }, { type: "array", additionalItems, items, minItems }, options2);
 }
 function IsTuple(value) {
@@ -22755,8 +22259,8 @@ function RemoveOptional(type, options2 = {}) {
 }
 
 // node_modules/typebox/build/type/engine/tuple/to_object.mjs
-function TupleElementsToProperties(types) {
-  const result2 = types.reduceRight((result3, right, index) => {
+function TupleElementsToProperties(types2) {
+  const result2 = types2.reduceRight((result3, right, index) => {
     return { [index]: right, ...result3 };
   }, {});
   return result2;
@@ -22788,8 +22292,8 @@ function CompositePropertyKey(left, right, key) {
   return key in left ? key in right ? CompositeProperty(left[key], right[key]) : left[key] : key in right ? right[key] : Never();
 }
 function CompositeProperties(left, right) {
-  const keys2 = /* @__PURE__ */ new Set([...guard_exports.Keys(left), ...guard_exports.Keys(right)]);
-  const result2 = [...keys2].reduce((result3, key) => {
+  const keys = /* @__PURE__ */ new Set([...guard_exports.Keys(left), ...guard_exports.Keys(right)]);
+  const result2 = [...keys].reduce((result3, key) => {
     return { ...result3, [key]: CompositePropertyKey(left, right, key) };
   }, {});
   return result2;
@@ -22832,14 +22336,14 @@ function DistributeOperation(left, right) {
   const result2 = shouldEvaluate ? EvaluateIntersect([evaluatedLeft, evaluatedRight]) : Narrow(evaluatedLeft, evaluatedRight);
   return result2;
 }
-function DistributeType(type, types, result2 = []) {
-  return guard_exports.ShiftLeft(types, (left, right) => DistributeType(type, right, [...result2, DistributeOperation(left, type)]), () => guard_exports.IsEqual(result2.length, 0) ? [type] : result2);
+function DistributeType(type, types2, result2 = []) {
+  return guard_exports.ShiftLeft(types2, (left, right) => DistributeType(type, right, [...result2, DistributeOperation(left, type)]), () => guard_exports.IsEqual(result2.length, 0) ? [type] : result2);
 }
-function DistributeUnion(types, distribution, result2 = []) {
-  return guard_exports.ShiftLeft(types, (left, right) => DistributeUnion(right, distribution, [...result2, ...Distribute([left], distribution)]), () => result2);
+function DistributeUnion(types2, distribution, result2 = []) {
+  return guard_exports.ShiftLeft(types2, (left, right) => DistributeUnion(right, distribution, [...result2, ...Distribute([left], distribution)]), () => result2);
 }
-function Distribute(types, result2 = []) {
-  return guard_exports.ShiftLeft(types, (left, right) => IsUnion(left) ? Distribute(right, DistributeUnion(left.anyOf, result2)) : Distribute(right, DistributeType(left, result2)), () => result2);
+function Distribute(types2, result2 = []) {
+  return guard_exports.ShiftLeft(types2, (left, right) => IsUnion(left) ? Distribute(right, DistributeUnion(left.anyOf, result2)) : Distribute(right, DistributeType(left, result2)), () => result2);
 }
 
 // node_modules/typebox/build/type/engine/exclude/operation.mjs
@@ -22869,8 +22373,8 @@ function EvaluateDependent(if_, then_, else_) {
 function EvaluateEnum(values, result2 = []) {
   return guard_exports.ShiftLeft(values, (left, right) => EvaluateEnum(right, [...result2, Literal(left)]), () => EvaluateUnion(result2));
 }
-function EvaluateIntersect(types) {
-  const distribution = Distribute(types);
+function EvaluateIntersect(types2) {
+  const distribution = Distribute(types2);
   const broadend = Broaden(distribution);
   const result2 = EvaluateUnion(broadend);
   return result2;
@@ -22880,8 +22384,8 @@ function EvaluateTemplateLiteral(pattern) {
   const result2 = EvaluateType(evaluated);
   return result2;
 }
-function EvaluateUnion(types) {
-  const broadend = Broaden(types);
+function EvaluateUnion(types2) {
+  const broadend = Broaden(types2);
   const result2 = EvaluateUnionFast(broadend);
   return result2;
 }
@@ -22889,8 +22393,8 @@ function EvaluateType(type) {
   const result2 = IsDependent(type) ? EvaluateDependent(type.if, type.then, type.else) : IsEnum(type) ? EvaluateEnum(type.enum) : IsIntersect(type) ? EvaluateIntersect(type.allOf) : IsTemplateLiteral(type) ? EvaluateTemplateLiteral(type.pattern) : IsUnion(type) ? EvaluateUnion(type.anyOf) : type;
   return result2;
 }
-function EvaluateUnionFast(types) {
-  const result2 = guard_exports.IsEqual(types.length, 1) ? types[0] : guard_exports.IsEqual(types.length, 0) ? Never() : Union(types);
+function EvaluateUnionFast(types2) {
+  const result2 = guard_exports.IsEqual(types2.length, 1) ? types2[0] : guard_exports.IsEqual(types2.length, 0) ? Never() : Union(types2);
   return result2;
 }
 
@@ -22908,8 +22412,8 @@ function FromIntegerKey(_key, value) {
 }
 
 // node_modules/typebox/build/type/engine/record/from_key_intersect.mjs
-function FromIntersectKey(types, value) {
-  const evaluatedKey = EvaluateIntersect(types);
+function FromIntersectKey(types2, value) {
+  const evaluatedKey = EvaluateIntersect(types2);
   const result2 = FromKey(evaluatedKey, value);
   return result2;
 }
@@ -22932,8 +22436,8 @@ function FromStringKey(key, value) {
 
 // node_modules/typebox/build/type/engine/record/from_key_template_literal.mjs
 function FromTemplateKey(pattern, value) {
-  const types = ParsePatternIntoTypes(pattern);
-  const finite = IsTemplateLiteralFinite(types);
+  const types2 = ParsePatternIntoTypes(pattern);
+  const finite = IsTemplateLiteralFinite(types2);
   const result2 = finite ? FromKey(EvaluateTemplateLiteral(pattern), value) : CreateRecord(pattern, value);
   return result2;
 }
@@ -22943,29 +22447,29 @@ function FlattenType(type) {
   const result2 = IsUnion(type) ? Flatten(type.anyOf) : [type];
   return result2;
 }
-function Flatten(types, result2 = []) {
-  return guard_exports.ShiftLeft(types, (left, right) => Flatten(right, [...result2, ...FlattenType(left)]), () => result2);
+function Flatten(types2, result2 = []) {
+  return guard_exports.ShiftLeft(types2, (left, right) => Flatten(right, [...result2, ...FlattenType(left)]), () => result2);
 }
 
 // node_modules/typebox/build/type/engine/record/from_key_union.mjs
-function StringOrNumberCheck(types) {
-  return types.some((type) => IsString3(type) || IsNumber3(type) || IsInteger2(type));
+function StringOrNumberCheck(types2) {
+  return types2.some((type) => IsString3(type) || IsNumber3(type) || IsInteger2(type));
 }
-function TryBuildRecord(types, value) {
-  return guard_exports.IsEqual(StringOrNumberCheck(types), true) ? CreateRecord(StringKey, value) : void 0;
+function TryBuildRecord(types2, value) {
+  return guard_exports.IsEqual(StringOrNumberCheck(types2), true) ? CreateRecord(StringKey, value) : void 0;
 }
-function CreateProperties(types, value) {
-  return types.reduce((result2, left) => {
+function CreateProperties(types2, value) {
+  return types2.reduce((result2, left) => {
     return IsLiteral(left) && (guard_exports.IsString(left.const) || guard_exports.IsNumber(left.const)) ? { ...result2, [left.const]: value } : result2;
   }, {});
 }
-function CreateObject(types, value) {
-  const properties = CreateProperties(types, value);
+function CreateObject(types2, value) {
+  const properties = CreateProperties(types2, value);
   const result2 = _Object_(properties);
   return result2;
 }
-function FromUnionKey(types, value) {
-  const flattened = Flatten(types);
+function FromUnionKey(types2, value) {
+  const flattened = Flatten(types2);
   const record3 = TryBuildRecord(flattened, value);
   return IsSchema(record3) ? record3 : CreateObject(flattened, value);
 }
@@ -23920,8 +23424,8 @@ function EncodeString(right, pattern) {
 function EncodeTemplateLiteral(templatePattern, right, pattern) {
   return EncodeTypes(right, `${pattern}${UnwrapTemplateLiteralPattern(templatePattern)}`);
 }
-function EncodeTemplateLiteralDeferred(types, right, pattern) {
-  const templateLiteral = TemplateLiteralAction(types, {});
+function EncodeTemplateLiteralDeferred(types2, right, pattern) {
+  const templateLiteral = TemplateLiteralAction(types2, {});
   const result2 = EncodeType(templateLiteral, right, pattern);
   return result2;
 }
@@ -23929,49 +23433,49 @@ function EncodeEnum(values, right, pattern) {
   const evaluated = EvaluateEnum(values);
   return EncodeType(evaluated, right, pattern);
 }
-function EncodeUnion(types, right, pattern, result2 = []) {
-  return guard_exports.ShiftLeft(types, (head, tail) => EncodeUnion(tail, right, pattern, [...result2, EncodeType(head, [], "")]), () => EncodeTypes(right, `${pattern}(${JoinString(result2)})`));
+function EncodeUnion(types2, right, pattern, result2 = []) {
+  return guard_exports.ShiftLeft(types2, (head, tail) => EncodeUnion(tail, right, pattern, [...result2, EncodeType(head, [], "")]), () => EncodeTypes(right, `${pattern}(${JoinString(result2)})`));
 }
 function EncodeType(type, right, pattern) {
   return IsEnum(type) ? EncodeEnum(type.enum, right, pattern) : IsInteger2(type) ? EncodeInteger(right, pattern) : IsLiteral(type) ? EncodeLiteral(type.const, right, pattern) : IsBigInt2(type) ? EncodeBigInt(right, pattern) : IsBoolean3(type) ? EncodeBoolean(right, pattern) : IsNumber3(type) ? EncodeNumber(right, pattern) : IsString3(type) ? EncodeString(right, pattern) : IsTemplateLiteral(type) ? EncodeTemplateLiteral(type.pattern, right, pattern) : IsTemplateLiteralDeferred(type) ? EncodeTemplateLiteralDeferred(type.parameters[0], right, pattern) : IsUnion(type) ? EncodeUnion(type.anyOf, right, pattern) : NeverPattern;
 }
-function EncodeTypes(types, pattern) {
-  return guard_exports.ShiftLeft(types, (left, right) => EncodeType(left, right, pattern), () => pattern);
+function EncodeTypes(types2, pattern) {
+  return guard_exports.ShiftLeft(types2, (left, right) => EncodeType(left, right, pattern), () => pattern);
 }
-function EncodePattern(types) {
-  const encoded = EncodeTypes(types, "");
+function EncodePattern(types2) {
+  const encoded = EncodeTypes(types2, "");
   const result2 = `^${encoded}$`;
   return result2;
 }
-function TemplateLiteralEncode(types) {
-  const pattern = EncodePattern(types);
+function TemplateLiteralEncode(types2) {
+  const pattern = EncodePattern(types2);
   const result2 = TemplateLiteralCreate(pattern);
   return result2;
 }
 
 // node_modules/typebox/build/type/engine/template_literal/instantiate.mjs
-function TemplateLiteralAction(types, options2) {
-  const result2 = CanInstantiate(types) ? memory_exports.Update(TemplateLiteralEncode(types), {}, options2) : TemplateLiteralDeferred(types, options2);
+function TemplateLiteralAction(types2, options2) {
+  const result2 = CanInstantiate(types2) ? memory_exports.Update(TemplateLiteralEncode(types2), {}, options2) : TemplateLiteralDeferred(types2, options2);
   return result2;
 }
-function TemplateLiteralInstantiate(context, state, types, options2) {
-  const instantiatedTypes = InstantiateTypes(context, state, types);
+function TemplateLiteralInstantiate(context, state, types2, options2) {
+  const instantiatedTypes = InstantiateTypes(context, state, types2);
   return TemplateLiteralAction(instantiatedTypes, options2);
 }
 
 // node_modules/typebox/build/type/types/template_literal.mjs
-function TemplateLiteralDeferred(types, options2 = {}) {
-  return Deferred("TemplateLiteral", [types], options2);
+function TemplateLiteralDeferred(types2, options2 = {}) {
+  return Deferred("TemplateLiteral", [types2], options2);
 }
 function IsTemplateLiteralDeferred(value) {
   return IsSchema(value) && guard_exports.HasPropertyKey(value, "action") && guard_exports.IsEqual(value.action, "TemplateLiteral");
 }
-function TemplateLiteralFromTypes(types) {
-  return TemplateLiteralAction(types, {});
+function TemplateLiteralFromTypes(types2) {
+  return TemplateLiteralAction(types2, {});
 }
 function TemplateLiteralFromString(template) {
-  const types = ParseTemplateIntoTypes(template);
-  return TemplateLiteralFromTypes(types);
+  const types2 = ParseTemplateIntoTypes(template);
+  return TemplateLiteralFromTypes(types2);
 }
 function TemplateLiteral2(input, options2 = {}) {
   const type = guard_exports.IsString(input) ? TemplateLiteralFromString(input) : TemplateLiteralFromTypes(input);
@@ -24171,8 +23675,8 @@ function ExtendsProperty(inferred, left, right) {
     IsInfer(right) && IsNever(right.extends) ? ExtendsFalse() : Match3(ExtendsLeft(inferred, left, right), (inferred2) => ExtendsPropertyOptional(inferred2, left, right), () => ExtendsFalse())
   );
 }
-function ExtractInferredProperties(keys2, properties) {
-  return keys2.reduce((result2, key) => {
+function ExtractInferredProperties(keys, properties) {
+  return keys.reduce((result2, key) => {
     return key in properties ? IsExtendsTrueLike(properties[key]) ? { ...result2, ...properties[key].inferred } : Unreachable() : Unreachable();
   }, {});
 }
@@ -24200,12 +23704,12 @@ function RecordMergeInferred(left, right) {
     };
   }, left);
 }
-function ExtendsRecordComparer(properties, keys2, type, result2) {
-  return guard_exports.ShiftLeft(keys2, (left, right) => Match3(ExtendsLeft({}, properties[left], type), (inferred) => ExtendsRecordComparer(properties, right, type, RecordMergeInferred(result2, inferred)), () => ExtendsFalse()), () => ExtendsTrue(result2));
+function ExtendsRecordComparer(properties, keys, type, result2) {
+  return guard_exports.ShiftLeft(keys, (left, right) => Match3(ExtendsLeft({}, properties[left], type), (inferred) => ExtendsRecordComparer(properties, right, type, RecordMergeInferred(result2, inferred)), () => ExtendsFalse()), () => ExtendsTrue(result2));
 }
 function ExtendsObjectToRecord(inferred, properties, _pattern, value) {
-  const keys2 = guard_exports.Keys(properties);
-  const result2 = ExtendsRecordComparer(properties, keys2, value, inferred);
+  const keys = guard_exports.Keys(properties);
+  const result2 = ExtendsRecordComparer(properties, keys, value, inferred);
   return result2;
 }
 function ExtendsObject(inferred, left, right) {
@@ -24265,14 +23769,14 @@ function InferUnionResult(inferred, name, left, right) {
 }
 
 // node_modules/typebox/build/type/extends/tuple.mjs
-function Reverse(types) {
-  return [...types].reverse();
+function Reverse(types2) {
+  return [...types2].reverse();
 }
-function ApplyReverse(types, reversed) {
-  return reversed ? Reverse(types) : types;
+function ApplyReverse(types2, reversed) {
+  return reversed ? Reverse(types2) : types2;
 }
-function Reversed(types) {
-  const first = types.length > 0 ? types[0] : void 0;
+function Reversed(types2) {
+  const first = types2.length > 0 ? types2[0] : void 0;
   const inferrable = IsSchema(first) ? TryRestInferable(first) : void 0;
   return IsSchema(inferrable);
 }
@@ -24369,11 +23873,11 @@ function FromRef(stack, context, ref) {
   return stack.includes(ref) ? true : FromType3([...stack, ref], context, context[ref]);
 }
 function FromProperties(stack, context, properties) {
-  const types = PropertyValues(properties);
-  return FromTypes2(stack, context, types);
+  const types2 = PropertyValues(properties);
+  return FromTypes2(stack, context, types2);
 }
-function FromTypes2(stack, context, types) {
-  return guard_exports.ShiftLeft(types, (left, right) => FromType3(stack, context, left) ? true : FromTypes2(stack, context, right), () => false);
+function FromTypes2(stack, context, types2) {
+  return guard_exports.ShiftLeft(types2, (left, right) => FromType3(stack, context, left) ? true : FromTypes2(stack, context, right), () => false);
 }
 function FromType3(stack, context, type) {
   return IsRef(type) ? FromRef(stack, context, type.$ref) : IsArray2(type) ? FromType3(stack, context, type.items) : IsConstructor2(type) ? FromTypes2(stack, context, [...type.parameters, type.instanceType]) : IsFunction2(type) ? FromTypes2(stack, context, [...type.parameters, type.returnType]) : IsInterfaceDeferred(type) ? FromProperties(stack, context, type.parameters[1]) : IsIntersect(type) ? FromTypes2(stack, context, type.allOf) : IsObject2(type) ? FromProperties(stack, context, type.properties) : IsUnion(type) ? FromTypes2(stack, context, type.anyOf) : IsTuple(type) ? FromTypes2(stack, context, type.items) : IsRecord(type) ? FromType3(stack, context, RecordValue(type)) : false;
@@ -24384,14 +23888,14 @@ function CyclicCheck(stack, context, type) {
 }
 
 // node_modules/typebox/build/type/engine/cyclic/candidates.mjs
-function ResolveCandidateKeys(context, keys2) {
-  return keys2.reduce((result2, left) => {
+function ResolveCandidateKeys(context, keys) {
+  return keys.reduce((result2, left) => {
     return CyclicCheck([left], context, context[left]) ? [...result2, left] : result2;
   }, []);
 }
 function CyclicCandidates(context) {
-  const keys2 = PropertyKeys(context);
-  const result2 = ResolveCandidateKeys(context, keys2);
+  const keys = PropertyKeys(context);
+  const result2 = ResolveCandidateKeys(context, keys);
   return result2;
 }
 
@@ -24400,11 +23904,11 @@ function FromRef2(context, ref, result2) {
   return result2.includes(ref) ? result2 : ref in context ? FromType4(context, context[ref], [...result2, ref]) : Unreachable();
 }
 function FromProperties2(context, properties, result2) {
-  const types = PropertyValues(properties);
-  return FromTypes3(context, types, result2);
+  const types2 = PropertyValues(properties);
+  return FromTypes3(context, types2, result2);
 }
-function FromTypes3(context, types, result2) {
-  return types.reduce((result3, left) => {
+function FromTypes3(context, types2, result2) {
+  return types2.reduce((result3, left) => {
     return FromType4(context, left, result3);
   }, result2);
 }
@@ -24425,8 +23929,8 @@ function FromProperties3(properties) {
     return { ...result2, [key]: FromType5(properties[key]) };
   }, {});
 }
-function FromTypes4(types) {
-  return types.reduce((result2, left) => {
+function FromTypes4(types2) {
+  return types2.reduce((result2, left) => {
     return [...result2, FromType5(left)];
   }, []);
 }
@@ -24448,8 +23952,8 @@ function CyclicInterface(context, heritage, properties) {
   return evaluatedInterface;
 }
 function CyclicDefinitions(context, dependencies) {
-  const keys2 = guard_exports.Keys(context).filter((key) => dependencies.includes(key));
-  return keys2.reduce((result2, key) => {
+  const keys = guard_exports.Keys(context).filter((key) => dependencies.includes(key));
+  return keys.reduce((result2, key) => {
     const type = context[key];
     const instantiatedType = IsInterfaceDeferred(type) ? CyclicInterface(context, type.parameters[0], type.parameters[1]) : type;
     return { ...result2, [key]: instantiatedType };
@@ -24492,33 +23996,33 @@ function Compare(left, right) {
 }
 
 // node_modules/typebox/build/type/engine/evaluate/broaden.mjs
-function BroadenFilter(type, types, result2 = [], all = types) {
-  return guard_exports.ShiftLeft(types, (left, right) => {
+function BroadenFilter(type, types2, result2 = [], all = types2) {
+  return guard_exports.ShiftLeft(types2, (left, right) => {
     const compare2 = Compare(type, left);
     return guard_exports.IsEqual(compare2, CompareResultLeftInside) || guard_exports.IsEqual(compare2, CompareResultEqual) ? all : guard_exports.IsEqual(compare2, CompareResultDisjoint) ? BroadenFilter(type, right, [...result2, left], all) : BroadenFilter(type, right, result2, all);
   }, () => [...result2, type]);
 }
-function BroadenType(type, types, result2) {
+function BroadenType(type, types2, result2) {
   const evaluated = EvaluateType(type);
   return IsAny(evaluated) ? [evaluated] : (
     // terminate (always the most broad)
     IsUnknown(evaluated) ? [evaluated] : (
       // terminate (always the most broad)
-      IsNever(evaluated) ? BroadenTypes(types, result2) : (
+      IsNever(evaluated) ? BroadenTypes(types2, result2) : (
         // ignored: never is dropped
-        IsObject2(evaluated) ? BroadenTypes(types, [...result2, evaluated]) : (
+        IsObject2(evaluated) ? BroadenTypes(types2, [...result2, evaluated]) : (
           // objects are always considered (too expensive to compare)
-          BroadenTypes(types, BroadenFilter(evaluated, result2))
+          BroadenTypes(types2, BroadenFilter(evaluated, result2))
         )
       )
     )
   );
 }
-function BroadenTypes(types, result2 = []) {
-  return guard_exports.ShiftLeft(types, (left, right) => BroadenType(left, right, result2), () => result2);
+function BroadenTypes(types2, result2 = []) {
+  return guard_exports.ShiftLeft(types2, (left, right) => BroadenType(left, right, result2), () => result2);
 }
-function Broaden(types) {
-  const broadened = BroadenTypes(types);
+function Broaden(types2) {
+  const broadened = BroadenTypes(types2);
   const flattened = Flatten(broadened);
   return flattened;
 }
@@ -24716,8 +24220,8 @@ function FromTemplateLiteral(mapping, pattern) {
 }
 
 // node_modules/typebox/build/type/engine/intrinsics/from_union.mjs
-function FromUnion2(mapping, types) {
-  const result2 = types.map((type) => FromType7(mapping, type));
+function FromUnion2(mapping, types2) {
+  const result2 = types2.map((type) => FromType7(mapping, type));
   return Union(result2);
 }
 
@@ -24899,13 +24403,13 @@ function ExtractInstantiate(context, state, left, right, options2) {
 }
 
 // node_modules/typebox/build/type/engine/helpers/keys_to_indexer.mjs
-function KeysToLiterals(keys2) {
-  return keys2.reduce((result2, left) => {
+function KeysToLiterals(keys) {
+  return keys.reduce((result2, left) => {
     return IsLiteralValue(left) ? [...result2, Literal(left)] : result2;
   }, []);
 }
-function KeysToIndexer(keys2) {
-  const literals = KeysToLiterals(keys2);
+function KeysToIndexer(keys) {
+  const literals = KeysToLiterals(keys);
   const result2 = Union(literals);
   return result2;
 }
@@ -24945,8 +24449,8 @@ function CollapseIntersectProperties(left, right) {
   const shared = memory_exports.Assign(unique, sharedProperties);
   return shared;
 }
-function FromIntersect(types) {
-  return types.reduce((result2, left) => {
+function FromIntersect(types2) {
+  return types2.reduce((result2, left) => {
     return CollapseIntersectProperties(result2, FromType8(left));
   }, {});
 }
@@ -24957,8 +24461,8 @@ function FromObject4(properties) {
 }
 
 // node_modules/typebox/build/type/engine/object/from_tuple.mjs
-function FromTuple(types) {
-  const object5 = TupleToObject(Tuple(types));
+function FromTuple(types2) {
+  const object5 = TupleToObject(Tuple(types2));
   const result2 = FromType8(object5);
   return result2;
 }
@@ -24971,11 +24475,11 @@ function CollapseUnionProperties(left, right) {
   }, {});
   return result2;
 }
-function ReduceVariants(types, result2) {
-  return guard_exports.ShiftLeft(types, (left, right) => ReduceVariants(right, CollapseUnionProperties(result2, FromType8(left))), () => result2);
+function ReduceVariants(types2, result2) {
+  return guard_exports.ShiftLeft(types2, (left, right) => ReduceVariants(right, CollapseUnionProperties(result2, FromType8(left))), () => result2);
 }
-function FromUnion3(types) {
-  return guard_exports.ShiftLeft(types, (left, right) => ReduceVariants(right, FromType8(left)), () => Unreachable());
+function FromUnion3(types2) {
+  return guard_exports.ShiftLeft(types2, (left, right) => ReduceVariants(right, FromType8(left)), () => Unreachable());
 }
 
 // node_modules/typebox/build/type/engine/object/from_type.mjs
@@ -25001,8 +24505,8 @@ function ConvertToIntegerKey(value) {
 function NormalizeLiteral(value) {
   return Literal(ConvertToIntegerKey(value));
 }
-function NormalizeIndexerTypes(types) {
-  return types.map((type) => NormalizeIndexer(type));
+function NormalizeIndexerTypes(types2) {
+  return types2.map((type) => NormalizeIndexer(type));
 }
 function NormalizeIndexer(type) {
   return IsIntersect(type) ? Intersect(NormalizeIndexerTypes(type.allOf)) : IsUnion(type) ? Union(NormalizeIndexerTypes(type.anyOf)) : IsLiteral(type) ? NormalizeLiteral(type.const) : type;
@@ -25039,8 +24543,8 @@ function FromEnum(values) {
 }
 
 // node_modules/typebox/build/type/engine/indexable/from_intersect.mjs
-function FromIntersect2(types) {
-  const evaluated = EvaluateIntersect(types);
+function FromIntersect2(types2) {
+  const evaluated = EvaluateIntersect(types2);
   const result2 = FromType9(evaluated);
   return result2;
 }
@@ -25059,8 +24563,8 @@ function FromTemplateLiteral2(pattern) {
 }
 
 // node_modules/typebox/build/type/engine/indexable/from_union.mjs
-function FromUnion4(types) {
-  return types.reduce((result2, left) => {
+function FromUnion4(types2) {
+  return types2.reduce((result2, left) => {
     return [...result2, ...FromType9(left)];
   }, []);
 }
@@ -25077,8 +24581,8 @@ function ToIndexableKeys(type) {
 }
 
 // node_modules/typebox/build/type/engine/this/expand_this.mjs
-function FromTypes5(properties, types) {
-  return types.map((type) => FromType10(properties, type));
+function FromTypes5(properties, types2) {
+  return types2.map((type) => FromType10(properties, type));
 }
 function FromType10(properties, type) {
   return IsArray2(type) ? _Array_(FromType10(properties, type.items)) : IsConstructor2(type) ? Constructor(FromTypes5(properties, type.parameters), FromType10(properties, type.instanceType)) : IsFunction2(type) ? _Function_(FromTypes5(properties, type.parameters), FromType10(properties, type.returnType)) : IsTuple(type) ? Tuple(FromTypes5(properties, type.items)) : IsUnion(type) ? Union(FromTypes5(properties, type.anyOf)) : IsIntersect(type) ? Intersect(FromTypes5(properties, type.allOf)) : IsThis(type) ? _Object_(properties) : type;
@@ -25094,25 +24598,25 @@ function IndexProperty(properties, key) {
   const result2 = ExpandThis(properties, selectedType);
   return result2;
 }
-function IndexProperties(properties, keys2) {
-  return keys2.reduce((result2, left) => {
+function IndexProperties(properties, keys) {
+  return keys.reduce((result2, left) => {
     return [...result2, IndexProperty(properties, left)];
   }, []);
 }
 function FromIndexer(properties, indexer) {
-  const keys2 = ToIndexableKeys(indexer);
-  const variants = IndexProperties(properties, keys2);
+  const keys = ToIndexableKeys(indexer);
+  const variants = IndexProperties(properties, keys);
   const result2 = EvaluateUnion(variants);
   return result2;
 }
 var NumericKeyPattern = new RegExp(IntegerKey);
-function NumericKeys(keys2) {
-  const result2 = keys2.filter((key) => NumericKeyPattern.test(key));
+function NumericKeys(keys) {
+  const result2 = keys.filter((key) => NumericKeyPattern.test(key));
   return result2;
 }
 function FromIndexerNumber(properties) {
-  const keys2 = PropertyKeys(properties);
-  const numericKeys = NumericKeys(keys2);
+  const keys = PropertyKeys(properties);
+  const numericKeys = NumericKeys(keys);
   const variants = IndexProperties(properties, numericKeys);
   const result2 = EvaluateUnion(variants);
   return result2;
@@ -25126,32 +24630,32 @@ function FromObject5(properties, indexer) {
 function ConvertLiteral(value) {
   return Literal(ConvertToIntegerKey(value));
 }
-function ArrayIndexerTypes(types) {
-  return types.map((type) => FormatArrayIndexer(type));
+function ArrayIndexerTypes(types2) {
+  return types2.map((type) => FormatArrayIndexer(type));
 }
 function FormatArrayIndexer(type) {
   return IsIntersect(type) ? Intersect(ArrayIndexerTypes(type.allOf)) : IsUnion(type) ? Union(ArrayIndexerTypes(type.anyOf)) : IsLiteral(type) ? ConvertLiteral(type.const) : type;
 }
 
 // node_modules/typebox/build/type/engine/indexed/from_tuple.mjs
-function IndexElementsWithIndexer(types, indexer) {
-  return types.reduceRight((result2, right, index) => {
+function IndexElementsWithIndexer(types2, indexer) {
+  return types2.reduceRight((result2, right, index) => {
     const check = Extends({}, Literal(index), indexer);
     return result_exports.IsExtendsTrueLike(check) ? [right, ...result2] : result2;
   }, []);
 }
-function FromTupleWithIndexer(types, indexer) {
+function FromTupleWithIndexer(types2, indexer) {
   const formattedArrayIndexer = FormatArrayIndexer(indexer);
-  const elements = IndexElementsWithIndexer(types, formattedArrayIndexer);
+  const elements = IndexElementsWithIndexer(types2, formattedArrayIndexer);
   return EvaluateUnionFast(elements);
 }
-function FromTupleWithoutIndexer(types) {
-  return EvaluateUnionFast(types);
+function FromTupleWithoutIndexer(types2) {
+  return EvaluateUnionFast(types2);
 }
-function FromTuple2(types, indexer) {
+function FromTuple2(types2, indexer) {
   return (
     // length (intrinsic)
-    IsLiteral(indexer) && guard_exports.IsEqual(indexer.const, "length") ? Literal(types.length) : IsNumber3(indexer) || IsInteger2(indexer) ? FromTupleWithoutIndexer(types) : FromTupleWithIndexer(types, indexer)
+    IsLiteral(indexer) && guard_exports.IsEqual(indexer.const, "length") ? Literal(types2.length) : IsNumber3(indexer) || IsInteger2(indexer) ? FromTupleWithoutIndexer(types2) : FromTupleWithIndexer(types2, indexer)
   );
 }
 
@@ -25215,8 +24719,8 @@ function FromArray4(_type) {
 }
 
 // node_modules/typebox/build/type/engine/keyof/from_object.mjs
-function FromPropertyKeys(keys2) {
-  const result2 = keys2.reduce((result3, left) => {
+function FromPropertyKeys(keys) {
+  const result2 = keys.reduce((result3, left) => {
     return IsLiteralValue(left) ? [...result3, Literal(ConvertToIntegerKey(left))] : Unreachable();
   }, []);
   return result2;
@@ -25234,8 +24738,8 @@ function FromRecord2(type) {
 }
 
 // node_modules/typebox/build/type/engine/keyof/from_tuple.mjs
-function FromTuple3(types) {
-  const result2 = types.map((_, index) => Literal(index));
+function FromTuple3(types2) {
+  const result2 = types2.map((_, index) => Literal(index));
   return EvaluateUnionFast(result2);
 }
 
@@ -25271,8 +24775,8 @@ function FromTemplateLiteral3(pattern) {
   const result2 = FromType13(evaluated);
   return result2;
 }
-function FromUnion5(types) {
-  return types.reduce((result2, left) => {
+function FromUnion5(types2) {
+  return types2.reduce((result2, left) => {
     return [...result2, ...FromType13(left)];
   }, []);
 }
@@ -25400,9 +24904,9 @@ function ToIndexable(type) {
 }
 
 // node_modules/typebox/build/type/engine/omit/from_type.mjs
-function FromKeys(properties, keys2) {
+function FromKeys(properties, keys) {
   const result2 = guard_exports.Keys(properties).reduce((result3, key) => {
-    return keys2.includes(key) ? result3 : { ...result3, [key]: properties[key] };
+    return keys.includes(key) ? result3 : { ...result3, [key]: properties[key] };
   }, {});
   return result2;
 }
@@ -25473,15 +24977,15 @@ function FromDependent3(if_, then_, else_) {
 }
 
 // node_modules/typebox/build/type/engine/partial/from_intersect.mjs
-function FromIntersect3(types) {
-  const evaluated = EvaluateIntersect(types);
+function FromIntersect3(types2) {
+  const evaluated = EvaluateIntersect(types2);
   const result2 = FromType15(evaluated);
   return result2;
 }
 
 // node_modules/typebox/build/type/engine/partial/from_union.mjs
-function FromUnion6(types) {
-  const result2 = types.map((type) => FromType15(type));
+function FromUnion6(types2) {
+  const result2 = types2.map((type) => FromType15(type));
   return Union(result2);
 }
 
@@ -25519,16 +25023,16 @@ function Pick(type, indexer_or_keys, options2 = {}) {
 }
 
 // node_modules/typebox/build/type/engine/pick/from_type.mjs
-function FromKeys2(properties, keys2) {
+function FromKeys2(properties, keys) {
   const result2 = guard_exports.Keys(properties).reduce((result3, key) => {
-    return keys2.includes(key) ? memory_exports.Assign(result3, { [key]: properties[key] }) : result3;
+    return keys.includes(key) ? memory_exports.Assign(result3, { [key]: properties[key] }) : result3;
   }, {});
   return result2;
 }
 function FromType16(type, indexer) {
   const indexable = ToIndexable(type);
-  const keys2 = ToIndexableKeys(indexer);
-  const applied = FromKeys2(indexable, keys2);
+  const keys = ToIndexableKeys(indexer);
+  const applied = FromKeys2(indexable, keys);
   const result2 = _Object_(applied);
   return result2;
 }
@@ -25575,8 +25079,8 @@ function FromDependent4(if_, then_, else_) {
 }
 
 // node_modules/typebox/build/type/engine/readonly_object/from_intersect.mjs
-function FromIntersect4(types) {
-  const evaluated = EvaluateIntersect(types);
+function FromIntersect4(types2) {
+  const evaluated = EvaluateIntersect(types2);
   const result2 = FromType17(evaluated);
   return result2;
 }
@@ -25591,14 +25095,14 @@ function FromObject8(properties) {
 }
 
 // node_modules/typebox/build/type/engine/readonly_object/from_tuple.mjs
-function FromTuple4(types) {
-  const result2 = AddImmutable(Tuple(types));
+function FromTuple4(types2) {
+  const result2 = AddImmutable(Tuple(types2));
   return result2;
 }
 
 // node_modules/typebox/build/type/engine/readonly_object/from_union.mjs
-function FromUnion7(types) {
-  const result2 = types.map((type) => FromType17(type));
+function FromUnion7(types2) {
+  const result2 = types2.map((type) => FromType17(type));
   return Union(result2);
 }
 
@@ -25638,15 +25142,15 @@ function FromDependent5(if_, then_, else_) {
 }
 
 // node_modules/typebox/build/type/engine/required/from_intersect.mjs
-function FromIntersect5(types) {
-  const evaluated = EvaluateIntersect(types);
+function FromIntersect5(types2) {
+  const evaluated = EvaluateIntersect(types2);
   const result2 = FromType18(evaluated);
   return result2;
 }
 
 // node_modules/typebox/build/type/engine/required/from_union.mjs
-function FromUnion8(types) {
-  const result2 = types.map((type) => FromType18(type));
+function FromUnion8(types2) {
+  const result2 = types2.map((type) => FromType18(type));
   return Union(result2);
 }
 
@@ -25726,8 +25230,8 @@ function SpreadElement(type) {
   const result2 = IsRest(type) ? IsTuple(type.items) ? RestSpread(type.items.items) : IsInfer(type.items) ? [type] : IsRef(type.items) ? [type] : [Never()] : [type];
   return result2;
 }
-function RestSpread(types) {
-  const result2 = types.reduce((result3, left) => {
+function RestSpread(types2) {
+  const result2 = types2.reduce((result3, left) => {
     return [...result3, ...SpreadElement(left)];
   }, []);
   return result2;
@@ -25737,21 +25241,21 @@ function RestSpread(types) {
 function State(callstack, visited) {
   return { callstack, visited };
 }
-function CanInstantiate(types) {
-  return guard_exports.ShiftLeft(types, (left, right) => IsRef(left) ? false : CanInstantiate(right), () => true);
+function CanInstantiate(types2) {
+  return guard_exports.ShiftLeft(types2, (left, right) => IsRef(left) ? false : CanInstantiate(right), () => true);
 }
 function InstantiateProperties(context, state, properties) {
   return guard_exports.Keys(properties).reduce((result2, key) => {
     return { ...result2, [key]: InstantiateType(context, state, properties[key]) };
   }, {});
 }
-function InstantiateElements(context, state, types) {
-  const elements = InstantiateTypes(context, state, types);
+function InstantiateElements(context, state, types2) {
+  const elements = InstantiateTypes(context, state, types2);
   const result2 = RestSpread(elements);
   return result2;
 }
-function InstantiateTypes(context, state, types) {
-  return types.map((type) => InstantiateType(context, state, type));
+function InstantiateTypes(context, state, types2) {
+  return types2.map((type) => InstantiateType(context, state, type));
 }
 function WithModifiers(type, instantiatedType) {
   const withOptional = IsOptional(type) ? AddOptionalAction(instantiatedType, {}) : instantiatedType;
@@ -25823,14 +25327,14 @@ function Comparer(left, right) {
   const compareResult = Compare(left, right);
   return guard_exports.IsEqual(compareResult, CompareResultRightInside) ? 1 : guard_exports.IsEqual(compareResult, CompareResultDisjoint) ? 1 : 0;
 }
-function Insert(type, types, result2 = []) {
-  return guard_exports.ShiftLeft(types, (left, right) => guard_exports.IsEqual(Comparer(type, left), 1) ? Insert(type, right, [...result2, left]) : [...result2, type, ...types], () => [...result2, type]);
+function Insert(type, types2, result2 = []) {
+  return guard_exports.ShiftLeft(types2, (left, right) => guard_exports.IsEqual(Comparer(type, left), 1) ? Insert(type, right, [...result2, left]) : [...result2, type, ...types2], () => [...result2, type]);
 }
-function Sort(types, result2 = []) {
-  return guard_exports.ShiftLeft(types, (left, right) => Sort(right, Insert(left, result2)), () => result2);
+function Sort(types2, result2 = []) {
+  return guard_exports.ShiftLeft(types2, (left, right) => Sort(right, Insert(left, result2)), () => result2);
 }
-function Priority(types) {
-  const result2 = Sort(types);
+function Priority(types2) {
+  const result2 = Sort(types2);
   return result2;
 }
 
@@ -26246,16 +25750,16 @@ function IsUnevaluatedProperties(schema) {
 var CheckContext = class {
   constructor() {
     const indices = /* @__PURE__ */ new Set();
-    const keys2 = /* @__PURE__ */ new Set();
-    this.stack = [{ indices, keys: keys2 }];
+    const keys = /* @__PURE__ */ new Set();
+    this.stack = [{ indices, keys }];
   }
   // ----------------------------------------------------------------
   // Stack
   // ----------------------------------------------------------------
   Push() {
     const indices = /* @__PURE__ */ new Set();
-    const keys2 = /* @__PURE__ */ new Set();
-    this.stack.push({ indices, keys: keys2 });
+    const keys = /* @__PURE__ */ new Set();
+    this.stack.push({ indices, keys });
     return true;
   }
   Pop() {
@@ -26596,15 +26100,15 @@ function ErrorDependencies(stack, context, schemaPath, instancePath, schema, val
 // node_modules/typebox/build/schema/engine/dependentRequired.mjs
 function CheckDependentRequired(_stack, _context, schema, value) {
   const isLength = guard_exports.IsEqual(guard_exports.Keys(value).length, 0);
-  const isEvery = guard_exports.Every(guard_exports.Entries(schema.dependentRequired), 0, ([key, keys2]) => {
-    return !guard_exports.HasPropertyKey(value, key) || keys2.every((key2) => guard_exports.HasPropertyKey(value, key2));
+  const isEvery = guard_exports.Every(guard_exports.Entries(schema.dependentRequired), 0, ([key, keys]) => {
+    return !guard_exports.HasPropertyKey(value, key) || keys.every((key2) => guard_exports.HasPropertyKey(value, key2));
   });
   return isLength || isEvery;
 }
 function ErrorDependentRequired(_stack, context, schemaPath, instancePath, schema, value) {
   const isLength = guard_exports.IsEqual(guard_exports.Keys(value).length, 0);
-  const isEveryEntry = guard_exports.EveryAll(guard_exports.Entries(schema.dependentRequired), 0, ([key, keys2]) => {
-    return !guard_exports.HasPropertyKey(value, key) || guard_exports.EveryAll(keys2, 0, (dependency) => guard_exports.HasPropertyKey(value, dependency) || context.AddError("dependentRequired", schemaPath, instancePath, { property: key, dependencies: keys2 }));
+  const isEveryEntry = guard_exports.EveryAll(guard_exports.Entries(schema.dependentRequired), 0, ([key, keys]) => {
+    return !guard_exports.HasPropertyKey(value, key) || guard_exports.EveryAll(keys, 0, (dependency) => guard_exports.HasPropertyKey(value, dependency) || context.AddError("dependentRequired", schemaPath, instancePath, { property: key, dependencies: keys }));
   });
   return isLength || isEveryEntry;
 }
@@ -27917,8 +27421,8 @@ function CheckTypeName(_stack, _context, type, _schema, value) {
     )
   );
 }
-function CheckTypeNames(stack, context, types, schema, value) {
-  return guard_exports.Some(types, (type) => CheckTypeName(stack, context, type, schema, value));
+function CheckTypeNames(stack, context, types2, schema, value) {
+  return guard_exports.Some(types2, (type) => CheckTypeName(stack, context, type, schema, value));
 }
 function CheckType(stack, context, schema, value) {
   return guard_exports.IsArray(schema.type) ? CheckTypeNames(stack, context, schema.type, schema, value) : CheckTypeName(stack, context, schema.type, schema, value);
@@ -27950,17 +27454,17 @@ function ErrorUnevaluatedItems(stack, context, schemaPath, instancePath, schema,
 
 // node_modules/typebox/build/schema/engine/unevaluatedProperties.mjs
 function CheckUnevaluatedProperties(stack, context, schema, value) {
-  const keys2 = context.GetKeys();
+  const keys = context.GetKeys();
   return guard_exports.Every(guard_exports.Entries(value), 0, ([key, prop]) => {
-    return keys2.has(key) || CheckSchema(stack, context, schema.unevaluatedProperties, prop) && context.AddKey(key);
+    return keys.has(key) || CheckSchema(stack, context, schema.unevaluatedProperties, prop) && context.AddKey(key);
   });
 }
 function ErrorUnevaluatedProperties(stack, context, schemaPath, instancePath, schema, value) {
-  const keys2 = context.GetKeys();
+  const keys = context.GetKeys();
   const unevaluatedProperties = [];
   const isUnevaluatedProperties = guard_exports.EveryAll(guard_exports.Entries(value), 0, ([key, prop]) => {
     const nextContext = new ErrorContext();
-    const isEvaluatedProperty = keys2.has(key) || ErrorSchema(stack, nextContext, schemaPath, instancePath, schema.unevaluatedProperties, prop) && context.AddKey(key);
+    const isEvaluatedProperty = keys.has(key) || ErrorSchema(stack, nextContext, schemaPath, instancePath, schema.unevaluatedProperties, prop) && context.AddKey(key);
     if (!isEvaluatedProperty)
       unevaluatedProperties.push(key);
     return isEvaluatedProperty;
@@ -28200,11 +27704,11 @@ function FromProperties4(properties) {
     result2[key] = FromType20(properties[key]);
   return result2;
 }
-function FromPriorityTypes(types) {
-  return FromTypes6(Priority(types));
+function FromPriorityTypes(types2) {
+  return FromTypes6(Priority(types2));
 }
-function FromTypes6(types) {
-  return types.map((type) => FromType20(type));
+function FromTypes6(types2) {
+  return types2.map((type) => FromType20(type));
 }
 function FromType20(type) {
   const next = IsArray2(type) ? _Array_(FromType20(type.items), ArrayOptions(type)) : IsIntersect(type) ? Intersect(FromTypes6(type.allOf)) : IsUnion(type) ? Union(FromPriorityTypes(type.anyOf)) : IsObject2(type) ? _Object_(FromProperties4(type.properties)) : IsRecord(type) ? Record(RecordKey(type), FromType20(RecordValue(type))) : IsTuple(type) ? Tuple(FromTypes6(type.items)) : type;
@@ -28442,9 +27946,9 @@ function FromNumber5(_context, _type, value) {
 
 // node_modules/typebox/build/value/convert/from_additional.mjs
 function FromAdditionalProperties(context, entries, additionalProperties, value) {
-  const keys2 = guard_exports.Keys(value);
+  const keys = guard_exports.Keys(value);
   for (const [regexp, _] of entries) {
-    for (const key of keys2) {
+    for (const key of keys) {
       if (!regexp.test(key)) {
         value[key] = FromType21(context, additionalProperties, value[key]);
       }
@@ -28461,9 +27965,9 @@ function IsOptionalUndefined(property, key, value) {
 // node_modules/typebox/build/value/convert/from_object.mjs
 function FromProperties5(context, type, value) {
   const entries = guard_exports.EntriesRegExp(type.properties);
-  const keys2 = guard_exports.Keys(value);
+  const keys = guard_exports.Keys(value);
   for (const [regexp, property] of entries) {
-    for (const key of keys2) {
+    for (const key of keys) {
       if (!regexp.test(key) || IsOptionalUndefined(property, key, value))
         continue;
       value[key] = FromType21(context, property, value[key]);
@@ -28478,9 +27982,9 @@ function FromObject11(context, type, value) {
 // node_modules/typebox/build/value/convert/from_record.mjs
 function FromPatternProperties(context, type, value) {
   const entries = guard_exports.EntriesRegExp(type.patternProperties);
-  const keys2 = guard_exports.Keys(value);
+  const keys = guard_exports.Keys(value);
   for (const [regexp, schema] of entries) {
-    for (const key of keys2) {
+    for (const key of keys) {
       if (regexp.test(key)) {
         value[key] = FromType21(context, schema, value[key]);
       }
@@ -29201,7 +28705,7 @@ import { join as join12, dirname as dirname7, extname } from "node:path";
 import { randomUUID as randomUUID5 } from "node:crypto";
 
 // src/image-presentation.ts
-import { createHash as createHash6 } from "node:crypto";
+import { createHash as createHash5 } from "node:crypto";
 import { deflateSync, inflateSync } from "node:zlib";
 var IMAGE_PRESENTATION_POLICY = Object.freeze({
   version: 1,
@@ -29260,7 +28764,7 @@ function crc32(bytes) {
 function pngDimensions(bytes) {
   requireImage(bytes.length >= 33 && bytes.subarray(0, 8).equals(PNG_SIGNATURE), "Invalid PNG signature or header");
   requireImage(bytes.readUInt32BE(8) === 13 && bytes.toString("ascii", 12, 16) === "IHDR", "Invalid PNG IHDR");
-  const size2 = dimensions(bytes.readUInt32BE(16), bytes.readUInt32BE(20));
+  const size = dimensions(bytes.readUInt32BE(16), bytes.readUInt32BE(20));
   const depths = { 0: [1, 2, 4, 8, 16], 2: [8, 16], 3: [1, 2, 4, 8], 4: [8, 16], 6: [8, 16] };
   requireImage(
     depths[bytes[25]]?.includes(bytes[24]) && bytes[26] === 0 && bytes[27] === 0 && bytes[28] <= 1,
@@ -29286,7 +28790,7 @@ function pngDimensions(bytes) {
     } else if (data) dataEnded = true;
     if (type === "IEND") {
       requireImage(length === 0 && data && end === bytes.length, "Invalid PNG end");
-      return size2;
+      return size;
     }
     offset = end;
   }
@@ -29294,15 +28798,15 @@ function pngDimensions(bytes) {
 }
 function jpegDimensions(bytes) {
   requireImage(bytes.length >= 4 && bytes[0] === 255 && bytes[1] === 216, "Invalid JPEG signature");
-  let offset = 2, records = 0, size2, scanned = false;
+  let offset = 2, records = 0, size, scanned = false;
   while (offset < bytes.length) {
     requireImage(++records <= MAX_RECORDS && bytes[offset++] === 255, "Invalid JPEG marker");
     while (offset < bytes.length && bytes[offset] === 255) offset++;
     requireImage(offset < bytes.length, "Truncated JPEG marker");
     const marker = bytes[offset++];
     if (marker === 217) {
-      requireImage(size2 && scanned && offset === bytes.length, "Invalid JPEG end");
-      return size2;
+      requireImage(size && scanned && offset === bytes.length, "Invalid JPEG end");
+      return size;
     }
     requireImage(
       marker !== 0 && marker !== 216 && marker !== 220 && !(marker >= 208 && marker <= 215),
@@ -29312,16 +28816,16 @@ function jpegDimensions(bytes) {
     const length = bytes.readUInt16BE(offset), end = offset + length;
     requireImage(length >= 2 && end <= bytes.length, "Invalid JPEG segment length");
     if (marker >= 192 && marker <= 207 && ![196, 200, 204].includes(marker)) {
-      requireImage((marker === 192 || marker === 194) && !size2 && length >= 8, "Unsupported or duplicate JPEG frame");
+      requireImage((marker === 192 || marker === 194) && !size && length >= 8, "Unsupported or duplicate JPEG frame");
       requireImage(
         bytes[offset + 2] === 8 && [1, 3, 4].includes(bytes[offset + 7]) && length === 8 + 3 * bytes[offset + 7],
         "Invalid JPEG frame header"
       );
-      size2 = dimensions(bytes.readUInt16BE(offset + 5), bytes.readUInt16BE(offset + 3));
+      size = dimensions(bytes.readUInt16BE(offset + 5), bytes.readUInt16BE(offset + 3));
     }
     offset = end;
     if (marker === 218) {
-      requireImage(size2 && length >= 6, "JPEG scan before frame header");
+      requireImage(size && length >= 6, "JPEG scan before frame header");
       scanned = true;
       while (offset < bytes.length) {
         if (bytes[offset] !== 255) {
@@ -29383,7 +28887,7 @@ function inspect(bytes, mimeType) {
       throw new PresentationUnavailableError("Unsupported image MIME type; only PNG, JPEG, and WebP are accepted");
   }
 }
-function decodePng(bytes, size2) {
+function decodePng(bytes, size) {
   const depth = bytes[24], colorType = bytes[25];
   requireImage(bytes[28] === 0, "Interlaced PNG cannot be resampled here");
   const idat = [];
@@ -29399,7 +28903,7 @@ function decodePng(bytes, size2) {
   const channels = { 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 }[colorType];
   requireImage(channels !== void 0, "Unsupported PNG colour type");
   requireImage(colorType !== 3 || plte && plte.length % 3 === 0 && plte.length > 0, "Palette PNG lacks its palette");
-  const { width, height } = size2;
+  const { width, height } = size;
   const bitsPerPixel = channels * depth, bpp = Math.max(1, bitsPerPixel >> 3), stride = Math.ceil(width * bitsPerPixel / 8);
   let raw;
   try {
@@ -29564,30 +29068,30 @@ function encodePng(raster) {
 var base64Length = (bytes) => Math.ceil(bytes / 3) * 4;
 async function prepareImage(bytes, mimeType) {
   try {
-    const policy = IMAGE_PRESENTATION_POLICY;
+    const policy2 = IMAGE_PRESENTATION_POLICY;
     requireImage(
-      Buffer.isBuffer(bytes) && bytes.length > 0 && bytes.length <= policy.maxOriginalBytes,
+      Buffer.isBuffer(bytes) && bytes.length > 0 && bytes.length <= policy2.maxOriginalBytes,
       "Image must contain between 1 byte and 64 MiB"
     );
     const original = Buffer.from(bytes);
     const header = inspect(original, mimeType);
-    let presented = original, size2 = header, presentedType = mimeType;
+    let presented = original, size = header, presentedType = mimeType;
     const raster = mimeType === "image/png" ? decodePng(original, header) : void 0;
-    if (header.width > policy.maxWidth || header.height > policy.maxHeight || base64Length(original.length) > policy.maxBytes) {
+    if (header.width > policy2.maxWidth || header.height > policy2.maxHeight || base64Length(original.length) > policy2.maxBytes) {
       requireImage(raster, `${mimeType} original exceeds the preview bounds and only PNG originals are resampled here; retrieve the original with the host read tool`);
       let width = header.width, height = header.height;
-      if (width > policy.maxWidth) {
-        height = Math.round(height * policy.maxWidth / width);
-        width = policy.maxWidth;
+      if (width > policy2.maxWidth) {
+        height = Math.round(height * policy2.maxWidth / width);
+        width = policy2.maxWidth;
       }
-      if (height > policy.maxHeight) {
-        width = Math.round(width * policy.maxHeight / height);
-        height = policy.maxHeight;
+      if (height > policy2.maxHeight) {
+        width = Math.round(width * policy2.maxHeight / height);
+        height = policy2.maxHeight;
       }
       for (; ; ) {
         presented = encodePng(resample(raster, Math.max(1, width), Math.max(1, height)));
-        size2 = { width: Math.max(1, width), height: Math.max(1, height) };
-        if (base64Length(presented.length) <= policy.maxBytes) break;
+        size = { width: Math.max(1, width), height: Math.max(1, height) };
+        if (base64Length(presented.length) <= policy2.maxBytes) break;
         const nextWidth = Math.max(1, Math.floor(width * 0.75)), nextHeight = Math.max(1, Math.floor(height * 0.75));
         requireImage(nextWidth !== width || nextHeight !== height, "Image cannot be presented within the preview byte bound");
         width = nextWidth;
@@ -29596,21 +29100,21 @@ async function prepareImage(bytes, mimeType) {
       presentedType = "image/png";
     }
     const output = inspect(presented, presentedType);
-    requireImage(output.width === size2.width && output.height === size2.height && output.width <= policy.maxWidth && output.height <= policy.maxHeight, "Presented image dimensions are inconsistent");
+    requireImage(output.width === size.width && output.height === size.height && output.width <= policy2.maxWidth && output.height <= policy2.maxHeight, "Presented image dimensions are inconsistent");
     const data = presented.toString("base64");
-    requireImage(data.length > 0 && Buffer.byteLength(data, "utf8") <= policy.maxBytes, "Presented image exceeds the preview byte bound");
+    requireImage(data.length > 0 && Buffer.byteLength(data, "utf8") <= policy2.maxBytes, "Presented image exceeds the preview byte bound");
     return {
       content: { type: "image", data, mimeType: presentedType },
       presentation: {
         originalWidth: header.width,
         originalHeight: header.height,
-        width: size2.width,
-        height: size2.height,
+        width: size.width,
+        height: size.height,
         mimeType: presentedType,
-        sha256: createHash6("sha256").update(presented).digest("hex"),
+        sha256: createHash5("sha256").update(presented).digest("hex"),
         bytes: presented.length,
         transformed: presentedType !== mimeType || !original.equals(presented),
-        policy
+        policy: policy2
       }
     };
   } catch (error2) {
@@ -30103,7 +29607,7 @@ function overlaps2(a, b) {
   const path = relative5(a, b);
   return path === "" || !isAbsolute5(path) && path !== ".." && !path.startsWith("../");
 }
-async function refreshEvidenceState(incoming, destination, archiveRoot, options2 = {}) {
+async function refreshEvidenceState(incoming, destination, archiveRoot) {
   incoming = safePath(incoming);
   destination = safePath(destination);
   archiveRoot = safePath(archiveRoot);
@@ -30134,6 +29638,7 @@ async function refreshEvidenceState(incoming, destination, archiveRoot, options2
     await rename4(destination, archived);
   }
   await directory(dirname8(destination), true);
+  await mkdir8(destination);
   const copy = async (source, tree) => {
     for (const [path, kind] of tree) {
       const target2 = join13(destination, path);
@@ -30144,22 +29649,12 @@ async function refreshEvidenceState(incoming, destination, archiveRoot, options2
       }
     }
   };
-  let moved = false;
-  try {
-    await (options2.rename ?? rename4)(incoming, destination);
-    moved = true;
-  } catch (error2) {
-    if (error2.code !== "EXDEV") throw error2;
-  }
-  if (!moved) {
-    await mkdir8(destination);
-    await copy(incoming, fresh);
-  }
+  await copy(incoming, fresh);
   if (archived) await copy(archived, retained);
 }
 
 // src/targets.ts
-import { createHash as createHash7 } from "node:crypto";
+import { createHash as createHash6 } from "node:crypto";
 import { mkdir as mkdir9, readFile as readFile10, rename as rename5, writeFile as writeFile4 } from "node:fs/promises";
 import { join as join14 } from "node:path";
 import { randomUUID as randomUUID6 } from "node:crypto";
@@ -30212,7 +29707,7 @@ function tarballUrl(pin, registry2 = process.env.MCP_VM_RELAY_NPM_REGISTRY ?? "h
 }
 function integrityMatches(bytes, integrity) {
   const [algorithm, expected] = integrity.split("-", 2);
-  return algorithm === "sha512" && !!expected && createHash7("sha512").update(bytes).digest("base64") === expected;
+  return algorithm === "sha512" && !!expected && createHash6("sha512").update(bytes).digest("base64") === expected;
 }
 var registrySource = async (pin, signal) => {
   const response = await fetch(tarballUrl(pin), { signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(12e4)]) : AbortSignal.timeout(12e4) });
@@ -30223,7 +29718,7 @@ async function cachedTarball(cacheRoot, pin, source = registrySource, signal) {
   const path = join14(cacheRoot, tarballName(pin));
   try {
     const bytes2 = await readFile10(path);
-    if (integrityMatches(bytes2, pin.integrity)) return { path, sha256: createHash7("sha256").update(bytes2).digest("hex") };
+    if (integrityMatches(bytes2, pin.integrity)) return { path, sha256: createHash6("sha256").update(bytes2).digest("hex") };
   } catch (error2) {
     if (error2.code !== "ENOENT") throw error2;
   }
@@ -30233,7 +29728,7 @@ async function cachedTarball(cacheRoot, pin, source = registrySource, signal) {
   const temporary = `${path}.${randomUUID6()}.tmp`;
   await writeFile4(temporary, bytes, { mode: 384 });
   await rename5(temporary, path);
-  return { path, sha256: createHash7("sha256").update(bytes).digest("hex") };
+  return { path, sha256: createHash6("sha256").update(bytes).digest("hex") };
 }
 
 // src/json-schema.ts
@@ -30275,8 +29770,8 @@ function checkArguments(schema, args) {
   let validate2 = compiled.get(key);
   if (!validate2) {
     try {
-      const { $id: _id, ...plain } = schema;
-      validate2 = engine(plain).compile(plain);
+      const { $id: _id, ...plain2 } = schema;
+      validate2 = engine(plain2).compile(plain2);
     } catch (error2) {
       return { valid: false, errors: [`The target tool's input schema could not be compiled: ${error2 instanceof Error ? error2.message : String(error2)}`] };
     }
@@ -30289,13 +29784,10 @@ function checkArguments(schema, args) {
 }
 
 // src/manager.ts
-var RENEWAL_WINDOW_MS = 15 * 6e4;
-var MIN_RENEWAL_MS = 0.1 * 36e5;
 var RELAY_RUN_OUTPUTS = "relay-run";
 var MCP_START_ALLOWANCE_MS = 6e4;
 var MAX_TOOL_IMAGES = 4;
 var instructions = "This server offers nineteen tools for one interruptive VM enclosure: relay_search, relay_probe, relay_acquisition_capabilities, relay_acquire, relay_stage, relay_run, relay_tools, the command tools relay_exec/relay_script/relay_code, relay_image, relay_extract, relay_finish, relay_release, relay_console_resolve, relay_console_open, relay_console_cancel, relay_status and relay_trajectory. relay_run sends the cua-driver, Playwright MCP or Chrome DevTools MCP tool calls you already know to that server inside the VM; evidence is automatic. Relay only interruptive computer-use or browser-use that would otherwise take over a real desktop or browser, judged for yourself from relay_probe facts; unknown is not idle, and non-disruptive or headless work stays with local tools. One task gets one enclosure: call relay_acquire once per task, never reused for a second task. Work an enclosure in order: relay_probe, then relay_acquire, then relay_stage, then relay_run or the command tools, then relay_image or relay_extract as needed, then relay_finish or relay_release. Always call relay_finish or relay_release explicitly before you return an answer; ending the session only pauses lease renewal, it does not destroy the VM, and the backend's own expiry is the last-resort safeguard. A refused, uncertain or nonzero operation keeps the VM so you can diagnose and submit a corrected operation; never replay input whose effect is uncertain. A tool result, an attached image or a verified evidence package, is evidence for a human reviewer, never the review itself. The relay never targets a physical or local display and offers no video or spawn API. Every tool's text result is capped at 50 KiB / 2000 lines; a larger result is retained whole in a local file the result names.";
-var NO_OWNED_LEASE = "This session owns no lease, so nothing was released. Each server process has its own session identity (a new random one unless MCP_VM_RELAY_SESSION sets it); a lease acquired under another identity is not visible here. Restart the server with that MCP_VM_RELAY_SESSION to reconcile and release it, or let the backend TTL expire it.";
 var RelayManager = class {
   constructor(options2) {
     this.options = options2;
@@ -30327,7 +29819,6 @@ var RelayManager = class {
   transport;
   timer;
   heartbeating = false;
-  renewal;
   queue = Promise.resolve();
   initialized = false;
   ownerLock;
@@ -30657,7 +30148,7 @@ var RelayManager = class {
         this.enclosure.acquisitionInFlight = true;
         await this.save();
         try {
-          this.enclosure.lease = await this.vm.acquire({ purpose, image: input.image, env: input.env ?? "none", ttl_hours: Math.min(this.renewalWindowMs(), ttlHours * 36e5) / 36e5, wait: true, ...input.vnc === void 0 ? {} : { vnc: input.vnc } }, { signal });
+          this.enclosure.lease = await this.vm.acquire({ purpose, image: input.image, env: input.env ?? "none", ttl_hours: ttlHours, wait: true, ...input.vnc === void 0 ? {} : { vnc: input.vnc } }, { signal });
           this.enclosure.acquisitionInFlight = false;
         } catch (error2) {
           if (signal?.aborted && error2 === signal.reason || error2 instanceof VmServiceError && error2.status !== void 0 && error2.status >= 400 && error2.status < 500) this.enclosure.acquisitionInFlight = false;
@@ -30669,11 +30160,11 @@ var RelayManager = class {
         }
         await this.save();
         if (input.vnc && (!this.enclosure.lease?.lease_id || !this.enclosure.lease.console?.console_id || this.enclosure.lease.console.status !== "ready")) throw new Error("VNC acquisition did not return a ready console and lease identity; ownership retained for reconciliation");
+        signal?.throwIfAborted();
         this.enclosure.guestState = this.enclosure.lease.state;
         this.enclosure.expiresAt = this.enclosure.lease.ttl_expires_at;
         this.startHeartbeat();
         await this.save();
-        if (signal?.aborted) throw new Error(`${String(signal.reason)}; the acquisition completed after it was cancelled: VM ${this.enclosure.lease.vm} is owned by this session, retained and renewed. Continue with relay_stage, or call relay_finish or relay_release.`, { cause: signal.reason });
         return { ...this.status(), guestRoot: this.enclosure.guestRoot, workspace: join15(this.enclosure.guestRoot, "workspace"), declarations: input.extractions };
       } catch (error2) {
         await this.fail(error2);
@@ -30681,58 +30172,23 @@ var RelayManager = class {
       }
     });
   }
-  renewalWindowMs() {
-    const ms = this.options.renewalWindowMs ?? RENEWAL_WINDOW_MS;
-    if (!Number.isFinite(ms) || ms < MIN_RENEWAL_MS) throw new Error("renewalWindowMs must be at least 0.1 hours");
-    return ms;
-  }
-  /** Milliseconds left until the lease's own deadline, startedAt + ttlHours. */
-  remainingMs(e) {
-    return Date.parse(e.startedAt) + e.ttlHours * 36e5 - Date.now();
-  }
   startHeartbeat() {
     if (this.timer || !this.enclosure?.lease) return;
-    if (this.remainingMs(this.enclosure) < MIN_RENEWAL_MS) {
-      this.enclosure.active = false;
-      return;
-    }
     this.enclosure.active = true;
-    const ms = this.options.heartbeatMs ?? Math.min(6e4, this.renewalWindowMs() / 3);
+    const ms = this.options.heartbeatMs ?? Math.min(6e4, this.enclosure.ttlHours * 36e5 / 3);
     this.timer = setInterval(() => {
       void this.heartbeat();
     }, ms);
     this.timer.unref();
   }
-  heartbeat() {
+  async heartbeat() {
     const e = this.enclosure;
-    if (!e?.lease || e.released || this.heartbeating) return this.renewal ?? Promise.resolve();
+    if (!e?.lease || e.released || this.heartbeating) return;
     this.heartbeating = true;
-    return this.renewal = this.renew(e, e.lease).finally(() => {
-      this.heartbeating = false;
-      this.renewal = void 0;
-    });
-  }
-  /** Stop renewing at the lease's own deadline; the VM is retained until the backend expires it. */
-  async stopRenewal(e) {
-    if (this.timer) {
-      clearInterval(this.timer);
-      this.timer = void 0;
-    }
-    if (this.enclosure !== e || e.released) return;
-    e.active = false;
-    await this.save();
-    await this.log("renewal-stopped", void 0, { reason: "the lease reached its own TTL", deadline: new Date(Date.parse(e.startedAt) + e.ttlHours * 36e5).toISOString(), expiresAt: e.expiresAt ?? e.lease?.ttl_expires_at });
-  }
-  async renew(e, lease) {
     try {
-      const remaining = this.remainingMs(e);
-      if (remaining < MIN_RENEWAL_MS) {
-        await this.stopRenewal(e);
-        return;
-      }
       this.assertBinding();
       await this.assertBackend();
-      const renewed = await this.vm.heartbeat(lease.vm, { ttl_hours: Math.min(this.renewalWindowMs(), remaining) / 36e5 }, { timeoutMs: 1e4 });
+      const renewed = await this.vm.heartbeat(e.lease.vm, { ttl_hours: e.ttlHours }, { timeoutMs: 1e4 });
       if (this.enclosure !== e || e.released) return;
       e.expiresAt = renewed.ttl_expires_at;
       e.guestState = renewed.state;
@@ -30753,6 +30209,8 @@ var RelayManager = class {
         }
       }).catch(() => {
       });
+    } finally {
+      this.heartbeating = false;
     }
   }
   async guarded(signal, fn) {
@@ -30819,7 +30277,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
         if (!Number.isSafeInteger(timeoutMs2) || timeoutMs2 < 1 || timeoutMs2 > 36e5) throw new Error("timeoutMs must be an integer from 1 to 3600000");
         if (input.diagnostic && input.kind !== "exec") throw new Error("diagnostic is only supported for exec");
         if (e.delivered) throw new Error("Evidence already sealed; release this VM explicitly");
-        if (input.diagnostic) return this.diagnostic(input, timeoutMs2, signal);
+        if (input.diagnostic) return this.diagnostic(input, timeoutMs2);
         if (e.pendingReset) throw new Error("Recording reset is pending; retry stage to reconcile it, or use diagnostic exec");
         if (!e.staged || !this.session || !this.transport) throw new Error("Use relay_stage before a run, or relay_exec diagnostic=true for setup diagnosis and repair");
         let argv2, callTimeoutMs = timeoutMs2;
@@ -30835,7 +30293,6 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
         this.transport.because = record3.because;
         this.transport.timeoutMs = input.kind === "mcp" ? callTimeoutMs + MCP_START_ALLOWANCE_MS + 15e3 : timeoutMs2;
         this.transport.diagnostic = false;
-        this.transport.signal = signal;
         const options2 = { step: record3.step, snapshots: record3.snapshots, cwd: join15(e.guestRoot, "workspace") };
         let result2;
         if (input.kind === "exec" || input.kind === "mcp") {
@@ -31133,7 +30590,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
     const marker = await transfer.checked([e.node, "-e", 'const fs=require("fs"),p=require("path");console.log(fs.existsSync(p.join(process.argv[1],"recordings",process.argv[2]))?"archived":"current");', e.guestRoot, reset.id]);
     const attempts = `${reset.from}.reset-attempts`;
     const incoming = join15(attempts, randomUUID7(), "state");
-    await transfer.pullVerified(marker.trim() === "archived" ? archive : join15(e.guestRoot, "state"), incoming, e.guestRoot, attempts, { beforePull: (facts) => this.assertFreeSpace(reset.from, facts) });
+    await transfer.pullVerified(marker.trim() === "archived" ? archive : join15(e.guestRoot, "state"), incoming, e.guestRoot, attempts);
     await this.imageStore().materializeDisplayOriginals(reset.from);
     await refreshEvidenceState(incoming, join15(reset.from, "state"), join15(attempts, "previous"));
     await this.log("recording-reset-intent", void 0, reset);
@@ -31169,29 +30626,6 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
       return this.extractInternal(names);
     }));
   }
-  /**
-   * finish's extraction: a declared output whose source does not exist in the
-   * guest (it was never produced) is recorded as incomplete and skipped, so a
-   * retry cannot fail the same way forever. Any other extraction failure, such
-   * as a transfer or checksum failure, still fails finish and keeps the VM,
-   * because the guest may hold the only good copy (docs/lifecycle-fixes.md).
-   */
-  async extractForFinish() {
-    const e = this.current(), incomplete = [];
-    for (const extraction of e.extractions) {
-      try {
-        await this.extractInternal([extraction.name]);
-      } catch (error2) {
-        const source = within(join15(e.guestRoot, "workspace"), extraction.path);
-        const missing = /ENOENT: no such file or directory, lstat '([^']+)'/.exec(String(error2))?.[1];
-        if (!missing || !(source === missing || source.startsWith(`${missing}/`))) throw error2;
-        incomplete.push({ name: extraction.name, path: extraction.path, error: String(error2) });
-        await this.log("extraction-incomplete", void 0, { name: extraction.name, path: extraction.path, missing: true, error: String(error2) });
-      }
-    }
-    if (e.fullWorkspace) await this.transfer().pullVerified(join15(e.guestRoot, "workspace"), join15(e.hostRoot, "extractions", "full-workspace", randomUUID7()), e.guestRoot, e.hostRoot);
-    return incomplete;
-  }
   async extractAvailable() {
     const e = this.current();
     for (const extraction of e.extractions) {
@@ -31211,25 +30645,12 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
       }
     }
   }
-  /**
-   * A precondition, not a limit (PS-D12): refuse to pull the relay state when
-   * the evidence volume cannot hold it, before any byte is pulled, so the disk
-   * is not filled part way and the VM stays for a retry after space is freed.
-   */
-  async assertFreeSpace(hostRoot, facts) {
-    const needed = facts.reduce((sum, fact) => sum + BigInt(fact.bytes), 0n);
-    const info = await (this.options.statfs ?? ((path) => statfs(path, { bigint: true })))(hostRoot);
-    const free = BigInt(info.bavail) * BigInt(info.bsize);
-    if (needed <= free) return;
-    const mib = (bytes) => `${(Number(bytes) / 1048576).toFixed(1)} MiB`;
-    throw new Error(`Not enough free space on the evidence volume at ${hostRoot}: the relay state needs ${needed} bytes (${mib(needed)}), ${free} bytes are free (${mib(free)}), short by ${needed - free} bytes (${mib(needed - free)}). Nothing of the state was pulled and the VM is kept; free space on that volume, then call relay_finish again.`);
-  }
   async packageInternal() {
     const e = this.current();
     if (!e.staged || !e.sessionId) throw new Error("No staged session to package");
     const attempts = `${e.hostRoot}.finalization-attempts`;
     const incoming = join15(attempts, randomUUID7(), "state");
-    await this.transfer().pullVerified(join15(e.guestRoot, "state"), incoming, e.guestRoot, attempts, { beforePull: (facts) => this.assertFreeSpace(e.hostRoot, facts) });
+    await this.transfer().pullVerified(join15(e.guestRoot, "state"), incoming, e.guestRoot, attempts);
     await this.imageStore().materializeDisplayOriginals(e.hostRoot);
     await refreshEvidenceState(incoming, join15(e.hostRoot, "state"), join15(attempts, "previous"));
     const result2 = await deliverPackage(e.hostRoot, { packageId: `pkg-${e.purpose}`, sessionId: e.sessionId, taskId: e.purpose });
@@ -31241,14 +30662,14 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
     return this.serialized(() => this.guarded(signal, async () => {
       const e = this.current();
       await this.log("finish");
-      let incomplete = [];
       if (!e.delivered) {
         await this.stopMcpHost("finish");
-        incomplete = await this.extractForFinish();
+        await this.extractInternal(e.extractions.map((item) => item.name));
+        if (e.fullWorkspace) await this.transfer().pullVerified(join15(e.guestRoot, "workspace"), join15(e.hostRoot, "extractions", "full-workspace", randomUUID7()), e.guestRoot, e.hostRoot);
       }
       const result2 = e.delivered ?? await this.packageInternal();
       await this.releaseInternal("finished");
-      return incomplete.length ? { ...result2, incompleteExtractions: incomplete } : result2;
+      return result2;
     }));
   }
   async fail(error2) {
@@ -31258,7 +30679,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
     await this.save();
     await this.log("operation-failed", void 0, { error: String(error2), leaseRetained: !e.released });
   }
-  async diagnostic(input, timeoutMs2, signal) {
+  async diagnostic(input, timeoutMs2) {
     const e = this.current();
     if (!input.argv?.length || input.snapshots?.group) throw new Error("Diagnostic exec requires argv and cannot join a snapshot group");
     const executionId = `diagnostic-${randomUUID7()}`;
@@ -31267,7 +30688,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
     let result2;
     try {
       const argv2 = e.staged ? ["/bin/sh", "-c", 'cd "$1" || exit; shift; exec "$@"', "relay-diagnostic", join15(e.guestRoot, "workspace"), ...input.argv] : input.argv;
-      const r = await this.channel.exec(e.lease.vm, argv2, timeoutMs2, { signal });
+      const r = await this.channel.exec(e.lease.vm, argv2, timeoutMs2);
       result2 = { executionId, outcome: { kind: "completed", exitStatus: { code: r.code, signal: null } }, output: r.stdout, outputStreams: "stdout and stderr combined" };
     } catch (error2) {
       result2 = { executionId, outcome: { kind: "uncertain", diagnostic: String(error2) }, output: "", outputStreams: "stdout and stderr combined" };
@@ -31282,7 +30703,6 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
       await this.init();
       this.assertBinding();
       await this.assertBackend();
-      if (!this.enclosure) return { active: false, ownedLease: false, released: false, diagnostic: NO_OWNED_LEASE };
       try {
         await this.log("release");
         if (this.enclosure?.staged && !this.enclosure.delivered) {
@@ -31310,8 +30730,8 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
     }
     if (!e.released) {
       if (!e.lease) {
-        const list = await this.vm.list({ timeoutMs: 1e4 });
-        const matches = Object.values(list.vms).filter((lease) => lease.purpose === e.purpose);
+        const list2 = await this.vm.list({ timeoutMs: 1e4 });
+        const matches = Object.values(list2.vms).filter((lease) => lease.purpose === e.purpose);
         if (matches.length > 1) throw new Error("Ambiguous acquisition; refusing to remove ownership record");
         if (!matches.length && e.acquisitionInFlight) throw new Error(`Acquire outcome still indeterminate for ${e.purpose}; ownership record retained at ${this.root}. Reconcile before retrying; never blindly acquire again.`);
         e.lease = matches[0];
@@ -31370,52 +30790,14 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
       clearInterval(this.timer);
       this.timer = void 0;
     }
-    const e = this.enclosure;
-    if (e) {
-      await this.finalRenewal(e);
-      e.active = false;
+    if (this.enclosure) {
+      this.enclosure.active = false;
       await this.save();
-      await this.log("renewal-paused", void 0, { reason: reason2, expiresAt: e.expiresAt ?? e.lease?.ttl_expires_at });
-    }
-  }
-  /**
-   * H6: renewal renews only a short window, so pausing it renews once for the
-   * rest of the lease's own TTL, and the paused VM is retained until that TTL
-   * for an explicit finish or release. A failure is recorded, not thrown.
-   */
-  async finalRenewal(e) {
-    if (!e.lease || e.released) return;
-    await this.renewal?.catch(() => {
-    });
-    const remaining = this.remainingMs(e);
-    if (remaining < MIN_RENEWAL_MS) return;
-    try {
-      const renewed = await this.vm.heartbeat(e.lease.vm, { ttl_hours: remaining / 36e5 }, { timeoutMs: 1e4 });
-      if (this.enclosure === e && !e.released) {
-        e.expiresAt = renewed.ttl_expires_at;
-        e.guestState = renewed.state;
-      }
-    } catch (error2) {
-      await this.log("final-renewal-failed", void 0, { error: String(error2), expiresAt: e.expiresAt ?? e.lease.ttl_expires_at }).catch(() => {
-      });
+      await this.log("renewal-paused", void 0, { reason: reason2, expiresAt: this.enclosure.expiresAt ?? this.enclosure.lease?.ttl_expires_at });
     }
   }
   async settle() {
     return this.serialized(() => this.pause("Agent settled; VM retained until explicit release or backend expiration"));
-  }
-  /**
-   * Shutdown's last resort when an operation does not settle: pause renewal
-   * and release the owner lock without waiting for the queue. The process
-   * exits right after, so the abandoned operation cannot save again.
-   */
-  async pauseNow(reason2) {
-    this.shuttingDown = true;
-    try {
-      await this.pause(`${reason2}; an in-flight operation did not settle and was abandoned`);
-    } finally {
-      this.initialized = false;
-      await this.unlock();
-    }
   }
   async cleanup(reason2) {
     return this.serialized(async () => {
@@ -31635,14 +31017,14 @@ var relayTools = [
     action: "finish",
     title: "Finish and deliver evidence",
     annotations: acts(false, true),
-    description: "Complete the task: extract every declared output, deliver and verify a portable evidence package, then destroy the VM and unregister it. The result reports delivery, snapshot completeness, execution outcome and human review as separate facts; a verified package is not a passing test, and a delivered package is not itself human approval. Call this, or relay_release, explicitly before you return, since ending the session does not do it for you. A declared output that was never produced is listed in `incompleteExtractions` and does not stop the delivery; any other failed extraction or delivery keeps the VM for a corrected attempt."
+    description: "Complete the task: extract every declared output, deliver and verify a portable evidence package, then destroy the VM and unregister it. The result reports delivery, snapshot completeness, execution outcome and human review as separate facts; a verified package is not a passing test, and a delivered package is not itself human approval. Call this, or relay_release, explicitly before you return, since ending the session does not do it for you. A failed delivery keeps the VM for a corrected attempt."
   },
   {
     name: "relay_release",
     action: "release",
     title: "Release the VM",
     annotations: acts(false, true),
-    description: "Abandon the task: destroy the owned VM and unregister it, retaining whatever evidence already exists, without claiming the task succeeded. Use this instead of relay_finish when the task is not being completed. Safe to retry if a previous release attempt failed; a failed release keeps ownership until destruction is verified. When this session owns no lease, the result is an error saying that nothing was released; a lease acquired under another session identity is never guessed at."
+    description: "Abandon the task: destroy the owned VM and unregister it, retaining whatever evidence already exists, without claiming the task succeeded. Use this instead of relay_finish when the task is not being completed. Safe to retry if a previous release attempt failed; a failed release keeps ownership until destruction is verified."
   },
   {
     name: "relay_console_resolve",
@@ -31757,17 +31139,327 @@ async function relayCall(host, raw, options2 = {}) {
     case "finish":
       value = await manager.finish(signal);
       break;
-    case "release": {
-      const released = await manager.release();
-      return { ...await renderRelayResult(released), isError: "ownedLease" in released && released.ownedLease === false };
-    }
+    case "release":
+      value = await manager.release();
+      break;
   }
   return { ...await renderRelayResult(value), isError: false };
 }
 
+// src/review-server.ts
+import { execFile } from "node:child_process";
+import { createServer } from "node:http";
+import { readFile as readFile12, realpath as realpath2 } from "node:fs/promises";
+import { basename, dirname as dirname10, extname as extname2, resolve as resolve10, sep } from "node:path";
+import { promisify } from "node:util";
+
+// src/review-page.ts
+var reviewCss = `:root{color-scheme:light;--bg:#fbf6ef;--s1:#ffffff;--s2:#f7efe5;--s3:#efe3d5;--hair:rgba(90,50,20,.08);--text:#2a1d15;--dim:#5e4b3e;--faint:#7d6a5c;
+--accent:#f0502a;--accent2:#ff9f1a;--grad:linear-gradient(135deg,var(--accent),var(--accent2));--on:#fff;--ring:rgba(240,80,42,.28);
+--ok:#0e9f62;--bad:#e23744;--warn:#b87700;--warn-ink:#8a5a00;--shadow:0 1px 2px rgba(90,50,20,.06),0 12px 32px rgba(90,50,20,.10);
+--sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;--round:ui-rounded,"SF Pro Rounded",var(--sans);--mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+*{box-sizing:border-box}html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:14.5px/1.55 var(--sans);-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline;text-underline-offset:3px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:999px}
+pre{font:12.5px/1.6 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere;margin:0}
+b,time,.n,.exit,dd,.took{font-variant-numeric:tabular-nums}.d{font-family:var(--mono);font-weight:600;letter-spacing:0}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.label,h3,dt{font:600 11px/1.3 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+.quiet{color:var(--faint);margin:0}
+.ok{--tone:var(--ok)}.bad{--tone:var(--bad)}.warn{--tone:var(--warn)}
+.verdict{display:inline-flex;align-items:center;gap:.45rem;font:600 12.5px/1 var(--sans);color:var(--tone,var(--dim));text-transform:capitalize}
+.verdict i{flex:none;width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 0 3px color-mix(in srgb,currentColor 18%,transparent)}
+.app{height:100vh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;grid-template-columns:minmax(0,1fr);overflow:clip}.track{min-width:0;position:relative;z-index:0;display:grid}
+.top{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:1rem .75rem;padding:1.1rem 1.25rem;position:relative;z-index:2}
+.brand{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:.3rem .8rem;min-width:0}.brand .mark{grid-row:1/3}.brand h1,.brand .stats{grid-column:2;margin:0}
+.mark{flex:none;display:grid;place-items:center;width:2.85rem;height:2.85rem;border-radius:14px;background:linear-gradient(145deg,#ffb23d,var(--accent) 70%);box-shadow:inset 0 1px 0 rgba(255,255,255,.4),inset 0 -2px 6px rgba(160,40,10,.18),0 6px 18px var(--ring)}
+h1{display:flex;align-items:baseline;gap:.6rem;font:700 1.3rem/1.15 var(--round);letter-spacing:-.015em;margin:0}
+.stats .at time{font:600 12px var(--round);color:var(--text)}.stats .at .sep{margin:0 .35rem}
+.stats{display:flex;flex-wrap:wrap;gap:.15rem .7rem;list-style:none;margin:.3rem 0 0;padding:0;font-size:12px;color:var(--faint)}.stats b{font:700 12px var(--round);color:var(--text)}
+.pills{justify-self:end;display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:.3rem;list-style:none;margin:0;padding:0}.pills>li,.stats>li{white-space:nowrap}
+.pill{display:flex;align-items:center;gap:.4rem;padding:.42rem .7rem;border-radius:999px;background:color-mix(in srgb,var(--tone) 12%,transparent);font-size:12px;color:var(--dim)}
+.mid{justify-self:center}
+.tabs{display:flex;gap:.2rem;padding:.25rem;border-radius:999px;background:var(--s2)}
+.tabs a{display:inline-flex;align-items:center;gap:.5rem;padding:.4rem 1rem;border-radius:999px;color:var(--dim);font-size:13px;font-weight:600}.tabs a:hover{text-decoration:none;color:var(--text)}
+.tabs a span{display:grid;place-items:center;min-width:1.35rem;height:1.35rem;padding:0 .35rem;font:700 11px/1 var(--round);border-radius:999px;background:var(--s3);color:var(--dim)}.tabs a span.has{background:var(--grad);color:var(--on)}
+.app:not(:has(#overview:target)) .t-traj,.app:has(#overview:target) .t-over{background:var(--s1);color:var(--text);box-shadow:var(--shadow)}
+.pill button{all:unset;display:flex;align-items:center;gap:.4rem;cursor:pointer}.pill:has(button){padding-right:.4rem}.pill:has(button):hover{background:color-mix(in srgb,var(--tone) 20%,transparent)}
+.pill button:focus-visible{outline:2px solid var(--accent);outline-offset:6px;border-radius:999px}
+.q{display:grid;place-items:center;width:1.1rem;height:1.1rem;border-radius:50%;background:var(--tone);color:var(--on);font:700 10.5px/1 var(--round)}
+.why{white-space:normal;text-align:left;position:fixed;inset:auto;top:4.6rem;right:1.75rem;margin:0;width:min(26rem,calc(100vw - 2rem));max-height:calc(100vh - 6rem);overflow:auto;padding:1.1rem 1.25rem 1.2rem;border:0;border-radius:18px;background:var(--s1);color:var(--text);box-shadow:0 2px 6px rgba(90,50,20,.08),0 24px 60px rgba(90,50,20,.22)}
+.why h3{margin:0 0 .8rem;font:700 15px/1.3 var(--round);letter-spacing:0;text-transform:none;color:var(--text)}
+.reasons{list-style:none;margin:0;padding:0;display:grid;gap:.75rem}.reasons li{display:grid;gap:.4rem}.reasons p{margin:0;color:var(--dim);font-size:13.5px;line-height:1.5}
+.reasons .steps{display:flex;flex-wrap:wrap;gap:.3rem}.reasons .steps a{padding:.15rem .55rem;border-radius:999px;background:var(--s2);font:600 11.5px var(--round)}.reasons .steps a:hover{background:var(--grad);color:var(--on);text-decoration:none}
+.concern{margin-top:1.25rem;padding:1rem 1.1rem;border-radius:16px;background:color-mix(in srgb,var(--warn) 9%,var(--bg))}.concern h3{margin:0 0 .7rem;color:var(--warn-ink)}
+.concern ul{list-style:none;margin:0;padding:0;display:grid;gap:.6rem}.concern li{display:grid;gap:.2rem}.concern .label{color:var(--warn-ink)}.concern p{margin:0;color:var(--text);font-size:14px;line-height:1.55}
+.vblock{padding:.95rem 1.1rem;border-radius:14px;background:var(--s1);box-shadow:var(--shadow)}.vblock+.vblock{margin-top:.6rem}
+.vblock h4{display:flex;align-items:center;gap:.7rem;margin:0 0 .5rem;font:700 14px var(--round)}.vwhy{margin:0 0 .6rem;font-size:12.5px;color:var(--faint)}.vblock>.quiet{font-size:13.5px}
+.face{position:relative}.flag{position:absolute;top:.35rem;right:.35rem;display:grid;place-items:center;width:1.1rem;height:1.1rem;border-radius:50%;background:var(--warn);color:#fff;font:800 11px/1 var(--round);box-shadow:0 2px 6px rgba(0,0,0,.2)}
+.focus{position:absolute;left:1.5rem;bottom:1rem;z-index:4;display:flex;align-items:center;gap:.45rem;padding:.35rem .7rem .35rem .5rem;border-radius:999px;background:var(--bg);font-size:12px;font-weight:600;color:var(--dim);cursor:pointer;user-select:none}
+.focus:hover{background:var(--s2)}.focus input{appearance:none;margin:0;width:1.05rem;height:1.05rem;border-radius:6px;background:var(--s1);box-shadow:inset 0 0 0 1.5px var(--faint);display:grid;place-items:center;cursor:pointer}
+.focus input:checked{background:var(--bad);box-shadow:none}.focus input:checked::after{content:"";width:.28rem;height:.55rem;border:solid #fff;border-width:0 2px 2px 0;rotate:45deg;translate:0 -1px}
+
+.app:has(#focus-errors:checked) .track li:not(.err){opacity:.35;filter:grayscale(1)}
+.app:has(#focus-errors:checked) .track li.err .face{box-shadow:0 0 0 2px var(--bad),0 6px 16px color-mix(in srgb,var(--bad) 25%,transparent)}
+.app:has(#focus-errors:checked) .track li.err .t{color:var(--bad)}
+.app:has(#overview:target) .track{display:none}.app:has(#overview:target) .focus{display:none}.app:has(#overview:target) .keys{display:none}
+.keys{display:flex;align-items:center;gap:.25rem;margin-right:.4rem;font-size:11px;color:var(--faint)}.keys span{margin:0 .35rem 0 .1rem}.keys span:last-child{margin-right:0}
+kbd{display:inline-grid;place-items:center;min-width:1.3rem;height:1.3rem;padding:0 .3rem;border-radius:6px;background:var(--s1);box-shadow:0 0 0 1px var(--hair),0 1.5px 0 var(--s3);font:600 10.5px/1 var(--sans);color:var(--dim)}.overview>.doc{grid-area:auto;grid-column:1/-1;grid-row:1}
+.center{display:grid;grid-template-columns:minmax(0,1fr) minmax(20rem,25rem);grid-template-areas:"stage panel";gap:0 .75rem;padding:0 .75rem;min-height:0;position:relative;z-index:1}
+.step{display:none}.step:is(:target,:has(:target)){display:contents}.center:not(:has(:target))>.step:first-of-type{display:contents}
+.step>.view{display:none}.step>.view:target,.step:target>.view.first,.center:not(:has(:target))>.step:first-of-type>.view.first{display:flex}
+.stage{grid-area:stage;position:relative;min-width:0;min-height:0;background:var(--bg);display:grid;grid-template-rows:minmax(0,1fr);overflow:clip}
+.view{flex-direction:column;align-items:center;justify-content:center;gap:1rem;padding:1.5rem 4.75rem 1.25rem}
+.solo{flex:0 1 auto;min-height:0;max-width:100%;display:flex;justify-content:center}
+.zoom{all:unset;display:flex;min-height:0;max-height:100%;max-width:100%;cursor:zoom-in;border-radius:12px}.zoom:focus-visible{outline:none}
+.solo img{max-width:100%;max-height:100%;object-fit:contain;border-radius:12px;box-shadow:0 2px 4px rgba(60,30,10,.08),0 18px 44px rgba(60,30,10,.16);background:#fff;transition:box-shadow .15s}
+.zoom:hover img,.zoom:focus-visible img{box-shadow:0 0 0 2px var(--accent),0 18px 44px rgba(60,30,10,.18)}
+.vlabel{display:grid;justify-items:center;gap:.55rem;min-width:0}
+.badge{display:inline-flex;align-items:center;gap:.65rem;padding:.32rem .85rem;border-radius:999px;background:var(--s1);box-shadow:0 0 0 1px var(--hair),0 1px 3px rgba(90,50,20,.07)}
+.badge .role{font:600 11px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--dim)}.badge[data-role="after"] .role{color:var(--accent)}.badge time{font:12px/1 var(--mono);color:var(--faint)}
+.sname{flex:none;display:flex;align-items:baseline;gap:.6rem;max-width:100%;margin:0;font:700 17px/1.35 var(--round);letter-spacing:-.005em;color:var(--text)}
+.sname .d{flex:none;font-size:13px;color:var(--faint)}.sname .h{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sname .took{flex:none;align-self:center;padding:.18rem .5rem;border-radius:999px;background:color-mix(in srgb,var(--accent) 11%,transparent);font:700 11.5px/1 var(--round);color:var(--accent)}
+.lightbox{position:fixed;inset:0;width:auto;height:auto;max-width:none;max-height:none;margin:0;padding:1.5rem 1.5rem 1.25rem;border:0;background:none;color:var(--text);overflow:hidden;transition:overlay .36s allow-discrete,display .36s allow-discrete}
+.lb-body>*{transform-origin:0 0;transition:transform .36s cubic-bezier(.3,.9,.3,1),opacity .24s ease}
+.lightbox:not([data-flip]):not(:popover-open) .lb-body>*{opacity:0}@starting-style{.lightbox:popover-open:not([data-flip]) .lb-body>*{opacity:0}}
+.lightbox>:not(.lb-body){translate:0 calc(100% + 2.5rem);transition:translate .36s cubic-bezier(.3,.9,.3,1)}.lightbox:popover-open>:not(.lb-body){translate:0}@starting-style{.lightbox:popover-open>:not(.lb-body){translate:0 calc(100% + 2.5rem)}}
+.lightbox{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto;gap:1rem 1.25rem;align-items:center}.lightbox:popover-open{display:grid}
+.lightbox::backdrop{background:rgba(22,15,10,0);backdrop-filter:blur(0);transition:background .32s ease,backdrop-filter .32s ease,overlay .36s allow-discrete,display .36s allow-discrete}
+.lightbox:popover-open::backdrop{background:rgba(22,15,10,.9);backdrop-filter:blur(10px)}@starting-style{.lightbox:popover-open::backdrop{background:rgba(22,15,10,0);backdrop-filter:blur(0)}}
+.lightbox[data-instant],.lightbox[data-instant]::backdrop,.lightbox[data-instant]>*,.lightbox[data-instant] .lb-body>*{transition:none}
+.lb-body{grid-column:1/-1;grid-row:1;display:grid;place-items:center;min-height:0;height:100%;pointer-events:none}.lb-body>*{pointer-events:auto}
+.lb-body img{display:block;max-width:100%;max-height:calc(100vh - 7.5rem);object-fit:contain;border-radius:14px;background:#fff;box-shadow:0 30px 90px rgba(0,0,0,.5)}
+.lb-term{width:min(100%,72rem);max-height:calc(100vh - 7.5rem);overflow:auto;padding:2rem 2.25rem;border-radius:22px;background:var(--s1);color:var(--text);box-shadow:0 30px 90px rgba(0,0,0,.5)}
+.lb-cmd{font-size:18px;line-height:1.65;color:var(--text)}.lb-term .stream{margin:1.25rem 0 0}.lb-term .stream pre{font-size:15px;max-height:none}.lb-term .quiet{margin-top:1.25rem;font-size:15px}
+.lb-cap{grid-row:2;grid-column:2;display:flex;align-items:center;gap:.9rem;margin:0;padding:.35rem .45rem .35rem 1rem;border-radius:999px;background:var(--s1);box-shadow:0 8px 28px rgba(0,0,0,.35);font-size:12.5px;white-space:nowrap}
+.lb-cap time,.lb-cap .size{font:12px var(--mono);color:var(--faint)}.lb-cap a{font-weight:600}.lb-cap .file{font:12px var(--mono);color:var(--text)}
+.lb-nav{all:unset;box-sizing:border-box;grid-row:2;display:flex;align-items:center;gap:.7rem;min-width:0;max-width:22rem;padding:.35rem 1rem .35rem .35rem;border-radius:999px;background:var(--s1);box-shadow:0 8px 28px rgba(0,0,0,.35);cursor:pointer}
+.lb-nav.prev{grid-column:1;justify-self:start}.lb-nav.next{grid-column:3;justify-self:end;flex-direction:row-reverse;padding:.35rem .35rem .35rem 1rem;text-align:right}
+.lb-nav .dir{flex:none;display:grid;place-items:center;width:2.1rem;height:2.1rem;border-radius:50%;background:var(--s2);font-size:1.3rem;line-height:1;color:var(--text)}
+.lb-nav:hover .dir{background:var(--grad);color:var(--on)}.lb-nav:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.lb-nav .role{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 10.5px/1.4 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.enlarge{all:unset;margin-left:auto;display:flex;align-items:center;gap:.4rem;padding:.3rem .7rem;border-radius:999px;font-weight:600;color:var(--dim);cursor:zoom-in}.enlarge:hover{background:var(--s2);color:var(--accent)}.enlarge:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.close{all:unset;display:grid;place-items:center;width:1.8rem;height:1.8rem;border-radius:50%;background:var(--s2);color:var(--dim);font:600 1.1rem/1 var(--sans);cursor:pointer}.close:hover{background:var(--grad);color:var(--on)}.close:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.void{display:grid;place-items:center;border-radius:14px;background:var(--s1);color:var(--faint);padding:2rem;text-align:center;aspect-ratio:16/9}
+.arrow{position:absolute;top:50%;translate:0 -50%;z-index:3;display:grid;place-items:center;width:2.75rem;height:2.75rem;border-radius:50%;background:rgba(255,255,255,.85);backdrop-filter:blur(8px);color:var(--text);font-size:1.5rem;line-height:1;box-shadow:var(--shadow)}
+.arrow.errs,.app:has(#focus-errors:checked) .arrow.all{display:none}.app:has(#focus-errors:checked) .arrow.errs{display:grid}
+.arrow:hover{text-decoration:none;background:var(--grad);color:var(--on)}.arrow.prev{left:1rem}.arrow.next{right:1rem}
+.terminal .term{flex:0 1 auto;min-height:0}
+.term{width:min(100%,56rem);max-height:100%;overflow:auto;background:var(--s1);border-radius:18px;box-shadow:var(--shadow)}
+.term-bar{display:flex;align-items:center;gap:1rem;padding:.8rem 1.1rem;font-size:12px;color:var(--faint);position:sticky;top:0;background:var(--s1)}
+.dots{display:flex;gap:.35rem}.dots i{width:10px;height:10px;border-radius:50%;background:var(--s3)}.dots i:first-child{background:var(--grad)}
+.term-cmd{padding:.4rem 1.2rem 1.1rem;font-size:13px;color:var(--text)}.prompt{color:var(--accent);margin-right:.6em;user-select:none}
+.term .stream{margin:0 1.2rem 1rem}.term .quiet,.term-note{margin:0 1.2rem 1.1rem;font-size:12.5px;color:var(--faint)}
+.stream .label{display:block;margin-bottom:.35rem}.stream pre,.plain,.command{background:var(--s2);border-radius:12px;padding:.75rem .9rem;max-height:14rem;overflow:auto;color:var(--text)}
+.panel{grid-area:panel;min-height:0;display:grid;grid-template-rows:minmax(0,1fr)}
+.panel-scroll{overflow:auto;padding:1.25rem .5rem 2.5rem 1rem;scrollbar-width:thin;scrollbar-color:var(--s3) transparent;--fade:linear-gradient(transparent,#000 1.25rem,#000 calc(100% - 2.5rem),transparent);-webkit-mask-image:var(--fade);mask-image:var(--fade)}
+.panel .stream pre,.panel .plain,.panel .command{background:var(--s1);box-shadow:0 0 0 1px var(--hair),0 1px 2px rgba(90,50,20,.05);padding:.8rem .95rem}
+.stephead{display:flex;align-items:center;gap:.75rem}.stepno{margin:0;font:700 1.45rem/1.2 var(--round);letter-spacing:-.015em;color:var(--faint)}
+.stepno .n{color:var(--text)}.stepno .of{font-size:1rem;font-weight:600}
+.meta{display:flex;flex-wrap:wrap;align-items:center;gap:.3rem .9rem;margin:.45rem 0 0;font-size:12.5px;color:var(--faint)}.meta time{font-family:var(--mono)}
+.permalink{margin-left:auto;display:grid;place-items:center;width:1.9rem;height:1.9rem;margin-block:-.4rem;border-radius:999px;color:var(--faint)}.permalink:hover{background:var(--s3);color:var(--text)}
+.panel h2{font:700 1.35rem/1.3 var(--round);letter-spacing:-.012em;margin:.55rem 0 .6rem;overflow-wrap:anywhere}
+.meta .state{margin-left:auto}
+.block{margin-top:1.5rem}.block h3{margin:0 0 .45rem}.block p{margin:0;color:var(--dim)}.panel .block{margin-top:1.75rem}.panel .block h3{margin-bottom:.55rem}.panel .block p{font-size:14px;line-height:1.6}
+.command{font-size:12px;max-height:9rem}
+.receipts{list-style:none;margin:0 0 .4rem;padding:0;display:grid;gap:.45rem}.receipts li{display:flex;flex-wrap:wrap;gap:.4rem .8rem;align-items:center}.diag{font-size:13px;color:var(--dim)}
+.exit{display:inline-block;font:700 11.5px var(--mono);padding:.25rem .6rem;border-radius:999px;margin-bottom:.55rem}
+.exit.ok{color:var(--ok);background:color-mix(in srgb,var(--ok) 15%,transparent)}.exit.bad{color:var(--bad);background:color-mix(in srgb,var(--bad) 15%,transparent)}
+.receipts .exit{margin:0}.stream{margin-bottom:.6rem}
+.raw summary{cursor:pointer;font-size:12px;color:var(--faint);width:max-content}.raw summary:hover{color:var(--dim)}.raw pre{margin-top:.5rem;color:var(--faint);font-size:11.5px;max-height:12rem;overflow:auto}
+.facts{display:grid;grid-template-columns:1fr 1fr;gap:1rem 1.25rem;margin:1.75rem 0 0;padding:0}.facts dd{margin:.2rem 0 0;font:12.5px var(--mono);color:var(--dim);overflow-wrap:anywhere}
+.facts.stack{grid-template-columns:1fr}
+.files{list-style:none;margin:0;padding:0;display:grid;gap:.6rem}.files li{display:grid;justify-items:start}.files .fopen{font:12.5px var(--mono)}.files span{font-size:12px;color:var(--faint)}
+.doc{display:block;overflow:auto;font-size:1rem;line-height:1.6}.doc-in{width:100%;max-width:56rem;margin:0 auto;padding:2.75rem 2.75rem 4rem}
+.doc h2{font:700 2.25rem/1.15 var(--round);letter-spacing:-.02em;margin:0}.lede{color:var(--dim);margin:.85rem 0 0;font-size:1.125rem;line-height:1.6}
+.doc .block{margin-top:2.75rem}.doc .block>h3{display:flex;align-items:baseline;gap:.6rem;margin:0 0 1rem;font:700 1.25rem/1.3 var(--round);letter-spacing:-.005em;text-transform:none;color:var(--text)}
+.doc h3 .count{font:600 .875rem var(--round);color:var(--faint)}
+.doc .vblock{padding:1.2rem 1.4rem;border-radius:18px}.doc .vblock+.vblock{margin-top:.75rem}.doc .vblock h4{font-size:1.0625rem;margin-bottom:.6rem}.doc .verdict{font-size:.875rem}
+.doc .vwhy{font-size:.875rem;margin-bottom:.7rem}.doc .reasons{gap:1rem}.doc .reasons p{font-size:1rem;line-height:1.6}.doc .reasons .steps a{font-size:.8125rem;padding:.2rem .65rem}
+.doc .quiet,.doc .vblock>.quiet{font-size:1rem}
+.doc .findings{gap:.6rem}.doc .findings li{padding:1rem 1.25rem;border-radius:18px;font-size:1rem}.doc .findings code{font-size:.8125rem}
+.doc .group{padding:1rem 1.25rem;border-radius:18px}.doc .group summary{font-size:1.0625rem}.doc .group .count{font-size:.875rem}.doc .group[open] summary{margin-bottom:1rem}
+.doc .flist{font-size:.875rem;gap:.4rem}.doc .gallery{grid-template-columns:repeat(auto-fill,minmax(11rem,1fr));gap:1rem}.doc .gthumb{font-size:.8125rem}
+.package{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:1.5rem;padding:1.25rem 1.4rem;border-radius:18px;background:var(--s1);box-shadow:var(--shadow)}
+.package .ids{display:grid;gap:.9rem;margin:0}.package dt{font-size:.75rem}.package dd{margin:.2rem 0 0;font:.875rem var(--mono);color:var(--dim);overflow-wrap:anywhere}
+.doc .files{gap:.9rem}.doc .files .fopen{font-size:.875rem}.doc .files span{font-size:.8125rem}
+@media(max-width:960px){.package{grid-template-columns:minmax(0,1fr)}}
+.findings{list-style:none;margin:0;padding:0;display:grid;gap:.5rem}.findings li{padding:.8rem 1rem;border-radius:14px;background:var(--s1);box-shadow:var(--shadow)}
+.findings summary{cursor:pointer}.findings code{display:block;font:11.5px/1.6 var(--mono);color:var(--faint);margin-top:.4rem;overflow-wrap:anywhere}
+.outputs{display:grid;gap:.5rem}.group{background:var(--s1);border-radius:14px;padding:.75rem 1rem;box-shadow:var(--shadow)}
+.group summary{display:flex;justify-content:space-between;gap:1rem;cursor:pointer;font-size:13px;list-style:none}.group summary::-webkit-details-marker{display:none}
+.group summary{align-items:center}.group .where{display:inline-flex;align-items:center;gap:.7rem;font-weight:600}
+.group .where::before{content:"";flex:none;width:.4rem;height:.4rem;border:solid var(--accent);border-width:0 1.5px 1.5px 0;rotate:-45deg;transition:rotate .15s}.group[open] .where::before{rotate:45deg}.group .count{color:var(--faint);flex:none}
+.group[open] summary{margin-bottom:.75rem}
+.flist{list-style:none;margin:-6px;padding:6px;display:grid;gap:.3rem;font:12px var(--mono);max-height:16rem;overflow:auto}.flist li{display:flex;justify-content:space-between;gap:1rem}.flist a{overflow-wrap:anywhere;min-width:0}.flist span{color:var(--faint);flex:none}
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(8.5rem,1fr));gap:.75rem}.flist+.gallery{margin-top:.75rem}
+.gthumb{all:unset;box-sizing:border-box;cursor:zoom-in;display:grid;gap:.4rem;font:11.5px var(--mono);min-width:0;color:var(--dim)}.gthumb span{display:flex;justify-content:space-between;gap:.5rem;overflow:hidden;white-space:nowrap}.gthumb small{color:var(--faint);font-size:inherit;flex:none}
+.gthumb img{width:100%;aspect-ratio:16/9;object-fit:contain;border-radius:10px;display:block;background:var(--s2);box-shadow:inset 0 0 0 1px var(--hair);transition:box-shadow .15s}.gthumb:hover img,.gthumb:focus-visible img{box-shadow:0 0 0 2px var(--accent)}
+.track ol{min-width:0;list-style:none;margin:0;padding:.75rem 1.75rem 1rem;display:flex;gap:.6rem;overflow-x:auto;scrollbar-width:thin;scrollbar-color:var(--s3) transparent}
+.track li{flex:none;display:grid;gap:.45rem;padding:.35rem;border-radius:16px;transition:background .15s}
+.track li:hover{background:var(--s1)}
+.faces{display:flex;gap:.3rem}.faces a{display:block;width:8rem}.faces a:hover{text-decoration:none}
+.face{display:block;aspect-ratio:16/9;border-radius:11px;overflow:hidden;background:var(--s1);box-shadow:0 1px 2px rgba(90,50,20,.08),0 6px 16px rgba(90,50,20,.08)}
+.face img{width:100%;height:100%;object-fit:cover;display:block}
+.face.text pre{padding:.55rem .6rem;font-size:9.5px;line-height:1.45;color:var(--dim);height:100%;overflow:hidden;-webkit-mask-image:linear-gradient(#000 60%,transparent);mask-image:linear-gradient(#000 60%,transparent)}
+.cap{display:flex;align-items:center;gap:.4rem;width:0;min-width:100%;padding:0 .2rem;font-size:12px}.cap .took{flex:none;margin-left:auto;font:700 10.5px var(--round);color:var(--accent)}
+.face .role{position:absolute;left:.3rem;bottom:.3rem;padding:.14rem .4rem;border-radius:999px;background:rgba(255,255,255,.9);font:600 9px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--dim)}
+.face .none{display:grid;place-items:center;height:100%;font-size:10px;color:var(--faint)}
+.cap .n{font:600 11px var(--mono);color:var(--faint)}.dot{flex:none;width:7px;height:7px;border-radius:50%;background:var(--tone)}
+.cap .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dim)}
+.track li.bad .face{box-shadow:0 0 0 2px var(--bad)}
+@media(max-width:960px){.top{grid-template-columns:minmax(0,1fr)}.pills{justify-self:center;justify-content:center}.app{height:auto;min-height:100vh;overflow:visible}.center{grid-template-columns:minmax(0,1fr);grid-template-areas:"stage" "panel";gap:.75rem}
+.stage{min-height:60vh}.view{padding:.5rem 3.75rem 1rem}.track{position:sticky;bottom:0;background:var(--bg)}}
+@supports (corner-shape:squircle){*,*::before,*::after,::backdrop{corner-shape:squircle}.dot,.verdict i,.arrow,.q,.flag,.close,.dots i,.lb-nav .dir,
+:focus-visible,.pill,.tabs,.tabs a,.tabs a span,.reasons .steps a,.took,.badge,.face .role,.focus,.lb-cap,.lb-nav,.enlarge,.permalink,.exit,.fw-dl,.fopen{corner-shape:round}}
+.fopen{all:unset;cursor:pointer;color:var(--accent);overflow-wrap:anywhere;min-width:0}.fopen:hover{text-decoration:underline;text-underline-offset:3px}.fopen:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:999px}
+.fwin{position:fixed;inset:0;width:auto;height:auto;max-width:none;max-height:none;margin:0;padding:2rem;border:0;background:none;place-items:center;overflow:hidden;transition:overlay .28s allow-discrete,display .28s allow-discrete}
+.fwin:popover-open{display:grid}
+.fwin::backdrop{background:rgba(42,29,21,0);transition:background .28s ease,overlay .28s allow-discrete,display .28s allow-discrete}
+.fwin:popover-open::backdrop{background:rgba(42,29,21,.3)}
+@starting-style{.fwin:popover-open::backdrop{background:rgba(42,29,21,0)}}
+.fw-card{width:min(52rem,100%);max-height:min(42rem,100%);display:grid;grid-template-rows:auto minmax(0,1fr);background:var(--s1);border-radius:18px;box-shadow:0 1px 2px rgba(90,50,20,.08),0 24px 64px rgba(60,30,10,.24);overflow:hidden;opacity:0;scale:.96;translate:0 .75rem;transition:opacity .22s ease,scale .28s cubic-bezier(.3,.9,.3,1),translate .28s cubic-bezier(.3,.9,.3,1)}
+.fwin:popover-open .fw-card{opacity:1;scale:1;translate:0}
+@starting-style{.fwin:popover-open .fw-card{opacity:0;scale:.96;translate:0 .75rem}}
+.fw-bar{display:flex;align-items:center;gap:.75rem;padding:.7rem .7rem .7rem 1.15rem;border-bottom:1px solid var(--hair)}
+.fw-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 13px var(--mono);color:var(--text)}
+.fw-bar .size,.fw-note{flex:none;font:12px var(--mono);color:var(--faint)}
+.fw-note{font-family:var(--sans)}
+.fw-dl{flex:none;display:inline-flex;align-items:center;gap:.4rem;padding:.4rem .85rem .4rem .7rem;border-radius:999px;background:var(--grad);color:var(--on);font-size:12.5px;font-weight:600}
+.fw-dl:hover{text-decoration:none;filter:brightness(1.05)}
+.fw-dl:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.fw-body{margin:0;padding:1rem 1.15rem 1.25rem;overflow:auto;background:var(--bg);font:12.5px/1.6 var(--mono);color:var(--text);white-space:pre-wrap;overflow-wrap:anywhere;tab-size:2}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+@media print{.app{height:auto;display:block}.track,.arrow,.mid,.lightbox,.enlarge{display:none}.center{display:block}.step{display:block!important;break-inside:avoid;margin-bottom:1rem}.view{display:flex!important}.stage{background:none}}`;
+
+// src/review-server.ts
+var types = {
+  ".json": "application/json; charset=utf-8",
+  ".jsonl": "text/plain; charset=utf-8",
+  ".ndjson": "text/plain; charset=utf-8",
+  ".log": "text/plain; charset=utf-8",
+  ".txt": "text/plain; charset=utf-8",
+  ".md": "text/plain; charset=utf-8",
+  ".csv": "text/plain; charset=utf-8",
+  ".tsv": "text/plain; charset=utf-8",
+  ".yaml": "text/plain; charset=utf-8",
+  ".yml": "text/plain; charset=utf-8",
+  ".xml": "text/plain; charset=utf-8",
+  ".toml": "text/plain; charset=utf-8",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
+  ".gif": "image/gif"
+};
+var html = "text/html; charset=utf-8";
+var plain = "text/plain; charset=utf-8";
+var escape2 = (value) => value.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+var href = (...parts) => `/${parts.map(encodeURIComponent).join("/")}/`;
+var policy = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+var shell = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light"><title>Relay review</title><link rel="stylesheet" href="/.app/review.css"><script type="module" src="/.app/review.js"></script></head><body><p class="loading">Reading the trajectory\u2026</p></body></html>`;
+var list = (title, items) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${escape2(title)}</title><link rel="stylesheet" href="/.app/review.css"></head><body class="runs"><h1>${escape2(title)}</h1><ul>${items.map(([h, text4]) => `<li><a href="${escape2(h)}">${escape2(text4)}</a></li>`).join("")}</ul></body></html>`;
+var git = async (dir, ...args) => {
+  try {
+    return (await promisify(execFile)("git", ["-C", dir, ...args])).stdout.trim() || void 0;
+  } catch {
+    return void 0;
+  }
+};
+async function projectOf(dir) {
+  const remote = await git(dir, "remote", "get-url", "origin");
+  if (remote) return basename(remote.replace(/\/+$/, "")).replace(/\.git$/, "");
+  const top = await git(dir, "rev-parse", "--show-toplevel");
+  return basename(top ?? dirname10(dir));
+}
+async function runOf(dir) {
+  const { taskId, startedAt } = await deliveredPackageRun(dir);
+  return `${startedAt.replace(/[:.]/g, "-")}-${/-([0-9a-f]{8})$/.exec(taskId)?.[1] ?? taskId}`;
+}
+var ReviewServer = class {
+  constructor(script, port = 0) {
+    this.script = script;
+    this.port = port;
+  }
+  /** project → run → package folder */
+  projects = /* @__PURE__ */ new Map();
+  server;
+  listening;
+  /** Serve a package; returns the address of its page. The same package keeps its address. */
+  async add(dir) {
+    const root = await realpath2(resolve10(dir));
+    const project = (await projectOf(root)).replace(/^\.+/, "") || "package", run = await runOf(root);
+    const runs = this.projects.get(project) ?? this.projects.set(project, /* @__PURE__ */ new Map()).get(project);
+    const existing = runs.get(run);
+    if (existing && existing !== root) throw new Error(`${root} and ${existing} would both be served at /${project}/${run}/`);
+    runs.set(run, root);
+    return `http://127.0.0.1:${await this.listen()}${href(project, run)}`;
+  }
+  /** The packages served, as their page addresses. */
+  async addresses() {
+    const port = await this.listen();
+    return [...this.projects].flatMap(([project, runs]) => [...runs.keys()].map((run) => `http://127.0.0.1:${port}${href(project, run)}`));
+  }
+  listen() {
+    this.listening ??= new Promise((done, fail2) => {
+      const server = createServer((request, response) => void this.handle(request.url ?? "/", request.headers.host, response));
+      server.once("error", fail2);
+      server.listen(this.port, "127.0.0.1", () => {
+        server.unref();
+        done(server.address().port);
+      });
+      this.server = server;
+    });
+    return this.listening;
+  }
+  close() {
+    this.server?.close();
+  }
+  async handle(url, host, response) {
+    const send = (status, type, body, headers = {}) => {
+      response.writeHead(status, { "content-type": type, "cache-control": "no-store", "x-content-type-options": "nosniff", "content-security-policy": policy, ...headers });
+      response.end(body);
+    };
+    const redirect = (location) => {
+      response.writeHead(301, { location });
+      response.end();
+    };
+    try {
+      const port = await this.listen();
+      if (host !== `127.0.0.1:${port}` && host !== `localhost:${port}`) return send(421, plain, "unknown host");
+      const path = new URL(url, "http://127.0.0.1").pathname;
+      if (path === "/.app/review.js") return send(200, "text/javascript; charset=utf-8", await this.script());
+      if (path === "/.app/review.css") return send(200, "text/css; charset=utf-8", reviewCss);
+      const api = /^\/\.api\/([^/]+)\/([^/]+)\.json$/.exec(path);
+      if (api) {
+        const root2 = this.projects.get(decodeURIComponent(api[1]))?.get(decodeURIComponent(api[2]));
+        return root2 ? send(200, types[".json"], JSON.stringify(await reviewData(root2))) : send(404, plain, "unknown run");
+      }
+      const [, project = "", run, ...rest] = path.split("/").map(decodeURIComponent);
+      if (!project) return send(200, html, list("Relay reviews", [...this.projects].flatMap(([p, runs2]) => [...runs2.keys()].map((r) => [href(p, r), `${p} / ${r}`]))));
+      const runs = this.projects.get(project);
+      if (!runs) return send(404, plain, `unknown project ${project}`);
+      if (run === void 0) return redirect(href(project));
+      if (!run) return send(200, html, list(project, [...runs.keys()].map((r) => [href(project, r), r])));
+      const root = runs.get(run);
+      if (!root) return send(404, plain, `unknown run ${run} of ${project}`);
+      if (!rest.length) return redirect(href(project, run));
+      const file = rest.join("/");
+      if (!file) return send(200, html, shell);
+      const target2 = await realpath2(resolve10(root, file)).catch(() => void 0);
+      if (!target2 || !target2.startsWith(root + sep)) return send(404, plain, "not in the package");
+      return send(200, types[extname2(target2).toLowerCase()] ?? "application/octet-stream", await readFile12(target2));
+    } catch (error2) {
+      return send(500, plain, error2 instanceof Error ? error2.message : String(error2));
+    }
+  }
+};
+
 // src/server.ts
 var SERVER_NAME = "relay";
-var SERVER_VERSION = true ? "0.6.2" : JSON.parse(readFileSync(fileURLToPath2(new URL("../package.json", import.meta.url)), "utf8")).version;
+var SERVER_VERSION = true ? "0.6.1" : JSON.parse(readFileSync(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8")).version;
 var STATUS_TOOL = "relay_status";
 var TRAJECTORY_TOOL = "relay_trajectory";
 var PLUGIN_TOOL_PREFIX = "mcp__plugin_mcp-vm-relay_relay__";
@@ -31779,7 +31471,7 @@ function relayContent(result2) {
 }
 function projectDirectory(env = process.env, cwd = process.cwd()) {
   const given = env.MCP_VM_RELAY_PROJECT;
-  return given && !given.includes("${") ? resolve10(given) : cwd;
+  return given && !given.includes("${") ? resolve11(given) : cwd;
 }
 var readOnlyStatus = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
 var trajectoryAnnotations = { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false };
@@ -31793,7 +31485,7 @@ var statusToolDefinition = {
 var trajectoryToolDefinition = {
   name: TRAJECTORY_TOOL,
   title: "Open the trajectory viewer",
-  description: "Verify a delivered relay evidence package (every artifact, hash and reference) and open its trajectory viewer in the local browser. Human review remains pending.",
+  description: "Verify a delivered relay evidence package (every artifact, hash and reference) and open its trajectory review in the local browser, served by this relay on 127.0.0.1 from the package's data. Human review remains pending.",
   inputSchema: { type: "object", properties: { directory: { type: "string", description: "The package directory, absolute or relative to the project." } }, required: ["directory"], additionalProperties: false },
   annotations: trajectoryAnnotations
 };
@@ -31804,10 +31496,12 @@ function allToolDefinitions() {
     trajectoryToolDefinition
   ];
 }
-var SHUTDOWN_GRACE_MS = 12e4;
-var SHUTDOWN_CANCEL_MS = 5e3;
+var reviewApp = true ? async () => 'var X=e=>({...e,details:new Map(Object.entries(e.details))}),ie=/\\.(json|jsonl|ndjson|log|txt|md|csv|tsv|ya?ml|xml|toml)$/i,l=e=>String(e??"").replace(/[&<>"\']/g,t=>({"&":"&amp;","<":"&lt;",">":"&gt;",\'"\':"&quot;","\'":"&#39;"})[t]),j=e=>l(e.split("/").map(encodeURIComponent).join("/")),Z=e=>`#step-${encodeURIComponent(e.id)}`,O=e=>e&&Number.isFinite(Date.parse(e))?new Date(e).toISOString().slice(11,19):void 0,Q=e=>e&&Number.isFinite(Date.parse(e))?new Date(e).toISOString().slice(11,23):void 0,ee=e=>e<6e4?`${(e/1e3).toFixed(1)} s`:`${Math.floor(e/6e4)} min ${Math.round(e%6e4/1e3)} s`,oe=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],_=(e,t=!1)=>{let i=new Date(e),a=o=>String(o).padStart(2,"0");return`${oe[i.getUTCMonth()]} ${i.getUTCDate()}, ${t?`${i.getUTCFullYear()}, `:""}${a(i.getUTCHours())}:${a(i.getUTCMinutes())} UTC`},se=\'<svg viewBox="0 0 24 24" width="32" height="32" aria-hidden="true"><rect x="3.5" y="4" width="12" height="9.5" rx="2.6" fill="none" stroke="#fff" stroke-width="2" opacity=".75"/><rect x="8.5" y="10" width="12" height="9.5" rx="2.6" fill="#f7862a" stroke="#fff" stroke-width="2.1"/><path d="M12 14.8h5M15.2 12.9l1.9 1.9-1.9 1.9" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>\',A=e=>e>=1e6?`${(e/1e6).toFixed(1)} MB`:e>=1e3?`${(e/1e3).toFixed(1)} kB`:`${e} B`,N=(e,t)=>e===1?t:`${t}s`,le=(e,t)=>`${e} ${N(e,t)}`,q=e=>D(e.execution)!=="ok",D=e=>["passed","complete","completed"].includes(e)?"ok":["failed","refused"].includes(e)?"bad":"warn",H=e=>`<span class="verdict ${D(e)}"><i aria-hidden="true"></i>${l(e)}</span>`,de=e=>/^[\\w@%+=:,./-]+$/.test(e)?e:`\'${e.replace(/\'/g,"\'\\\\\'\'")}\'`;function ce(e){let t=i=>Date.parse(e.details.get(i.id)?.at??"");return e.steps.map((i,a)=>({step:i,index:a})).sort((i,a)=>(Number.isFinite(t(i.step))?t(i.step):1/0)-(Number.isFinite(t(a.step))?t(a.step):1/0)||i.index-a.index).map(({step:i})=>i)}function pe(e){let t=new Map;for(let a of e){let o=/^(diagnostic|request|action) (\\S+) (.*)$/.exec(a),g=o?`${o[1]} ${o[3]}`:a,m=t.get(g)??{sentence:a,ids:[]};o&&m.ids.push(o[2]),t.set(g,m)}let i=a=>a.replace(/^./,o=>o.toUpperCase());return[...t.entries()].map(([a,o])=>{if(o.ids.length<2)return{text:i(o.sentence),ids:[]};let[g,...m]=a.split(" "),h=m.join(" ").replace(/^has /,"have ").replace(/^is /,"are ").replace(/^lacks /,"lack ");return{text:`${o.ids.length} ${g}s ${h}`,ids:o.ids}})}function V(e,t){let i=t?.argv?.length?t.argv.map(de).join(" "):void 0,a=!!i&&(e.title==="Diagnostic command"||e.title.startsWith("exec ")),o=a&&e.because?e.because:e.title,g=o.split(`\n`)[0].trimEnd(),m=g.length>140?`${g.slice(0,139).trimEnd()}\\u2026`:g===o?o:`${g} \\u2026`,h=e.inputMode==="diagnostic"?"Diagnostic":i&&!e.snapshots?"Command":"Action";return{headline:m,command:i??(m===o?void 0:o),reasonShown:!(a&&e.because),kind:h}}function me(e){let t=/^Authoritative receipt outcomes: (\\[.*\\])$/m.exec(e??"");if(t)try{let i=new Set;return JSON.parse(t[1]).filter(a=>{let o=JSON.stringify(a);return i.has(o)?!1:(i.add(o),!0)})}catch{return}}var K=(e,t)=>`<span class="exit ${e.code===0&&!t?"ok":"bad"}">exit ${l(e.code??"none")}${e.signal?` \\xB7 ${l(e.signal)}`:""}${t?" \\xB7 timed out":""}</span>`;function ge(e,t,i=!0){let a=l(e.observed??"No confirmed result"),o=`<details class="raw"><summary>Receipt as recorded</summary><pre>${a}</pre></details>`;if(t){let m=t.exit===void 0?"":K({code:t.exit,signal:t.signal},t.timedOut),h=i?J(t):"";return`${m}${h||(i?\'<p class="quiet">No output.</p>\':"")}${o}`}let g=me(e.observed);return g?.length?`<ul class="receipts">${g.map(m=>`<li>${H(m.execution??m.outcome?.kind??"unknown")}${m.outcome?.exitStatus?K(m.outcome.exitStatus):""}${m.outcome?.diagnostic?`<span class="diag">${l(m.outcome.diagnostic)}</span>`:""}</li>`).join("")}</ul>${o}`:`<pre class="plain">${a}</pre>`}var J=e=>["stdout","stderr"].filter(t=>e[t]?.trim()).map(t=>`<div class="stream"><span class="label">${t}</span><pre>${l(e[t].trimEnd())}</pre></div>`).join("");function F(e){let t=Date.parse(e?.afterAt??"")-Date.parse(e?.beforeAt??"");return Number.isFinite(t)&&t>=0?ee(t):void 0}var U=(e,t)=>`lightbox-${e.id}--${t}`,Y=e=>l(e).replace(/^Step (\\d+)/,\'Step <span class="d">$1</span>\'),ue=\'<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M9.5 2.5h4v4M6.5 13.5h-4v-4M13.5 2.5 9 7M2.5 13.5 7 9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>\';function G(e){let t=(i,a)=>i?`<button type="button" class="lb-nav ${a}" popovertarget="${l(i.id)}" aria-label="${a==="prev"?"Previous":"Next"}: ${l(i.label)}, ${l(i.title)}"><span class="dir" aria-hidden="true">${a==="prev"?"\\u2039":"\\u203A"}</span><span class="role">${Y(i.nav??i.label)}</span></button>`:"";return e.map((i,a)=>`<div class="lightbox" id="${l(i.id)}" data-step="${l(i.step)}" popover><div class="lb-body">${i.body}</div>${t(e[a-1],"prev")}<p class="lb-cap"><span class="label">${Y(i.label)}</span>${i.caption}<button type="button" class="close" popovertarget="${l(i.id)}" popovertargetaction="hide" aria-label="Close">\\xD7</button></p>${t(e[a+1],"next")}</div>`).join(`\n`)}function fe(e,t,i){return e.flatMap(a=>{let o=t.details.get(a.id),g=i.get(a.id),{headline:m,command:h}=V(a,o),b=p=>`step-${a.id}--${p}`;if(!a.snapshots){let p=O(o?.at);return[{id:U(a,"command"),step:b("command"),label:`Step ${g} \\xB7 ${a.inputMode==="diagnostic"?"Diagnostic":"Command"}`,title:m,body:`<div class="lb-term"><pre class="lb-cmd"><span class="prompt" aria-hidden="true">$</span>${l(h??m)}</pre>${o?.output?J(o.output)||\'<p class="quiet">No output.</p>\':""}</div>`,caption:p?`<time>${p} UTC</time>`:""}]}return["before","after"].filter(p=>a.snapshots?.[p]).map(p=>{let k=a.snapshots[p],v=p==="before"?"Before":"After",$=Q(p==="before"?o?.beforeAt:o?.afterAt);return{id:U(a,p),step:b(p),label:`Step ${g} \\xB7 ${v}`,title:m,body:`<img loading="lazy" alt="${v} dispatch snapshot, enlarged" src="${j(k)}">`,caption:`${$?`<time>${$}</time>`:""}<a href="${j(k)}">Open the original</a>`}})})}function he(e){let t=[];for(let i of e)(i.snapshots?["before","after"]:["command"]).forEach((a,o)=>t.push({step:i,role:a,id:`step-${i.id}--${a}`,index:t.length,first:o===0}));return t}var te=e=>`#${encodeURIComponent(e.id)}`,L=e=>e.role==="before"?"Before":e.role==="after"?"After":e.step.inputMode==="diagnostic"?"Diagnostic":"Command";function be(e,t,i,a){let o=e.step,{headline:g,command:m}=V(o,t),h=i.get(o.id),b=r=>i.get(r.step.id),p=(r,s,c)=>r?`<a class="arrow ${s} ${c}" href="${l(te(r))}" aria-label="${s==="prev"?"Previous":"Next"}${c==="errs"?" with errors":""}: step ${b(r)}, ${L(r).toLowerCase()}">${s==="prev"?"\\u2039":"\\u203A"}</a>`:"",k=p(a.previous,"prev","all")+p(a.next,"next","all")+p(a.previousError,"prev","errs")+p(a.nextError,"next","errs"),v=F(t),$=e.role==="command"?O(t?.at)?`${O(t?.at)} UTC`:void 0:Q(e.role==="before"?t?.beforeAt:t?.afterAt),z=`<div class="vlabel"><span class="badge" data-role="${e.role}"><span class="role">${L(e)}</span>${$?`<time>${$}</time>`:""}</span></div>`,R=`<h2 class="sname" title="${l(g)}"><span class="d">${h}</span><span class="h">${l(g)}</span>${v?`<span class="took" title="Time from the before snapshot to the after snapshot">${v}</span>`:""}</h2>`,I=`<section class="stage view${e.role==="command"?" terminal":""}${e.first?" first":""}" id="${l(e.id)}" data-v="${e.index}" aria-label="Step ${h}, ${L(e).toLowerCase()}">${k}${R}`;if(e.role==="command")return`${I}<div class="term"><div class="term-bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span>${o.inputMode==="diagnostic"?"Diagnostic command":"Command"} \\xB7 no snapshots</span><button type="button" class="enlarge" popovertarget="${l(U(o,"command"))}" title="Enlarge the command">${ue}Enlarge</button></div>\n<pre class="term-cmd"><span class="prompt" aria-hidden="true">$</span>${l(m??g)}</pre>${t?.output?J(t.output)||\'<p class="quiet">No output.</p>\':""}\n<p class="term-note">${o.inputMode==="diagnostic"?"Screenshots were not requested for this diagnostic.":"No snapshots were captured for this step."}</p></div>${z}</section>`;let T=o.snapshots?.[e.role],C=T?`<button type="button" class="zoom" popovertarget="${l(U(o,e.role))}" title="Enlarge the ${e.role} snapshot"><img alt="${L(e)} dispatch snapshot" src="${j(T)}"></button>`:`<div class="void">${L(e)}: unavailable \\u2014 incomplete evidence</div>`;return`${I}<div class="solo">${C}</div>${z}</section>`}function ve(e,t,i,a,o){let{headline:g,command:m,reasonShown:h,kind:b}=V(e,t),p=e.snapshots?.declaredAfterIntervalMs,k=O(t?.at),v=($,z)=>`<div><dt>${$}</dt><dd>${z}</dd></div>`;return`<aside class="panel" aria-label="Step ${i} details"><div class="panel-scroll">\n<div class="stephead"><h2 class="stepno"><span class="n">Step <span class="d">${i}</span></span> <span class="of">of <span class="d">${String(a).padStart(2,"0")}</span></span></h2><a class="permalink" href="${l(Z(e))}" title="Stable link to this step" aria-label="Stable link to step ${i}">${xe}</a></div>\n<p class="meta"><span>${b}</span>${k?`<time>${k} UTC</time>`:""}<span class="state"><span class="sr">Execution: </span>${H(e.execution)}</span></p>\n${o.length?`<section class="concern"><h3>Why this step affects the verdicts</h3><ul>${o.map($=>`<li><span class="label">${l($.verdict)}</span><p>${l($.text)}</p></li>`).join("")}</ul></section>`:""}\n${h?`<section class="block"><h3>Reason</h3><p>${l(e.because??"Not present in retained host metadata")}</p></section>`:""}\n${m&&e.snapshots?`<section class="block"><h3>Command</h3><pre class="command">${l(m)}</pre></section>`:""}\n<section class="block"><h3>Expected</h3><p>${l(e.expected||"Not supplied")}</p></section>\n<section class="block"><h3>Observed</h3>${ge(e,t?.output,!!e.snapshots)}</section>\n<dl class="facts">${v("State",l(e.state))}${v("Input",l(e.inputMode))}${v("After interval",p===void 0?"unavailable":`${p} ms`)}${F(t)?v("Before to after",F(t)):""}${e.snapshots?.groupId?v("Group",l(e.snapshots.groupId)):""}</dl>\n</div></aside>`}var xe=\'<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M6.6 9.4l2.8-2.8M7.2 4.6l.9-.9a2.8 2.8 0 0 1 4 4l-.9.9M8.8 11.4l-.9.9a2.8 2.8 0 0 1-4-4l.9-.9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>\',we=\'<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7.2 8 10.4l3.2-3.2M3 13h10" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>\';function ye(e,t,i,a,o){let{headline:g,command:m}=V(e,t),h=F(t),b=o.map((p,k)=>{let v=p.role==="command"?void 0:e.snapshots?.[p.role],$=p.role==="command"?`<pre aria-hidden="true"><span class="prompt">$</span>${l(m??g)}</pre>`:v?`<img loading="lazy" alt="" src="${j(v)}">`:`<span class="none">No ${p.role} snapshot</span>`;return`<a data-t="${p.index}" href="${l(te(p))}" title="${l(`Step ${i} \\xB7 ${L(p)} \\xB7 ${g}`)}"><span class="face${p.role==="command"?" text":""}">${$}${p.role==="command"?"":`<span class="role">${L(p)}</span>`}${a&&k===0?\'<span class="flag" title="This step affects the verdicts">!</span>\':""}</span></a>`}).join("");return`<li class="${D(e.execution)}${e.inputMode==="diagnostic"?" diagnostic":""}${q(e)?" err":""}"><div class="faces">${b}</div><span class="cap"><span class="n">${i}</span><i class="dot" aria-hidden="true"></i><span class="t">${l(g)}</span>${h?`<span class="took">${h}</span>`:""}</span><span class="sr">${l(e.execution)}</span></li>`}var $e=(e,t,i)=>e?Array.from({length:e},(a,o)=>`.app:has(.center>.step:nth-of-type(${o+1}):target) .track li:nth-child(${o+1}),.app:has(.center>.step:nth-of-type(${o+1}) :target) .track li:nth-child(${o+1})`).join(",")+",.app:not(:has(.center :target)) .track li:first-child{background:var(--s2)}"+[...Array.from({length:i},(a,o)=>`.app:has([data-v="${o}"]:target) .track [data-t="${o}"] .face`),...t.map(a=>`.app:has(.center>.step[data-first="${a}"]:target) .track [data-t="${a}"] .face`),\'.app:not(:has(.center :target)) .track [data-t="0"] .face\'].join(",")+"{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--accent),0 0 18px var(--ring)}":"";function ke(e,t){let i=l(t.label);return`<div class="fwin" id="${e}" data-step="overview" data-src="${t.href}" popover aria-label="${i}"><div class="fw-card"><div class="fw-bar"><span class="fw-name" title="${i}">${i}</span><span class="fw-note" title="The download is the original file" hidden>Formatted</span><span class="size">${A(t.bytes)}</span><a class="fw-dl" href="${t.href}" download="${l(t.name)}">${we}<span>Download</span></a><button type="button" class="close" popovertarget="${e}" popovertargetaction="hide" aria-label="Close">\\xD7</button></div><pre class="fw-body"><span class="quiet">Reading the file\\u2026</span></pre></div></div>`}function re(e){let t=ce(e),i=new Map(t.map((n,d)=>[n.id,String(d+1).padStart(2,"0")])),a=he(t),o=t.map(n=>Date.parse(e.details.get(n.id)?.at??"")).filter(Number.isFinite),g=t.filter(n=>n.inputMode==="diagnostic").length,m=t.length-g,h=t.filter(q).length,b=o.length?new Date(Math.min(...o)).toISOString():void 0,p=new Map;for(let[n,d]of[["snapshots",`Snapshots ${e.completeness}`],["execution",`Execution ${e.execution}`]])for(let u of e.reasons[n])for(let M of u.stepIds)p.set(M,[...p.get(M)??[],{verdict:d,text:u.text}]);let k=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,v=new Map;for(let n of e.outputs){let[,d="",...u]=n.path.split("/");v.set(d,[...v.get(d)??[],{...n,label:u.filter(M=>!k.test(M)).join("/")||n.path.split("/").at(-1)}])}let $=[],z=[],R=(n,d)=>(z.push(ke(n,d)),`<button type="button" class="fopen" popovertarget="${n}" title="View ${l(d.name)}">${l(d.label)}</button>`),I=n=>ie.test(n.path)?R(`window-output-${z.length+1}`,{href:j(n.path),label:n.label,name:n.label.split("/").at(-1),bytes:n.bytes}):`<a href="${j(n.path)}">${l(n.label)}</a>`,T=[...v].map(([n,d])=>{let u=d.filter(y=>/\\.(png|jpe?g|webp|gif)$/i.test(y.path)),M=d.filter(y=>!u.includes(y)),ne=d.reduce((y,P)=>y+P.bytes,0);return`<details class="group"${e.outputs.length<=12?" open":""}><summary><span class="where">${l(n)}</span><span class="count">${le(d.length,"file")} \\xB7 ${A(ne)}</span></summary>${M.length?`<ul class="flist">${M.map(y=>`<li>${I(y)}<span>${A(y.bytes)}</span></li>`).join("")}</ul>`:""}${u.length?`<div class="gallery">${u.map(y=>{let P=`lightbox-output-${$.length+1}`,W=y.label.split("/").at(-1);return $.push({id:P,step:"overview",label:n,title:y.label,nav:W,body:`<img loading="lazy" alt="${l(y.label)}, enlarged" src="${j(y.path)}">`,caption:`<span class="file">${l(y.label)}</span><span class="size">${A(y.bytes)}</span><a href="${j(y.path)}">Open the original</a>`}),`<button type="button" class="gthumb" popovertarget="${P}" title="Enlarge ${l(W)}"><img loading="lazy" alt="${l(y.label)}" src="${j(y.path)}"><span>${l(W)}<small>${A(y.bytes)}</small></span></button>`}).join("")}</div>`:""}</details>`}).join(""),C={"manifest.json":"Checksums of every artifact","summary.json":"Verdicts and findings","trajectory.json":"Steps as recorded"},r=e.files.map(n=>`<li>${R(`window-${n.path.replace(/\\W+/g,"-")}`,{href:j(n.path),label:n.path,name:n.path.split("/").at(-1),bytes:n.bytes})}${C[n.path]?`<span>${C[n.path]}</span>`:""}</li>`).join(""),s=(n,d)=>`<li><b>${d}</b>${n?` <span>${n}</span>`:""}</li>`,c=n=>[...n.reduce((d,u)=>d.set(u.text,[...new Set([...d.get(u.text)??[],...u.stepIds])]),new Map)].map(([d,u])=>({text:d,stepIds:u})),f=n=>n.map(d=>`<a href="${l(`#step-${encodeURIComponent(d)}`)}">Step <span class="d">${i.get(d)??"?"}</span></a>`).join(""),x=n=>`<ul class="reasons">${c(n).map(d=>`<li><p>${l(d.text)}</p>${d.stepIds.length?`<p class="steps">${f(d.stepIds)}</p>`:""}</li>`).join("")}</ul>`,w=(n,d)=>n==="snapshots"?`Why snapshots are ${d}`:d==="failed"?"Why execution failed":`Why execution is ${d}`,S=(n,d,u)=>e.reasons[n].length?`<li class="pill ${D(u)}"><button type="button" popovertarget="why-${n}" title="${w(n,u)}"><span>${d}</span>${H(u)}<span class="q" aria-hidden="true">?</span></button><div class="why" id="why-${n}" popover><h3>${w(n,u)}</h3>${x(e.reasons[n])}</div></li>`:`<li class="pill ${D(u)}"><span>${d}</span>${H(u)}</li>`,E=(n,d,u,M)=>`<div class="vblock"><h4>${d} ${H(u)}</h4>${e.reasons[n].length?`<p class="vwhy">${w(n,u)}:</p>${x(e.reasons[n])}`:`<p class="quiet">${M}</p>`}</div>`,B=`<article class="step overview" id="overview"><section class="stage doc" aria-label="Package overview"><div class="doc-in">\n<h2>Overview</h2><p class="lede">Delivery integrity is separate from execution success. Snapshots are dispatch-time evidence, not continuous video: each shows the screen just before a step was sent and shortly after it returned.</p>\n<section class="block"><h3>Verdicts</h3>${E("snapshots","Snapshots",e.completeness,"Every snapshot the steps declared is present and tied to its step.")}${E("execution","Execution",e.execution,"Every step completed, and every retained receipt confirms it.")}</section>\n<section class="block"><h3>Findings as recorded <span class="count">${e.findings.length}</span></h3>${e.findings.length?`<ul class="findings">${pe(e.findings).map(n=>`<li>${n.ids.length?`<details><summary>${l(n.text)}</summary><code>${n.ids.map(l).join("<br>")}</code></details>`:l(n.text)}</li>`).join("")}</ul>`:\'<p class="quiet">No findings.</p>\'}</section>\n<section class="block"><h3>Declared outputs <span class="count">${e.outputs.length}</span></h3>${T?`<div class="outputs">${T}</div>`:\'<p class="quiet">No declared outputs were delivered.</p>\'}</section>\n<section class="block"><h3>Package</h3><div class="package"><dl class="ids"><div><dt>Package</dt><dd>${l(e.packageId)}</dd></div><div><dt>Task</dt><dd>${l(e.taskId)}</dd></div><div><dt>Session</dt><dd>${l(e.sessionId)}</dd></div>${b?`<div><dt>Started</dt><dd>${_(b,!0)}</dd></div>`:""}</dl>\n<ul class="files">${r}</ul></div></section></div></section></article>`;return{title:`Relay review: ${e.packageId}`,selection:$e(t.length,a.filter(n=>n.first).map(n=>n.index),a.length),html:`<div class="app">\n<header class="top"><div class="brand"><span class="mark" aria-hidden="true">${se}</span><h1 title="${l(e.packageId)}">Relay</h1>\n<ul class="stats">${s(N(t.length,"step"),String(t.length))}${s(N(m,"action"),String(m))}${s(N(g,"diagnostic"),String(g))}${b?`<li class="at"><time datetime="${b}" title="Started ${b}">${_(b)}</time><span class="local" hidden><span class="sep" aria-hidden="true">\\xB7</span><time datetime="${b}" data-local title="Started, in your time zone"></time></span></li>`:""}${o.length?s("",ee(Math.max(...o)-Math.min(...o))):""}</ul></div>\n<nav class="tabs mid" aria-label="View"><a class="t-traj" href="${t[0]?l(Z(t[0])):"#"}">Trajectory</a><a class="t-over" href="#overview">Overview<span class="${e.findings.length?"has":""}">${e.findings.length}</span></a></nav>\n<ul class="pills"><li class="keys" title="Keyboard shortcuts"><kbd aria-label="Left arrow">\\u2190</kbd><kbd aria-label="Right arrow">\\u2192</kbd><span>Steps</span><kbd>Space</kbd><span>Enlarge</span></li>${S("snapshots","Snapshots",e.completeness)}${S("execution","Execution",e.execution)}</ul></header>\n<main class="center">${h?\'<label class="focus" title="Highlight the steps with errors, and move between them with the arrows"><input type="checkbox" id="focus-errors">Focus on errors</label>\':""}${t.map(n=>{let d=a.filter(u=>u.step===n);return`<article id="step-${l(n.id)}" data-first="${d[0].index}" class="step ${D(n.execution)}${q(n)?" err":""}">${d.map(u=>be(u,e.details.get(n.id),i,{previous:a[u.index-1],next:a[u.index+1],previousError:a.slice(0,u.index).findLast(M=>q(M.step)),nextError:a.slice(u.index+1).find(M=>q(M.step))})).join("")}${ve(n,e.details.get(n.id),i.get(n.id),t.length,p.get(n.id)??[])}</article>`}).join(`\n`)}\n${B}</main>\n<footer class="track" aria-label="Steps"><ol>${t.map(n=>ye(n,e.details.get(n.id),i.get(n.id),p.has(n.id),a.filter(d=>d.step===n))).join("")}</ol></footer>\n</div>\n${G(fe(t,e,i))}\n${G($)}${z.join("")}`}}function ae(e=document){let t=()=>[...e.querySelectorAll(".center .view")],i=()=>matchMedia("(prefers-reduced-motion: reduce)").matches,a=r=>r.querySelector(".lb-body>*"),o=r=>r?e.getElementById(r.getAttribute("popovertarget")??""):null,g=r=>{for(let s of e.querySelectorAll(".zoom,.enlarge,.gthumb")){if(s.getAttribute("popovertarget")!==r.id)continue;let c=s.classList.contains("enlarge")?s.closest(".term"):s.querySelector("img");if(c&&c.getBoundingClientRect().width)return c}return null},m=r=>{let s=r.getBoundingClientRect();if(!(r instanceof HTMLImageElement)||getComputedStyle(r).objectFit!=="contain"||!r.naturalWidth||!r.naturalHeight)return s;let c=Math.min(s.width/r.naturalWidth,s.height/r.naturalHeight),f=r.naturalWidth*c,x=r.naturalHeight*c;return{left:s.left+(s.width-f)/2,top:s.top+(s.height-x)/2,width:f,height:x}},h=(r,s)=>{let c=getComputedStyle(r).transform;r.style.transition="none",r.style.transform="none";let f=r.getBoundingClientRect(),x=m(s);if(r.style.transform=c==="none"?"":c,r.getBoundingClientRect(),r.style.transition="",!f.width)return"";let w=x.width/f.width;return`translate(${x.left+x.width/2-f.left-f.width*w/2}px,${x.top+x.height/2-f.top-f.height*w/2}px) scale(${w})`},b=null,p=0,k=()=>{b&&(b.style.visibility=""),b=null},v=r=>{p++,k();let s=i()?null:g(r);r.toggleAttribute("data-flip",!!s),r.showPopover();let c=a(r);if(s&&c){let f=h(c,s);c.style.transition="none",c.style.transform=f,c.getBoundingClientRect(),c.style.transition="",c.style.transform="",s.style.visibility="hidden",b=s}},$=r=>{if(r.hasAttribute("data-instant"))return;let s=a(r),c=b,f=++p;c&&s&&!i()&&c.getBoundingClientRect().width?(r.setAttribute("data-flip",""),s.style.transform=h(s,c),s.addEventListener("transitionend",()=>{f===p&&k()},{once:!0}),setTimeout(()=>{f===p&&k()},450)):(r.removeAttribute("data-flip"),k()),setTimeout(()=>{f===p&&!r.matches(":popover-open")&&s&&(s.style.transform="")},520)};e.querySelectorAll(".lightbox").forEach(r=>r.addEventListener("beforetoggle",s=>{s.newState==="closed"&&$(r)}));let z=r=>{let s=r.closest(".lightbox"),c=o(r);if(!c)return;let f=[s,c].filter(E=>!!E);f.forEach(E=>E.setAttribute("data-instant","")),p++,k(),s&&s.hidePopover();let x=c.dataset.step;x&&decodeURIComponent(location.hash.slice(1))!==x&&(location.hash=encodeURIComponent(x));let w=a(c);w&&(w.style.transform=""),c.showPopover();let S=g(c);S&&(S.style.visibility="hidden",b=S),setTimeout(()=>f.forEach(E=>E.removeAttribute("data-instant")),60)};e.querySelectorAll(".fwin").forEach(r=>r.addEventListener("beforetoggle",s=>{s.newState==="open"&&Se(r)})),e.addEventListener("click",r=>{let s=r.target instanceof Element?r.target:null,c=s?.closest(".lb-nav");if(c){r.preventDefault(),z(c);return}let f=o(s?.closest(".zoom,.enlarge,.gthumb")??null);if(f){r.preventDefault(),v(f);return}s instanceof HTMLElement&&(s.classList.contains("lightbox")||s.classList.contains("fwin"))&&s.hidePopover()});try{e.querySelectorAll("time[data-local]").forEach(r=>{let s=new Date(r.dateTime);if(isNaN(s.getTime())||!s.getTimezoneOffset())return;r.textContent=new Intl.DateTimeFormat(void 0,{...s.getFullYear()!==s.getUTCFullYear()?{year:"numeric"}:{},month:"short",day:"numeric",hour:"numeric",minute:"2-digit",timeZoneName:"short"}).format(s);let c=r.closest("[hidden]");c&&(c.hidden=!1)})}catch{}let R=()=>{let r=null;try{r=e.getElementById(decodeURIComponent(location.hash.slice(1)))}catch{}if(!r)return 0;let s=r.classList.contains("step")?r.querySelector(".view.first"):r.closest(".view");return s?t().indexOf(s):-1},I=()=>!!e.getElementById("focus-errors")?.checked,T="",C=()=>{let r=R();r<0||(T=location.hash,e.querySelector(`.track a[data-t="${r}"]`)?.scrollIntoView({block:"nearest",inline:"nearest"}))};e.addEventListener("keydown",r=>{if(r.defaultPrevented||r.altKey||r.ctrlKey||r.metaKey||r.shiftKey)return;let s=r.target;if(s instanceof HTMLElement&&(s.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(s.tagName)))return;let c=e.querySelector(".lightbox:popover-open");if(r.key===" "){if(c){r.preventDefault(),r.repeat||c.hidePopover();return}let S=s instanceof Element?s.closest(".zoom,.enlarge,.gthumb"):null;if(s instanceof Element&&!S&&(s.closest("summary")||s.closest("button"))||(r.preventDefault(),r.repeat))return;if(S?.classList.contains("gthumb")){let d=o(S);d&&v(d);return}let E=R(),B=E<0?null:t()[E],n=B&&e.getElementById(B.id.replace(/^step-/,"lightbox-"));n&&v(n);return}let f=r.key==="ArrowRight"?1:r.key==="ArrowLeft"?-1:0;if(!f)return;if(c){r.preventDefault();let S=c.querySelector(f<0?".lb-nav.prev":".lb-nav.next");S&&z(S);return}let x=t(),w=R();if(!(w<0)){do w+=f;while(w>=0&&w<x.length&&I()&&!x[w].closest(".step").classList.contains("err"));w<0||w>=x.length||(r.preventDefault(),location.hash=encodeURIComponent(x[w].id))}}),e.querySelector(".tabs .t-traj")?.addEventListener("click",r=>{T&&(r.preventDefault(),location.hash=T)}),addEventListener("hashchange",()=>{let r="";try{r=decodeURIComponent(location.hash.slice(1))}catch{}e.querySelectorAll(":popover-open").forEach(s=>{s.dataset.step!==r&&s.hidePopover()}),C()}),C()}async function Se(e){if(e.dataset.filled)return;e.dataset.filled="reading";let t=e.querySelector(".fw-body"),i=e.querySelector(".fw-note");try{let a=await fetch(e.dataset.src);if(!a.ok)throw new Error(`${a.status}`);let o=new Uint8Array(await a.arrayBuffer()),g=o.length>1e6,m=new TextDecoder().decode(g?o.subarray(0,1e6):o);if(!g&&/\\.json$/i.test(e.dataset.src))try{let h=JSON.stringify(JSON.parse(m),null,2);h!==m.trimEnd()&&(m=h,i.hidden=!1)}catch{}t.textContent=m,m||(t.innerHTML=\'<span class="quiet">Empty file.</span>\'),g&&t.insertAdjacentHTML("beforeend",`\n<span class="quiet">Showing the first megabyte; download the file for the rest.</span>`),e.dataset.filled="done"}catch{t.innerHTML=\'<span class="quiet">The file could not be read.</span>\',delete e.dataset.filled}}async function Me(){let[,e="",t=""]=location.pathname.split("/");try{let i=await fetch(`/.api/${e}/${t}.json`);if(!i.ok)throw new Error(`The review server answered ${i.status}.`);let a=re(X(await i.json()));document.title=a.title;let o=new CSSStyleSheet;o.replaceSync(a.selection),document.adoptedStyleSheets=[...document.adoptedStyleSheets,o],document.body.innerHTML=a.html}catch(i){let a=document.createElement("p");a.className="loading",a.textContent=`The trajectory could not be loaded. ${i instanceof Error?i.message:""}`,document.body.replaceChildren(a);return}location.hash&&location.replace(location.hash),ae()}Me();\n' : /* @__PURE__ */ (() => {
+  let script;
+  return () => script ??= null.then((m) => m.buildReviewApp());
+})();
 async function openInBrowser(url) {
-  const run = promisify(execFile);
+  const run = promisify2(execFile2);
   if (process.platform === "darwin") await run("/usr/bin/open", ["-a", "Google Chrome", url]);
   else await run("xdg-open", [url]);
 }
@@ -31815,6 +31509,7 @@ function createRelayServer(options2 = {}) {
   const sessionId = options2.sessionId ?? process.env.MCP_VM_RELAY_SESSION ?? randomUUID9();
   const project = options2.project ?? projectDirectory();
   let manager;
+  const review = options2.review ?? new ReviewServer(reviewApp);
   const get = options2.manager ?? (() => {
     if (!manager) {
       const environment = selectedEnvironment();
@@ -31827,7 +31522,6 @@ function createRelayServer(options2 = {}) {
     const service = environment?.profile.vmServiceUrl ?? process.env.MCP_VM_RELAY_URL ?? "http://localhost:6240";
     return { ...manager ? manager.status() : { active: false }, project, service, environment: environment?.identity };
   };
-  const shutdownController = new AbortController();
   const server = new Server({ name: SERVER_NAME, version: SERVER_VERSION }, { capabilities: { tools: {} }, instructions });
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: allToolDefinitions() }));
   server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
@@ -31837,13 +31531,14 @@ function createRelayServer(options2 = {}) {
       if (name === TRAJECTORY_TOOL) {
         const directory2 = args?.directory;
         if (typeof directory2 !== "string" || !directory2.trim()) throw new Error("directory is required");
-        const root = resolve10(project, directory2.trim());
+        const root = resolve11(project, directory2.trim());
         const verified = await verifyDeliveredPackage(root);
-        if (!verified.deliveryVerified) throw new Error(`Package failed verification; refusing to open viewer: ${JSON.stringify(verified)}`);
-        await (options2.open ?? openInBrowser)(pathToFileURL(join17(root, "index.html")).href);
-        return text3(`Opened verified package: ${root}. Human review remains pending.`);
+        if (!verified.deliveryVerified) throw new Error(`Package failed verification; refusing to open the review: ${JSON.stringify(verified)}`);
+        const address = await review.add(root);
+        await (options2.open ?? openInBrowser)(address);
+        return text3(`Opened the review of verified package ${root} at ${address}. It is served while this relay runs. Human review remains pending.`);
       }
-      if (relayTools.some((tool) => tool.name === name)) return relayContent(await relayCall(get, relayToolInput(name, args ?? {}), { signal: AbortSignal.any([extra.signal, shutdownController.signal]), toolCallId: String(extra.requestId) }));
+      if (relayTools.some((tool) => tool.name === name)) return relayContent(await relayCall(get, relayToolInput(name, args ?? {}), { signal: extra.signal, toolCallId: String(extra.requestId) }));
       throw new Error(`Unknown tool: ${name}`);
     } catch (error2) {
       return text3(message(error2), true);
@@ -31856,13 +31551,7 @@ function createRelayServer(options2 = {}) {
       manager = void 0;
     }
   };
-  const cancel = (reason2) => {
-    shutdownController.abort(new Error(`Cancelled: ${reason2}`));
-  };
-  const pauseNow = async (reason2) => {
-    await manager?.pauseNow(reason2);
-  };
-  return { server, sessionId, project, cleanup, cancel, pauseNow, status: () => manager ? manager.status() : { active: false } };
+  return { server, sessionId, project, cleanup, status: () => manager ? manager.status() : { active: false } };
 }
 async function main(args) {
   if (args.includes("--instructions")) {
@@ -31877,20 +31566,10 @@ async function main(args) {
   }
   if (args.length) throw new Error("Usage: server.mjs [--instructions | --schema]; with no argument the MCP server speaks on stdin/stdout");
   const relay = createRelayServer();
-  const grace = Number(process.env.MCP_VM_RELAY_SHUTDOWN_GRACE_MS ?? SHUTDOWN_GRACE_MS);
-  if (!Number.isSafeInteger(grace) || grace < 0) throw new Error("MCP_VM_RELAY_SHUTDOWN_GRACE_MS must be a nonnegative integer of milliseconds");
-  const settledWithin = (work, ms) => Promise.race([work.then(() => true), new Promise((done) => setTimeout(done, ms, false).unref())]);
   let closing;
   const shutdown = (reason2, code) => closing ??= (async () => {
     try {
-      const cleanup = relay.cleanup(reason2);
-      if (await settledWithin(cleanup, grace)) return;
-      process.stderr.write(`mcp-vm-relay: an operation was still running ${grace} ms after the session ended; cancelling it
-`);
-      relay.cancel(reason2);
-      if (await settledWithin(cleanup, SHUTDOWN_CANCEL_MS)) return;
-      process.stderr.write("mcp-vm-relay: the cancelled operation did not stop; pausing renewal without it\n");
-      await relay.pauseNow(reason2);
+      await relay.cleanup(reason2);
     } catch (error2) {
       process.stderr.write(`mcp-vm-relay: cleanup failed: ${message(error2)}
 `);
@@ -31902,15 +31581,6 @@ async function main(args) {
   relay.server.onclose = () => {
     void shutdown("Enclosure session ended", 0);
   };
-  process.stdin.once("end", () => {
-    void shutdown("Enclosure session ended: the client closed standard input", 0);
-  });
-  process.stdin.once("close", () => {
-    void shutdown("Enclosure session ended: the client closed standard input", 0);
-  });
-  process.stdout.on("error", (error2) => {
-    void shutdown(`Enclosure session ended: standard output failed (${error2.code ?? message(error2)})`, 0);
-  });
   process.once("SIGTERM", () => {
     void shutdown("Enclosure session terminated", 0);
   });
@@ -31919,7 +31589,7 @@ async function main(args) {
   });
   await relay.server.connect(new StdioServerTransport());
 }
-if (process.argv[1] && await realpath2(process.argv[1]).catch(() => "") === await realpath2(new URL(import.meta.url)).catch(() => "")) {
+if (process.argv[1] && await realpath3(process.argv[1]).catch(() => "") === await realpath3(new URL(import.meta.url)).catch(() => "")) {
   main(process.argv.slice(2)).catch((error2) => {
     process.stderr.write(`mcp-vm-relay: ${message(error2)}
 `);
@@ -31930,8 +31600,6 @@ export {
   PLUGIN_TOOL_PREFIX,
   SERVER_NAME,
   SERVER_VERSION,
-  SHUTDOWN_CANCEL_MS,
-  SHUTDOWN_GRACE_MS,
   STATUS_TOOL,
   TRAJECTORY_TOOL,
   allToolDefinitions,

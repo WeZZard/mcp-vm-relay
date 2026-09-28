@@ -45,6 +45,8 @@ flowchart TB
     Guest --> Browser[Fresh guest Playwright browser]
     Guest --> CUA[Guest CuaDriver]
     Manager --> Evidence[Host evidence and declared extractions]
+    Pi -->|relay_trajectory| Review[Review server: app, review data and package files on 127.0.0.1]
+    Review --> Evidence
     Maintainer[Human / agent image maintainer] --> Provision[Provision image and install applications]
     Provision --> Tests[Run application test plans on a fresh clone]
     Provision --> Inventory[Extract installed-application inventory]
@@ -57,6 +59,7 @@ flowchart TB
 |---|---|
 | Pi extension (`src/index.ts`, `src/schema.ts`, `src/tool.ts`) | Registration, model guidance, validation, bounded rendering and action dispatch |
 | `RelayManager` | Durable ownership, same-session operation ordering, lease heartbeat, staging, delivery and cleanup |
+| Review server and app (`src/review-server.ts`, `src/review-app/`, `src/review-page.ts`) | On `relay_trajectory`, serves one static review app, a verified package's review data and its files on 127.0.0.1 for the life of the relay process; the page renders in the browser from the data. Delivery writes no page. |
 | vm-service | Disposable leases, guest command/transfer API, guest sharing, service-host viewer management, access revocation and verified destruction. |
 | relay-driver | Recorded/admitted submissions, journal, durable receipts, snapshots and evidence-package substrate |
 | Image/backend layer (planned integration) | Authoritative published-image application inventory and search/catalog API |

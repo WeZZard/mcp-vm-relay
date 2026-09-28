@@ -14,7 +14,10 @@ const common = { bundle: true, platform: 'node', target: 'node22', format: 'esm'
 const banner = "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);";
 const receiver = await build({ ...common, entryPoints: ['src/guest/receiver.ts'], outfile: 'dist/receiver.mjs', banner: { js: banner } });
 const mcpHost = await build({ ...common, entryPoints: ['src/guest/mcp-host.ts'], outfile: 'dist/mcp-host.mjs', banner: { js: banner } });
-const server = await build({ ...common, entryPoints: ['src/server.ts'], outfile: 'dist/server.mjs', banner: { js: `#!/usr/bin/env node\n${banner}` } });
+// The review app runs in the browser; the server carries its script (src/review-app/build.ts has the same options).
+const reviewApp = await build({ bundle: true, platform: 'browser', format: 'esm', target: 'es2022', write: false, minify: true, metafile: true, entryPoints: ['src/review-app/main.ts'] });
+const server = await build({ ...common, entryPoints: ['src/server.ts'], outfile: 'dist/server.mjs', banner: { js: `#!/usr/bin/env node\n${banner}` },
+  define: { ...common.define, __REVIEW_APP__: JSON.stringify(reviewApp.outputFiles[0].text) }, external: ['esbuild'] });
 const doctor = await build({ ...common, entryPoints: ['src/doctor.ts'], outfile: 'dist/doctor.mjs', banner: { js: `#!/usr/bin/env node\n${banner}` } });
 await chmod('dist/server.mjs', 0o755); await chmod('dist/doctor.mjs', 0o755);
 // Compiled relay-driver code is shipped, not fetched by users or copied into VM
@@ -25,7 +28,7 @@ for (const name of ['core', 'host-sdk', 'remote-runtime']) {
   packages.push({ name: manifest.name, version: manifest.version, license: manifest.license ?? 'UNSPECIFIED', source: 'https://github.com/WeZZard/relay-driver' });
 }
 const sources = {};
-for (const path of [...new Set([receiver, mcpHost, server, doctor].flatMap(r => Object.keys(r.metafile.inputs)))].sort()) {
+for (const path of [...new Set([receiver, mcpHost, server, doctor, reviewApp].flatMap(r => Object.keys(r.metafile.inputs)))].sort()) {
   const key = path.includes('relay-driver/') ? `relay-driver/${path.split('relay-driver/').at(-1)}` : path;
   sources[key] = createHash('sha256').update(await readFile(path)).digest('hex');
 }

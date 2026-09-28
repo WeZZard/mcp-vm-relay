@@ -146,7 +146,7 @@ Evidence is automatic for all four: see "relay_run" below.
 | `relay_console_open` | Open console viewing | `console-open` | Open explicitly user-requested viewing on the service host, with `console_id`, `attempt_id`, `userRequested: true`, `reason` and `expected`. |
 | `relay_console_cancel` | Cancel console viewing | `console-cancel` | Cancel the identified viewing attempt without releasing the VM. |
 | `relay_status` | Show relay status | (unchanged) | This session's owned lease: backend binding, guest state, renewal state, console observation, last error, staging state and evidence path, plus the project directory, the VM service origin and the selected environment; `{"active": false}` when nothing is owned. |
-| `relay_trajectory` | Open the trajectory viewer | (unchanged) | Verify a delivered evidence package (every artifact, hash and reference) and open its trajectory viewer in the local human-facing browser. The viewer explains every verdict that is not green. |
+| `relay_trajectory` | Open the trajectory viewer | (unchanged) | Verify a delivered evidence package (every artifact, hash and reference) and open its trajectory review in the local human-facing browser, served by the relay on 127.0.0.1 from the package's data. The viewer explains every verdict that is not green. |
 
 `readOnlyHint`/`idempotentHint` are true for `relay_search`, `relay_probe`,
 `relay_acquisition_capabilities`, `relay_console_resolve`, `relay_image` and
@@ -311,9 +311,11 @@ Default output is `relay-evidence/<unique-task>/` under the project, with
 `state/` (the guest journal, action records, receipts and snapshot PNGs),
 `host/` (reasons, submissions, transfer facts, receipts, diagnostics, image
 deliveries and lifecycle events), `extractions/` (declared files, including the
-page captures), and `manifest.json`, `summary.json`, `trajectory.json`,
-`index.html` and `OPENING.txt`. Open `index.html` directly: no server, network,
-VM or external assets are needed. Diagnostic commands appear in the trajectory
+page captures), and `manifest.json`, `summary.json`, `trajectory.json`
+and `OPENING.txt`. The package is data only; `/mcp-vm-relay:trajectory <directory>`
+(the `relay_trajectory` tool) verifies it and opens the review app on it, served by
+the relay on 127.0.0.1 while it runs. No network, VM or external assets are
+needed. Diagnostic commands appear in the trajectory
 as command-only steps without screenshots. `finish` verifies the package before
 destroying the VM; a failed delivery removes only the derived files it created
 and retains the VM for a corrected attempt. Cleanup checks the read-only host

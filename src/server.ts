@@ -15,13 +15,14 @@ import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { realpath } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { RelayManager, Registry, instructions, relayCall, relayToolInput, relayToolInputSchema, relayTools, selectedEnvironment, verifyDeliveredPackage, type RelayCallResult, type RelayToolAnnotations } from './core.js';
+import { ReviewServer, type AppScript } from './review-server.js';
 
 export const SERVER_NAME = 'relay';
 /** The build injects this from package.json (esbuild define); under tsx it falls back to reading the file directly. */
@@ -59,7 +60,7 @@ const statusToolDefinition = {
 const trajectoryToolDefinition = {
   name: TRAJECTORY_TOOL,
   title: 'Open the trajectory viewer',
-  description: 'Verify a delivered relay evidence package (every artifact, hash and reference) and open its trajectory viewer in the local browser. Human review remains pending.',
+  description: 'Verify a delivered relay evidence package (every artifact, hash and reference) and open its trajectory review in the local browser, served by this relay on 127.0.0.1 from the package\'s data. Human review remains pending.',
   inputSchema: { type: 'object', properties: { directory: { type: 'string', description: 'The package directory, absolute or relative to the project.' } }, required: ['directory'], additionalProperties: false },
   annotations: trajectoryAnnotations,
 };
@@ -80,7 +81,15 @@ export const SHUTDOWN_GRACE_MS = 120000;
 /** How long shutdown waits for a cancelled operation before it pauses renewal without it. */
 export const SHUTDOWN_CANCEL_MS = 5000;
 
-export interface RelayServerOptions { sessionId?: string; project?: string; open?: (url: string) => Promise<void>; manager?: () => RelayManager }
+export interface RelayServerOptions { sessionId?: string; project?: string; open?: (url: string) => Promise<void>; manager?: () => RelayManager; review?: ReviewServer }
+
+// The published relay carries the review app's script, built with it; from
+// source (development, tests) it is built on first use.
+declare const __REVIEW_APP__: string | undefined;
+const reviewApp: AppScript = typeof __REVIEW_APP__ === 'string' ? async () => __REVIEW_APP__ as string : (() => {
+  let script: Promise<string> | undefined;
+  return () => script ??= import('./review-app/build.js').then(m => m.buildReviewApp());
+})();
 
 async function openInBrowser(url: string): Promise<void> {
   const run = promisify(execFile);
@@ -92,6 +101,7 @@ export function createRelayServer(options: RelayServerOptions = {}) {
   const sessionId = options.sessionId ?? process.env.MCP_VM_RELAY_SESSION ?? randomUUID();
   const project = options.project ?? projectDirectory();
   let manager: RelayManager | undefined;
+  const review = options.review ?? new ReviewServer(reviewApp);
   // A selected environment (VM_ENVIRONMENT_FILE) binds the backend, the image
   // store and the state directories together; it is resolved once, at the
   // first call, so an invalid selection is reported rather than falling back.
@@ -123,9 +133,10 @@ export function createRelayServer(options: RelayServerOptions = {}) {
         if (typeof directory !== 'string' || !directory.trim()) throw new Error('directory is required');
         const root = resolve(project, directory.trim());
         const verified = await verifyDeliveredPackage(root);
-        if (!verified.deliveryVerified) throw new Error(`Package failed verification; refusing to open viewer: ${JSON.stringify(verified)}`);
-        await (options.open ?? openInBrowser)(pathToFileURL(join(root, 'index.html')).href);
-        return text(`Opened verified package: ${root}. Human review remains pending.`);
+        if (!verified.deliveryVerified) throw new Error(`Package failed verification; refusing to open the review: ${JSON.stringify(verified)}`);
+        const address = await review.add(root);
+        await (options.open ?? openInBrowser)(address);
+        return text(`Opened the review of verified package ${root} at ${address}. It is served while this relay runs. Human review remains pending.`);
       }
       if (relayTools.some(tool => tool.name === name)) return relayContent(await relayCall(get, relayToolInput(name, (args ?? {}) as Record<string, unknown>), { signal: AbortSignal.any([extra.signal, shutdownController.signal]), toolCallId: String(extra.requestId) }));
       throw new Error(`Unknown tool: ${name}`);
