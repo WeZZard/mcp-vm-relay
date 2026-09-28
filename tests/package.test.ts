@@ -186,14 +186,14 @@ test("review page orders steps by time and reads commands, exit status, output s
   assert.match(html, /<article id="step-diagnostic-early" data-first="0" class="step bad err">/);
   assert.match(html, /<li class="bad diagnostic err"><div class="faces"><a data-t="0" href="#step-diagnostic-early--command"/);
   const action = html.split('<article id="step-step-0"')[1]!.split("</article>")[0]!;
-  // Each view shows one snapshot under the step's name and duration, with a capsule naming the snapshot
-  // and its capture time right below it. A step's own fragment selects its first view.
+  // Each view shows one snapshot on a monitor under the step's name and duration; the monitor's chin names
+  // the snapshot and its capture time between the arrows. A step's own fragment selects its first view.
   const before = action.split('id="step-step-0--before"')[1]!.split("</section>")[0]!, after = action.split('id="step-step-0--after"')[1]!.split("</section>")[0]!;
   assert.match(action, /<section class="stage view first" id="step-step-0--before" data-v="1" aria-label="Step 02, before">/);
   assert.match(action, /<section class="stage view" id="step-step-0--after" data-v="2" aria-label="Step 02, after">/);
-  assert.match(before, /<div class="solo"><button type="button" class="zoom" popovertarget="lightbox-step-0--before" title="Enlarge the before snapshot"><img alt="Before dispatch snapshot" src="[^"]+"><\/button><\/div>/);
-  assert.match(before, /<h2 class="sname" title="[^"]+"><span class="d">02<\/span><span class="h">[^<]+<\/span><span class="took" title="Time from the before snapshot to the after snapshot">\d+\.\d s<\/span><\/h2><div class="solo">/);
-  assert.match(before, /<\/div><div class="vlabel"><span class="badge" data-role="before"><span class="role">Before<\/span><time>[^<]+<\/time><\/span><\/div>$/);
+  assert.match(before, /<div class="monitor"><div class="screen"><button type="button" class="zoom" popovertarget="lightbox-step-0--before" title="Enlarge the before snapshot"><img alt="Before dispatch snapshot" src="[^"]+"><\/button><\/div>/);
+  assert.match(before, /<h2 class="sname" title="[^"]+"><span class="d">02<\/span><span class="h">[^<]+<\/span><span class="took" title="Time from the before snapshot to the after snapshot">\d+\.\d s<\/span><\/h2><div class="monitor">/);
+  assert.match(before, /<div class="chin"><span class="nav"><a class="arrow prev all" [^>]+>‹<\/a><a class="arrow prev errs" [^>]+>‹<\/a><\/span><p class="info" data-role="before"><img class="plate" src="\/\.app\/icon\.svg" alt="" width="24" height="24"><b>Before<\/b><time>[^<]+<\/time><\/p><span class="nav"><a class="arrow next all" [^>]+>›<\/a><\/span><\/div><\/div>$/);
   assert.doesNotMatch(action, /class="(pair|seg)"/);
   // Pressing a snapshot opens it in a lightbox, which links to the original. The lightboxes form one
   // sequence in step order, commands included, and each one's arrows name the item before and after it.

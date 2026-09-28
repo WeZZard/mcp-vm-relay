@@ -36,16 +36,25 @@ export function bind(doc: Document = document) {
   };
   // The transform that lays an element over the source's rectangle, measured
   // from the element's own untransformed place; the element keeps its current
-  // (possibly mid-flight) look until the caller animates it.
+  // (possibly mid-flight) look until the caller animates it. A picture keeps
+  // its shape when enlarged, but a command's screen does not: the enlarged
+  // command meets it at the top and is cut to the screen's height and corners,
+  // so the flight grows and shrinks the cut as well.
   const from = (el: HTMLElement, src: HTMLElement) => {
     const now = getComputedStyle(el).transform;
     el.style.transition = "none"; el.style.transform = "none";
     const b = el.getBoundingClientRect(), a = shown(src);
     el.style.transform = now === "none" ? "" : now; el.getBoundingClientRect(); el.style.transition = "";
-    if (!b.width) return "";
+    if (!b.width) return { transform: "", clip: "" };
     const k = a.width / b.width;
-    return `translate(${a.left + a.width / 2 - b.left - b.width * k / 2}px,${a.top + a.height / 2 - b.top - b.height * k / 2}px) scale(${k})`;
+    if (src instanceof HTMLImageElement)
+      return { transform: `translate(${a.left + a.width / 2 - b.left - b.width * k / 2}px,${a.top + a.height / 2 - b.top - b.height * k / 2}px) scale(${k})`, clip: "" };
+    const r = parseFloat(getComputedStyle(src).borderTopLeftRadius) || 0;
+    return { transform: `translate(${a.left - b.left}px,${a.top - b.top}px) scale(${k})`, clip: `inset(0 0 ${Math.max(0, b.height - a.height / k)}px 0 round ${r / k}px)` };
   };
+  /** The uncut clip an element's cut grows into. */
+  const whole = (el: HTMLElement) => `inset(0 0 0 0 round ${getComputedStyle(el).borderTopLeftRadius})`;
+  const flight = "transform .36s cubic-bezier(.3,.9,.3,1),clip-path .36s cubic-bezier(.3,.9,.3,1)";
   let hidden: HTMLElement | null = null, token = 0;
   const unhide = () => { if (hidden) hidden.style.visibility = ""; hidden = null; };
   const open = (box: HTMLElement) => {
@@ -56,7 +65,8 @@ export function bind(doc: Document = document) {
     if (el) el.style.opacity = "";
     if (src && el) {
       const f = from(el, src);
-      el.style.transition = "none"; el.style.transform = f; el.getBoundingClientRect(); el.style.transition = ""; el.style.transform = "";
+      el.style.transition = "none"; el.style.transform = f.transform; el.style.clipPath = f.clip; el.getBoundingClientRect();
+      el.style.transition = ""; el.style.transform = ""; el.style.clipPath = f.clip ? whole(el) : "";
       src.style.visibility = "hidden"; hidden = src;
     }
   };
@@ -64,14 +74,17 @@ export function bind(doc: Document = document) {
     if (box.hasAttribute("data-instant")) return;
     const el = body(box), src = hidden, n = ++token;
     if (src && el && !still() && src.getBoundingClientRect().width) {
-      box.setAttribute("data-flip", ""); el.style.transform = from(el, src);
+      box.setAttribute("data-flip", "");
+      const f = from(el, src);
+      if (f.clip && !el.style.clipPath) { el.style.transition = "none"; el.style.clipPath = whole(el); el.getBoundingClientRect(); el.style.transition = ""; }
+      el.style.transform = f.transform; el.style.clipPath = f.clip;
       // The flying copy is drawn from the full-size image, scaled, and does not
       // look exactly like the page's copy; swapping them in one frame flashes.
       // Once it is a few pixels from landing, the page's copy appears beneath
       // and the flying copy fades out before the lightbox goes (at 0.36 s).
-      setTimeout(() => { if (n !== token) return; unhide(); el.style.transition = "transform .36s cubic-bezier(.3,.9,.3,1),opacity .1s linear"; el.style.opacity = "0"; }, 240);
+      setTimeout(() => { if (n !== token) return; unhide(); el.style.transition = `${flight},opacity .1s linear`; el.style.opacity = "0"; }, 240);
     } else { box.removeAttribute("data-flip"); unhide(); }
-    setTimeout(() => { if (n === token && !box.matches(":popover-open") && el) { el.style.transform = ""; el.style.transition = ""; el.style.opacity = ""; } }, 520);
+    setTimeout(() => { if (n === token && !box.matches(":popover-open") && el) { el.style.transform = ""; el.style.clipPath = ""; el.style.transition = ""; el.style.opacity = ""; } }, 520);
   };
   doc.querySelectorAll<HTMLElement>(".lightbox").forEach(b => b.addEventListener("beforetoggle", e => { if ((e as ToggleEvent).newState === "closed") leave(b); }));
   const go = (b: Element) => {
@@ -82,7 +95,7 @@ export function bind(doc: Document = document) {
     if (box) box.hidePopover();
     const s = next.dataset.step;
     if (s && decodeURIComponent(location.hash.slice(1)) !== s) location.hash = encodeURIComponent(s);
-    const el = body(next); if (el) { el.style.transform = ""; el.style.transition = ""; el.style.opacity = ""; }
+    const el = body(next); if (el) { el.style.transform = ""; el.style.clipPath = ""; el.style.transition = ""; el.style.opacity = ""; }
     next.showPopover();
     const src = sourceOf(next); if (src) { src.style.visibility = "hidden"; hidden = src; }
     setTimeout(() => instant.forEach(x => x.removeAttribute("data-instant")), 60);
