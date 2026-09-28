@@ -501,7 +501,7 @@ kbd{display:inline-grid;place-items:center;min-width:1.4rem;height:1.4rem;paddin
 .step{display:none}.step:is(:target,:has(:target)){display:contents}.center:not(:has(:target))>.step:first-of-type{display:contents}
 .step>.view{display:none}.step>.view:target,.step:target>.view.first,.center:not(:has(:target))>.step:first-of-type>.view.first{display:flex}
 .stage{grid-area:stage;position:relative;container-type:size;min-width:0;min-height:0;background:var(--dotgrid),var(--canvas);display:grid;grid-template-rows:minmax(0,1fr);overflow:clip}
-.view{--shot-chrome:12.5rem;flex-direction:column;align-items:center;justify-content:center;gap:.75rem;padding:1.5rem 1.5rem 2.5rem}
+.view{--shot-chrome:11rem;flex-direction:column;align-items:center;justify-content:center;gap:.75rem;padding:1rem 1rem 1.5rem}
 .zoom{all:unset;display:flex;min-height:0;max-height:100%;max-width:100%;cursor:zoom-in}.zoom:focus-visible{outline:none}
 .screen{flex:0 1 auto;min-height:0;display:flex;justify-content:center;border-radius:6px;background:var(--black);box-shadow:0 0 0 6px var(--bezel),0 0 0 7px var(--case-edge)}
 .screen img{display:block;max-width:100%;max-height:calc(100cqh - var(--shot-chrome));object-fit:contain;background:#fff;border-radius:6px;transition:box-shadow .15s}
