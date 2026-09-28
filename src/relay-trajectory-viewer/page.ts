@@ -253,18 +253,18 @@ function stage(view: View, detail: StepDetail | undefined, numbers: ReadonlyMap<
   // it, with the arrows to the neighbouring views at its two ends.
   const chin = (name: string, enlarge = "") => `<div class="chin"><span class="nav">${back}</span><p class="info" data-role="${view.role}"><img class="plate" src="/.app/icon.svg" alt="" width="24" height="24"><b>${name}</b>${at ? `<time>${at}</time>` : ""}</p><span class="nav">${enlarge}${forward}</span></div>`;
   const title = `<h2 class="sname" title="${escapeHtml(headline)}"><span class="d">${number}</span><span class="h">${escapeHtml(headline)}</span>${span ? `<span class="took" title="Time from the before snapshot to the after snapshot">${span}</span>` : ""}</h2>`;
-  const open = `<section class="stage view${view.role === "command" ? " terminal" : ""}${view.first ? " first" : ""}" id="${escapeHtml(view.id)}" data-v="${view.index}" aria-label="Step ${number}, ${roleName(view).toLowerCase()}">${title}`;
+  const open = `<section class="stage view${view.role === "command" ? " terminal" : ""}${view.first ? " first" : ""}" id="${escapeHtml(view.id)}" data-v="${view.index}" aria-label="Step ${number}, ${roleName(view).toLowerCase()}"><div class="unit">${title}`;
   if (view.role === "command") {
     const kind = step.inputMode === "diagnostic" ? "Diagnostic command" : "Command";
     return `${open}<div class="monitor"><div class="term"><pre class="term-cmd"><span class="prompt" aria-hidden="true">$</span>${escapeHtml(command ?? headline)}</pre>${detail?.output ? streamsOf(detail.output) || `<p class="quiet">No output.</p>` : ""}
 <p class="term-note">${step.inputMode === "diagnostic" ? "Screenshots were not requested for this diagnostic." : "No snapshots were captured for this step."}</p></div>
-${chin(kind, `<button type="button" class="enlarge" popovertarget="${escapeHtml(boxId(step, "command"))}" title="Enlarge the command">${expandIcon}Enlarge</button>`)}</div></section>`;
+${chin(kind, `<button type="button" class="enlarge" popovertarget="${escapeHtml(boxId(step, "command"))}" title="Enlarge the command">${expandIcon}Enlarge</button>`)}</div></div></section>`;
   }
   const path = step.snapshots?.[view.role];
   const picture = path
     ? `<button type="button" class="zoom" popovertarget="${escapeHtml(boxId(step, view.role))}" title="Enlarge the ${view.role} snapshot"><img alt="${roleName(view)} dispatch snapshot" src="${src(path)}"></button>`
     : `<div class="void">${roleName(view)}: unavailable — incomplete evidence</div>`;
-  return `${open}<div class="monitor"><div class="screen">${picture}</div>${chin(roleName(view))}</div></section>`;
+  return `${open}<div class="monitor"><div class="screen">${picture}</div>${chin(roleName(view))}</div></div></section>`;
 }
 /** A reason as it concerns one step: the verdict it affects, and why. */
 type Concern = { verdict: string; tone: string; text: string; action?: string };
@@ -277,7 +277,7 @@ function panel(step: ReviewPageStep, detail: StepDetail | undefined, number: str
   const at = time(detail?.at);
   const fact = (term: string, value: string) => `<div><dt>${term}</dt><dd>${value}</dd></div>`;
   return `<aside class="panel" aria-label="Step ${number} details"><div class="panel-scroll">
-<div class="stephead"><h2 class="stepno"><span class="n">Step <span class="d">${number}</span></span> <span class="of">of <span class="d">${String(total).padStart(2, "0")}</span></span></h2><a class="permalink" href="${escapeHtml(link(step))}" title="Stable link to this step" aria-label="Stable link to step ${number}">${linkIcon}</a></div>
+<div class="stephead"><h2 class="stepno"><span class="lg">Step</span> <span class="disp"><span class="d">${number}</span> <span class="of">of <span class="d">${String(total).padStart(2, "0")}</span></span></span></h2><a class="permalink" href="${escapeHtml(link(step))}" title="Stable link to this step" aria-label="Stable link to step ${number}">${linkIcon}</a></div>
 <p class="meta"><span>${kind}</span>${at ? `<time>${at} UTC</time>` : ""}<span class="state"><span class="sr">Execution: </span>${verdict(step.execution)}</span></p>
 ${concerns.length ? `<section class="concern ${worst(concerns.map(c => c.tone))}"><h3>Why this step affects the verdicts</h3><ul>${concerns.map(c => `<li class="${c.tone}"><span class="label">${escapeHtml(c.verdict)}</span><p>${escapeHtml(c.text)}</p>${whatToDo(c.action)}</li>`).join("")}</ul></section>` : ""}
 ${reasonShown ? `<section class="block"><h3>Reason</h3><p>${escapeHtml(step.because ?? "Not present in retained host metadata")}</p></section>` : ""}
@@ -419,7 +419,9 @@ ${lightboxes(outputBoxes)}${windows.join("")}` };
 // view's name and time between the keys to the neighbouring views. Controls
 // are raised cream keys that sink when pressed; labels are panel legends,
 // badges are label tape, indicators are lit lights, counts are tiny displays,
-// and code sits on small dark screens. The eight stripes appear only in the
+// and code sits on small dark screens. The panel's step number reads on a
+// dark display in amber digits under a STEP legend, and the viewport's step
+// title is set in bold monospace, its number on a small display. The eight stripes appear only in the
 // app icon, which the monitor's chin carries; a solid navy rules the header
 // and the Overview's title. Palette colours tint by meaning: labels in steel,
 // and whatever explains a status (concern card, flag, popover, the Overview's
@@ -504,8 +506,9 @@ kbd{display:inline-grid;place-items:center;min-width:1.4rem;height:1.4rem;paddin
 .screen{flex:0 1 auto;min-height:0;display:flex;justify-content:center;border-radius:6px;background:var(--black);box-shadow:0 0 0 6px var(--bezel),0 0 0 7px var(--case-edge)}
 .screen img{display:block;max-width:100%;max-height:calc(100cqh - var(--shot-chrome));object-fit:contain;background:#fff;border-radius:6px;transition:box-shadow .15s}
 .zoom:hover img,.zoom:focus-visible img{box-shadow:0 0 0 3px var(--pop)}.screen .void{width:min(40rem,80cqw);border-radius:6px}
-.sname{flex:none;display:flex;align-items:baseline;gap:.75rem;max-width:100%;margin:0;font:700 20px/1.3 var(--sans);letter-spacing:-.015em;color:var(--text)}
-.sname .d{flex:none;font:700 20px var(--sans);letter-spacing:-.015em;color:var(--pop)}.sname .h{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.unit{display:flex;flex-direction:column;gap:.75rem;min-height:0;max-width:100%}.unit>.monitor{align-self:center}
+.sname{flex:none;display:flex;align-items:center;gap:.75rem;width:0;min-width:100%;margin:0;font:700 16px/1.3 var(--mono);letter-spacing:0;color:var(--text)}
+.sname .d{flex:none;padding:.25rem .5rem;border-radius:6px;background:radial-gradient(120% 120% at 50% 30%,oklch(from var(--navy) l c h / .4),transparent 70%),var(--term);box-shadow:inset 0 1px 2px #000c,0 0 0 1px var(--case-edge),0 1px 0 #fff8;font:700 16px/1 var(--mono);color:var(--orange);text-shadow:0 0 6px oklch(from var(--orange) l c h / .55)}.sname .h{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sname .took{flex:none;align-self:center;padding:.24rem .55rem;border-radius:9px;background:var(--cream);font:700 12px/1 var(--sans);color:var(--ink)}
 .lightbox{position:fixed;inset:0;width:auto;height:auto;max-width:none;max-height:none;margin:0;padding:1.5rem 1.5rem 1.25rem;border:0;background:none;color:var(--text);overflow:hidden;transition:overlay .36s allow-discrete,display .36s allow-discrete}
 .lb-body>*{transform-origin:0 0;transition:transform .36s cubic-bezier(.3,.9,.3,1),clip-path .36s cubic-bezier(.3,.9,.3,1),opacity .24s ease}
@@ -532,7 +535,7 @@ kbd{display:inline-grid;place-items:center;min-width:1.4rem;height:1.4rem;paddin
 .arrow{display:grid;place-items:center;width:2rem;height:2rem;border-radius:9px;color:var(--pop);font:400 20px/1 var(--sans)}
 .arrow.errs,.app:has(#focus-errors:checked) .arrow.all{display:none}.app:has(#focus-errors:checked) .arrow.errs{display:grid}
 .arrow:hover{text-decoration:none}
-.terminal .monitor{width:min(100%,60rem)}
+.terminal .unit{width:min(100%,60rem)}.terminal .unit>.monitor{align-self:stretch}
 .monitor{flex:0 1 auto;min-height:0;display:flex;flex-direction:column;max-width:100%;padding:1.5rem 1.5rem 0;background:linear-gradient(var(--case-hi),var(--case));border-radius:24px;box-shadow:inset 0 1px 0 #fff9,inset 0 -3px 0 oklch(from var(--case-edge) l c h / .6),0 0 0 1px var(--case-edge),0 16px 40px oklch(from var(--shade) l c h / .14)}
 .monitor .term{flex:0 1 auto;min-height:0;width:100%;border-radius:12px;background:radial-gradient(120% 90% at 50% 40%,oklch(from var(--navy) l c h / .35),transparent 70%),var(--term);box-shadow:0 0 0 6px var(--bezel),0 0 0 7px var(--case-edge),inset 0 0 48px oklch(from var(--black) l c h / .8)}
 .chin{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:1rem;padding:1rem .25rem}.chin .nav{display:flex;align-items:center;gap:.5rem}.chin .nav:last-child{justify-self:end}
@@ -545,8 +548,8 @@ kbd{display:inline-grid;place-items:center;min-width:1.4rem;height:1.4rem;paddin
 .stream .label{display:block;margin-bottom:.25rem}.stream pre,.plain,.command{background:var(--paper);border:var(--rule);border-radius:12px;padding:.75rem .9rem;max-height:14rem;overflow:auto;color:var(--text)}
 .panel{grid-area:panel;min-height:0;display:grid;grid-template-rows:minmax(0,1fr);background:var(--s1);border-left:var(--rule)}
 .panel-scroll{overflow:auto;padding:1.5rem 1.5rem 3rem;scrollbar-width:thin;scrollbar-color:var(--s3) transparent}
-.stephead{display:grid;grid-template-columns:1.75rem 1fr 1.75rem;align-items:center}.stepno{grid-column:2;margin:0;text-align:center;font:400 14px/1 var(--sans);color:var(--faint)}
-.stepno .n{color:var(--text)}.stepno .d{font:700 32px/1 var(--sans);letter-spacing:-.045em}.stepno .n .d{color:var(--text);margin-left:.15rem}.stepno .of .d{font:400 14px var(--sans);letter-spacing:0}
+.stephead{display:grid;grid-template-columns:1.75rem 1fr 1.75rem;align-items:center}.stepno{grid-column:2;justify-self:center;display:flex;align-items:center;gap:.75rem;margin:0}.stepno .lg{font:700 12px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--steel-ink)}.disp{display:inline-flex;align-items:baseline;gap:.5rem;padding:.375rem .75rem;border-radius:8px;background:radial-gradient(120% 120% at 50% 30%,oklch(from var(--navy) l c h / .4),transparent 70%),var(--term);box-shadow:inset 0 1px 3px #000c,0 0 0 1px var(--case-edge),0 1px 0 #fff8}.disp>.d{font:700 32px/1 var(--mono);letter-spacing:.02em;color:var(--orange);text-shadow:0 0 6px oklch(from var(--orange) l c h / .55)}.disp .of,.disp .of .d{font:700 12px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--term-dim)}
+
 .meta{display:flex;flex-wrap:wrap;align-items:center;gap:.25rem 1rem;margin:1rem 0 0;padding-top:.5rem;border-top:var(--rule);font-size:12px;color:var(--dim)}.meta time{font-family:var(--mono)}
 .permalink{grid-column:3;display:grid;place-items:center;width:1.75rem;height:1.75rem;border-radius:9px;color:var(--pop)}.permalink:hover{background:var(--s2)}
 .panel h2{font:400 20px/1.3 var(--sans);letter-spacing:-.015em;margin:.5rem 0;overflow-wrap:anywhere}

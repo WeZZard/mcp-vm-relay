@@ -164,7 +164,7 @@ test("review page orders steps by time and reads commands, exit status, output s
   assert.ok(html.indexOf('id="step-diagnostic-early"') < html.indexOf('id="step-step-0"'));
   const diagnostic = html.split('<article id="step-diagnostic-early"')[1]!.split("</article>")[0]!;
   // The panel is headed by the step's position and its stable link, with its kind, time and verdict on the line below.
-  assert.match(diagnostic, /<div class="stephead"><h2 class="stepno"><span class="n">Step <span class="d">01<\/span><\/span> <span class="of">of <span class="d">02<\/span><\/span><\/h2><a class="permalink" href="#step-diagnostic-early"[^>]*>/);
+  assert.match(diagnostic, /<div class="stephead"><h2 class="stepno"><span class="lg">Step<\/span> <span class="disp"><span class="d">01<\/span> <span class="of">of <span class="d">02<\/span><\/span><\/span><\/h2><a class="permalink" href="#step-diagnostic-early"[^>]*>/);
   assert.match(diagnostic, /<p class="meta"><span>Diagnostic<\/span><time>23:59:00 UTC<\/time><span class="state"><span class="sr">Execution: <\/span><span class="verdict bad">/);
   // The step's name heads its views; the panel beside them carries no heading of its own.
   assert.match(diagnostic, /<h2 class="sname" title="Inspect the guest before acting"><span class="d">01<\/span><span class="h">Inspect the guest before acting<\/span><\/h2>/);
@@ -193,7 +193,7 @@ test("review page orders steps by time and reads commands, exit status, output s
   assert.match(action, /<section class="stage view" id="step-step-0--after" data-v="2" aria-label="Step 02, after">/);
   assert.match(before, /<div class="monitor"><div class="screen"><button type="button" class="zoom" popovertarget="lightbox-step-0--before" title="Enlarge the before snapshot"><img alt="Before dispatch snapshot" src="[^"]+"><\/button><\/div>/);
   assert.match(before, /<h2 class="sname" title="[^"]+"><span class="d">02<\/span><span class="h">[^<]+<\/span><span class="took" title="Time from the before snapshot to the after snapshot">\d+\.\d s<\/span><\/h2><div class="monitor">/);
-  assert.match(before, /<div class="chin"><span class="nav"><a class="arrow prev all" [^>]+>‹<\/a><a class="arrow prev errs" [^>]+>‹<\/a><\/span><p class="info" data-role="before"><img class="plate" src="\/\.app\/icon\.svg" alt="" width="24" height="24"><b>Before<\/b><time>[^<]+<\/time><\/p><span class="nav"><a class="arrow next all" [^>]+>›<\/a><\/span><\/div><\/div>$/);
+  assert.match(before, /<div class="chin"><span class="nav"><a class="arrow prev all" [^>]+>‹<\/a><a class="arrow prev errs" [^>]+>‹<\/a><\/span><p class="info" data-role="before"><img class="plate" src="\/\.app\/icon\.svg" alt="" width="24" height="24"><b>Before<\/b><time>[^<]+<\/time><\/p><span class="nav"><a class="arrow next all" [^>]+>›<\/a><\/span><\/div><\/div><\/div>$/);
   assert.doesNotMatch(action, /class="(pair|seg)"/);
   // Pressing a snapshot opens it in a lightbox, which links to the original. The lightboxes form one
   // sequence in step order, commands included, and each one's arrows name the item before and after it.
