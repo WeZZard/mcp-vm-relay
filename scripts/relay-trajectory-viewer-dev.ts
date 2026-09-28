@@ -1,4 +1,4 @@
-// Development server for the review app (src/review-app/, src/review-page.ts).
+// Development server for the review app (src/relay-trajectory-viewer/).
 //
 // It is the review server that `relay_trajectory` runs, on a fixed port and
 // with the app built from source on every request, so a reload shows an edit
@@ -8,9 +8,9 @@
 //   npm run dev:review-page -- <package-dir>...
 //
 // Each package is served at /<project>/<run timestamp>-<run id>/ (see
-// src/review-server.ts). PORT selects the port (default 8765).
-import { buildReviewApp } from "../src/review-app/build.js";
-import { ReviewServer } from "../src/review-server.js";
+// src/relay-trajectory-viewer/server.ts). PORT selects the port (default 8765).
+import { buildReviewApp } from "../src/relay-trajectory-viewer/build.js";
+import { ReviewServer } from "../src/relay-trajectory-viewer/server.js";
 
 const dirs = process.argv.slice(2);
 if (!dirs.length) {

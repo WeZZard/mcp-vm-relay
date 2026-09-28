@@ -59,7 +59,7 @@
     "check": "npm run build && npm run typecheck && npm test",
     "test:e2e": "tsx --test tests/e2e/headless.test.ts",
     "verify:package": "node scripts/verify-package.mjs",
-    "dev:review-page": "tsx watch --clear-screen=false scripts/review-page-dev.ts"
+    "dev:review-page": "tsx watch --clear-screen=false scripts/relay-trajectory-viewer-dev.ts"
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",

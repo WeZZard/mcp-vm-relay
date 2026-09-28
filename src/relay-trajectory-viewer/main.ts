@@ -1,6 +1,6 @@
 // The review app: served by the relay's review server at /<project>/<run>/,
 // it reads the run's review data and renders the page from it.
-import { renderReview, reviewModelOf, type ReviewData } from "../review-page.js";
+import { renderReview, reviewModelOf, type ReviewData } from "./page.js";
 import { bind } from "./behaviour.js";
 
 async function start() {

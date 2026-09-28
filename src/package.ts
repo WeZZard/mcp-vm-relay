@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { lstat, readFile, readdir, mkdir, writeFile, rm } from "node:fs/promises";
 import { dirname, join, resolve, parse } from "node:path";
 import { buildManifest, verifyPackage, type PackageManifest, type ReviewStep, type SnapshotArtifact } from "@wezzard/relay-driver-host-sdk";
-import { type CommandOutput, type Reason, type ReviewData, type StepDetail } from "./review-page.js";
+import { type CommandOutput, type Reason, type ReviewData, type StepDetail } from "./relay-trajectory-viewer/page.js";
 
 export interface DeliverPackageOptions {
   packageId: string;

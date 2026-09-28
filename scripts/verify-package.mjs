@@ -88,7 +88,7 @@ try {
   // 6. The review data export resolves to a module that derives a package's review data, with its types.
   const exported = pkg.exports?.['./review-data'];
   check(exported?.import === './dist/review-data.mjs' && exported?.types === './dist/review-data.d.ts', `package.json exports ./review-data as ${JSON.stringify(exported)}`);
-  check(has('dist/review-data.d.ts') && has('dist/review-page.d.ts'), 'the review data types are missing');
+  check(has('dist/review-data.d.ts') && has('dist/relay-trajectory-viewer/page.d.ts'), 'the review data types are missing');
   if (has('dist/review-data.mjs')) check(typeof (await import(join(root, 'dist', 'review-data.mjs'))).reviewData === 'function', 'dist/review-data.mjs does not export reviewData');
   else failures.push('dist/review-data.mjs is missing');
 

@@ -4,7 +4,7 @@
 // verified package to this server, which serves one static review app, the
 // package's review data and the package's files on 127.0.0.1, and names the
 // address the browser opens. The app renders the page from the data in the
-// browser (src/review-app/). The server lives as long as the relay process
+// browser (src/relay-trajectory-viewer/). The server lives as long as the relay process
 // and serves only the packages handed to it. UX: docs/ux-design.md §6.10.
 import { execFile } from 'node:child_process';
 import { createServer, type Server, type ServerResponse } from 'node:http';
@@ -12,8 +12,8 @@ import { readFile, realpath } from 'node:fs/promises';
 import type { AddressInfo } from 'node:net';
 import { basename, dirname, extname, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
-import { deliveredPackageRun, reviewData } from './package.js';
-import { reviewCss } from './review-page.js';
+import { deliveredPackageRun, reviewData } from '../package.js';
+import { reviewCss } from './page.js';
 
 /** The review app's script: built with the relay, or supplied by the caller (the dev server, tests). */
 export type AppScript = () => Promise<string>;

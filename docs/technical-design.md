@@ -59,7 +59,7 @@ flowchart TB
 |---|---|
 | Pi extension (`src/index.ts`, `src/schema.ts`, `src/tool.ts`) | Registration, model guidance, validation, bounded rendering and action dispatch |
 | `RelayManager` | Durable ownership, same-session operation ordering, lease heartbeat, staging, delivery and cleanup |
-| Review server and app (`src/review-server.ts`, `src/review-app/`, `src/review-page.ts`) | On `relay_trajectory`, serves one static review app, a verified package's review data and its files on 127.0.0.1 for the life of the relay process; the review data is derived from the raw evidence when it is served, and the page renders in the browser from it. Delivery writes no page and no derived data. |
+| Relay Trajectory Viewer: review server and app (`src/relay-trajectory-viewer/`) | On `relay_trajectory`, serves one static review app, a verified package's review data and its files on 127.0.0.1 for the life of the relay process; the review data is derived from the raw evidence when it is served, and the page renders in the browser from it. Delivery writes no page and no derived data. |
 | Review data export (`src/review-data.ts`, `dist/review-data.mjs`) | `@wezzard/mcp-vm-relay/review-data`: the same derivation for programs that read relay packages, such as a harness report; it reads a package and writes nothing. |
 | vm-service | Disposable leases, guest command/transfer API, guest sharing, service-host viewer management, access revocation and verified destruction. |
 | relay-driver | Recorded/admitted submissions, journal, durable receipts, snapshots and evidence-package substrate |

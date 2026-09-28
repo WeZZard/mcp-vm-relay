@@ -5,8 +5,8 @@
 // writes nothing; verify the package first with the trajectory review command
 // if its integrity matters.
 import { reviewData as derive } from "./package.js";
-import type { ReviewData } from "./review-page.js";
+import type { ReviewData } from "./relay-trajectory-viewer/page.js";
 
-export type { CommandOutput, Reason, ReviewData, ReviewPageStep, StepDetail } from "./review-page.js";
+export type { CommandOutput, Reason, ReviewData, ReviewPageStep, StepDetail } from "./relay-trajectory-viewer/page.js";
 /** The steps, verdicts and reasons of the package in `dir`, with each step's snapshots as package paths. */
 export const reviewData: (dir: string) => Promise<ReviewData> = derive;

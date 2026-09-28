@@ -8,8 +8,8 @@ import { request } from "node:http";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { deliverPackage, reviewData, verifyDeliveredPackage } from "../src/package.js";
-import { renderReview, reviewModelOf } from "../src/review-page.js";
-import { ReviewServer } from "../src/review-server.js";
+import { renderReview, reviewModelOf } from "../src/relay-trajectory-viewer/page.js";
+import { ReviewServer } from "../src/relay-trajectory-viewer/server.js";
 import { TRAJECTORY_TOOL, createRelayServer } from "../src/server.js";
 
 const options = { packageId: "pkg-test", sessionId: "session-test", taskId: "task-test" };

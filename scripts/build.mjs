@@ -16,8 +16,8 @@ const common = { bundle: true, platform: 'node', target: 'node22', format: 'esm'
 const banner = "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);";
 const receiver = await build({ ...common, entryPoints: ['src/guest/receiver.ts'], outfile: 'dist/receiver.mjs', banner: { js: banner } });
 const mcpHost = await build({ ...common, entryPoints: ['src/guest/mcp-host.ts'], outfile: 'dist/mcp-host.mjs', banner: { js: banner } });
-// The review app runs in the browser; the server carries its script (src/review-app/build.ts has the same options).
-const reviewApp = await build({ bundle: true, platform: 'browser', format: 'esm', target: 'es2022', write: false, minify: true, metafile: true, entryPoints: ['src/review-app/main.ts'] });
+// The review app runs in the browser; the server carries its script (src/relay-trajectory-viewer/build.ts has the same options).
+const reviewApp = await build({ bundle: true, platform: 'browser', format: 'esm', target: 'es2022', write: false, minify: true, metafile: true, entryPoints: ['src/relay-trajectory-viewer/main.ts'] });
 const server = await build({ ...common, entryPoints: ['src/server.ts'], outfile: 'dist/server.mjs', banner: { js: `#!/usr/bin/env node\n${banner}` },
   define: { ...common.define, __REVIEW_APP__: JSON.stringify(reviewApp.outputFiles[0].text) }, external: ['esbuild'] });
 const doctor = await build({ ...common, entryPoints: ['src/doctor.ts'], outfile: 'dist/doctor.mjs', banner: { js: `#!/usr/bin/env node\n${banner}` } });
@@ -27,7 +27,7 @@ const reviewData = await build({ ...common, entryPoints: ['src/review-data.ts'],
   const types = await mkdtemp(join(tmpdir(), 'mcp-vm-relay-types-'));
   execFileSync(process.execPath, ['node_modules/typescript/bin/tsc', 'src/review-data.ts', '--declaration', '--emitDeclarationOnly', '--outDir', types,
     '--target', 'ES2023', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--strict', '--skipLibCheck', '--types', 'node']);
-  for (const name of ['review-data.d.ts', 'review-page.d.ts']) await writeFile(`dist/${name}`, await readFile(join(types, name)));
+  for (const name of ['review-data.d.ts', 'relay-trajectory-viewer/page.d.ts']) { await mkdir(dirname(`dist/${name}`), { recursive: true }); await writeFile(`dist/${name}`, await readFile(join(types, name))); }
   await rm(types, { recursive: true, force: true });
 }
 await chmod('dist/server.mjs', 0o755); await chmod('dist/doctor.mjs', 0o755);

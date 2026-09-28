@@ -22,7 +22,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { RelayManager, Registry, instructions, relayCall, relayToolInput, relayToolInputSchema, relayTools, selectedEnvironment, verifyDeliveredPackage, type RelayCallResult, type RelayToolAnnotations } from './core.js';
-import { ReviewServer, type AppScript } from './review-server.js';
+import { ReviewServer, type AppScript } from './relay-trajectory-viewer/server.js';
 
 export const SERVER_NAME = 'relay';
 /** The build injects this from package.json (esbuild define); under tsx it falls back to reading the file directly. */
@@ -88,7 +88,7 @@ export interface RelayServerOptions { sessionId?: string; project?: string; open
 declare const __REVIEW_APP__: string | undefined;
 const reviewApp: AppScript = typeof __REVIEW_APP__ === 'string' ? async () => __REVIEW_APP__ as string : (() => {
   let script: Promise<string> | undefined;
-  return () => script ??= import('./review-app/build.js').then(m => m.buildReviewApp());
+  return () => script ??= import('./relay-trajectory-viewer/build.js').then(m => m.buildReviewApp());
 })();
 
 async function openInBrowser(url: string): Promise<void> {
