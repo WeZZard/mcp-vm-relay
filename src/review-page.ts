@@ -70,8 +70,8 @@ const utcStamp = (iso: string, year = false) => {
   const d = new Date(iso), two = (n: number) => String(n).padStart(2, "0");
   return `${months[d.getUTCMonth()]} ${d.getUTCDate()}, ${year ? `${d.getUTCFullYear()}, ` : ""}${two(d.getUTCHours())}:${two(d.getUTCMinutes())} UTC`;
 };
-/** The relay's mark: a trajectory from a start, through a waypoint, to its target. */
-const relayMark = `<svg viewBox="0 0 24 24" width="32" height="32" aria-hidden="true"><path d="M5 18.5c4.8 0 4.4-6.5 7-6.5s2.2-6.5 7-6.5" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round"/><circle cx="5" cy="18.5" r="2.6" fill="#fff"/><circle cx="12" cy="12" r="2.1" fill="#f36a2b" stroke="#fff" stroke-width="1.9"/><circle cx="19" cy="5.5" r="3.3" fill="#f7862a" stroke="#fff" stroke-width="2.1"/><circle cx="19" cy="5.5" r="1.1" fill="#fff"/></svg>`;
+/** The relay's mark: two frames, the second stepping in front of the first, for a step's before and after snapshots. */
+const relayMark = `<svg viewBox="0 0 24 24" width="32" height="32" aria-hidden="true"><rect x="3.5" y="4" width="12" height="9.5" rx="2.6" fill="none" stroke="#fff" stroke-width="2" opacity=".75"/><rect x="8.5" y="10" width="12" height="9.5" rx="2.6" fill="#f7862a" stroke="#fff" stroke-width="2.1"/><path d="M12 14.8h5M15.2 12.9l1.9 1.9-1.9 1.9" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const size = (bytes: number) => bytes >= 1e6 ? `${(bytes / 1e6).toFixed(1)} MB` : bytes >= 1e3 ? `${(bytes / 1e3).toFixed(1)} kB` : `${bytes} B`;
 const noun = (count: number, word: string) => count === 1 ? word : `${word}s`;
 const plural = (count: number, word: string) => `${count} ${noun(count, word)}`;
@@ -452,7 +452,7 @@ b,time,.n,.exit,dd,.took{font-variant-numeric:tabular-nums}.d{font-family:var(--
 .verdict{display:inline-flex;align-items:center;gap:.45rem;font:600 12.5px/1 var(--sans);color:var(--tone,var(--dim));text-transform:capitalize}
 .verdict i{flex:none;width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 0 3px color-mix(in srgb,currentColor 18%,transparent)}
 .app{height:100vh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;grid-template-columns:minmax(0,1fr);overflow:clip}.track{min-width:0;position:relative;z-index:0;display:grid}
-.top{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:1rem .75rem;padding:1.1rem 1.25rem}
+.top{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:1rem .75rem;padding:1.1rem 1.25rem;position:relative;z-index:2}
 .brand{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:.3rem .8rem;min-width:0}.brand .mark{grid-row:1/3}.brand h1,.brand .stats{grid-column:2;margin:0}
 .mark{flex:none;display:grid;place-items:center;width:2.85rem;height:2.85rem;border-radius:14px;background:linear-gradient(145deg,#ffb23d,var(--accent) 70%);box-shadow:inset 0 1px 0 rgba(255,255,255,.4),inset 0 -2px 6px rgba(160,40,10,.18),0 6px 18px var(--ring)}
 h1{display:flex;align-items:baseline;gap:.6rem;font:700 1.3rem/1.15 var(--round);letter-spacing:-.015em;margin:0}
