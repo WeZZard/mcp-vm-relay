@@ -20285,11 +20285,11 @@ var time3 = (iso) => iso && Number.isFinite(Date.parse(iso)) ? new Date(iso).toI
 var preciseTime = (iso) => iso && Number.isFinite(Date.parse(iso)) ? new Date(iso).toISOString().slice(11, 23) : void 0;
 var duration3 = (ms) => ms < 6e4 ? `${(ms / 1e3).toFixed(1)} s` : `${Math.floor(ms / 6e4)} min ${Math.round(ms % 6e4 / 1e3)} s`;
 var months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-var utcStamp = (iso) => {
+var utcStamp = (iso, year = false) => {
   const d = new Date(iso), two = (n) => String(n).padStart(2, "0");
-  return `${months[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}, ${two(d.getUTCHours())}:${two(d.getUTCMinutes())} UTC`;
+  return `${months[d.getUTCMonth()]} ${d.getUTCDate()}, ${year ? `${d.getUTCFullYear()}, ` : ""}${two(d.getUTCHours())}:${two(d.getUTCMinutes())} UTC`;
 };
-var relayMark = `<svg viewBox="0 0 24 24" width="25" height="25" aria-hidden="true"><path d="M5 18.5c4.8 0 4.4-6.5 7-6.5s2.2-6.5 7-6.5" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round"/><circle cx="5" cy="18.5" r="2.6" fill="#fff"/><circle cx="12" cy="12" r="2.1" fill="#f36a2b" stroke="#fff" stroke-width="1.9"/><circle cx="19" cy="5.5" r="3.3" fill="#f7862a" stroke="#fff" stroke-width="2.1"/><circle cx="19" cy="5.5" r="1.1" fill="#fff"/></svg>`;
+var relayMark = `<svg viewBox="0 0 24 24" width="32" height="32" aria-hidden="true"><path d="M5 18.5c4.8 0 4.4-6.5 7-6.5s2.2-6.5 7-6.5" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round"/><circle cx="5" cy="18.5" r="2.6" fill="#fff"/><circle cx="12" cy="12" r="2.1" fill="#f36a2b" stroke="#fff" stroke-width="1.9"/><circle cx="19" cy="5.5" r="3.3" fill="#f7862a" stroke="#fff" stroke-width="2.1"/><circle cx="19" cy="5.5" r="1.1" fill="#fff"/></svg>`;
 var size = (bytes) => bytes >= 1e6 ? `${(bytes / 1e6).toFixed(1)} MB` : bytes >= 1e3 ? `${(bytes / 1e3).toFixed(1)} kB` : `${bytes} B`;
 var noun = (count, word) => count === 1 ? word : `${word}s`;
 var plural = (count, word) => `${count} ${noun(count, word)}`;
@@ -20463,7 +20463,6 @@ function renderReviewPage(model) {
   const concerns = /* @__PURE__ */ new Map();
   for (const [key, label] of [["snapshots", `Snapshots ${model.completeness}`], ["execution", `Execution ${model.execution}`]])
     for (const reason2 of model.reasons[key]) for (const id2 of reason2.stepIds) concerns.set(id2, [...concerns.get(id2) ?? [], { verdict: label, text: reason2.text }]);
-  const title = /^relay-(.+)-[0-9a-f]{8}$/.exec(model.taskId)?.[1] ?? model.taskId;
   const uuid2 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
   const byName = /* @__PURE__ */ new Map();
   for (const output of model.outputs) {
@@ -20492,16 +20491,15 @@ function renderReviewPage(model) {
 <section class="block"><h3>Verdicts</h3>${verdictBlock("snapshots", "Snapshots", model.completeness, "Every snapshot the steps declared is present and tied to its step.")}${verdictBlock("execution", "Execution", model.execution, "Every step completed, and every retained receipt confirms it.")}</section>
 <section class="block"><h3>Findings as recorded <span class="count">${model.findings.length}</span></h3>${model.findings.length ? `<ul class="findings">${groupFindings(model.findings).map((g) => `<li>${g.ids.length ? `<details><summary>${escapeHtml(g.text)}</summary><code>${g.ids.map(escapeHtml).join("<br>")}</code></details>` : escapeHtml(g.text)}</li>`).join("")}</ul>` : `<p class="quiet">No findings.</p>`}</section>
 <section class="block"><h3>Declared outputs <span class="count">${model.outputs.length}</span></h3>${outputs ? `<div class="outputs">${outputs}</div>` : `<p class="quiet">No declared outputs were delivered.</p>`}</section>
-<section class="block"><h3>Package</h3><div class="package"><dl class="ids"><div><dt>Package</dt><dd>${escapeHtml(model.packageId)}</dd></div><div><dt>Task</dt><dd>${escapeHtml(model.taskId)}</dd></div><div><dt>Session</dt><dd>${escapeHtml(model.sessionId)}</dd></div></dl>
+<section class="block"><h3>Package</h3><div class="package"><dl class="ids"><div><dt>Package</dt><dd>${escapeHtml(model.packageId)}</dd></div><div><dt>Task</dt><dd>${escapeHtml(model.taskId)}</dd></div><div><dt>Session</dt><dd>${escapeHtml(model.sessionId)}</dd></div>${started ? `<div><dt>Started</dt><dd>${utcStamp(started, true)}</dd></div>` : ""}</dl>
 <ul class="files"><li><a href="manifest.json">manifest.json</a><span>Checksums of every artifact</span></li><li><a href="summary.json">summary.json</a><span>Verdicts and findings</span></li><li><a href="trajectory.json">trajectory.json</a><span>Steps as recorded</span></li></ul></div></section></div></section></article>`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' file:; style-src 'unsafe-inline'; script-src ${keysPolicy}; base-uri 'none'; form-action 'none'"><title>Relay review: ${escapeHtml(model.packageId)}</title><style>${css}${selection(steps.length, views.filter((v) => v.first).map((v) => v.index), views.length)}</style></head><body>
 <div class="app">
-<header class="top"><div class="brand"><span class="mark" aria-hidden="true">${relayMark}</span><h1 title="${escapeHtml(model.packageId)}">Relay<span class="task">${escapeHtml(title)}</span></h1>
+<header class="top"><div class="brand"><span class="mark" aria-hidden="true">${relayMark}</span><h1 title="${escapeHtml(model.packageId)}">Relay</h1>
 <ul class="stats">${stat2(noun(steps.length, "step"), String(steps.length))}${stat2(noun(actions, "action"), String(actions))}${stat2(noun(diagnostics, "diagnostic"), String(diagnostics))}${started ? `<li class="at"><time datetime="${started}" title="Started ${started}">${utcStamp(started)}</time><span class="local" hidden><span class="sep" aria-hidden="true">\xB7</span><time datetime="${started}" data-local title="Started, in your time zone"></time></span></li>` : ""}${times.length ? stat2("", duration3(Math.max(...times) - Math.min(...times))) : ""}</ul></div>
-<div class="mid"><nav class="tabs" aria-label="View"><a class="t-traj" href="${steps[0] ? escapeHtml(link2(steps[0])) : "#"}">Trajectory</a><a class="t-over" href="#overview">Overview<span class="${model.findings.length ? "has" : ""}">${model.findings.length}</span></a></nav>
-<label class="focus" title="Highlight the steps with errors, and move between them with the arrows"><input type="checkbox" id="focus-errors"${errors ? "" : " disabled"}>Focus on errors<span>${errors}</span></label></div>
+<nav class="tabs mid" aria-label="View"><a class="t-traj" href="${steps[0] ? escapeHtml(link2(steps[0])) : "#"}">Trajectory</a><a class="t-over" href="#overview">Overview<span class="${model.findings.length ? "has" : ""}">${model.findings.length}</span></a></nav>
 <ul class="pills"><li class="keys" title="Keyboard shortcuts"><kbd aria-label="Left arrow">\u2190</kbd><kbd aria-label="Right arrow">\u2192</kbd><span>Steps</span><kbd>Space</kbd><span>Enlarge</span></li>${pill("snapshots", "Snapshots", model.completeness)}${pill("execution", "Execution", model.execution)}</ul></header>
-<main class="center">${steps.map((step2) => {
+<main class="center">${errors ? `<label class="focus" title="Highlight the steps with errors, and move between them with the arrows"><input type="checkbox" id="focus-errors">Focus on errors</label>` : ""}${steps.map((step2) => {
     const own2 = views.filter((v) => v.step === step2);
     return `<article id="step-${escapeHtml(step2.id)}" data-first="${own2[0].index}" class="step ${tone(step2.execution)}${erred(step2) ? " err" : ""}">${own2.map((v) => stage(v, model.details.get(step2.id), numbers, {
       previous: views[v.index - 1],
@@ -20535,16 +20533,15 @@ b,time,.n,.exit,dd,.took{font-variant-numeric:tabular-nums}.d{font-family:var(--
 .verdict{display:inline-flex;align-items:center;gap:.45rem;font:600 12.5px/1 var(--sans);color:var(--tone,var(--dim));text-transform:capitalize}
 .verdict i{flex:none;width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 0 3px color-mix(in srgb,currentColor 18%,transparent)}
 .app{height:100vh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;grid-template-columns:minmax(0,1fr);overflow:clip}.track{min-width:0;position:relative;z-index:0;display:grid}
-.top{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:start;gap:1rem .75rem;padding:1.1rem 1.5rem}
-.brand{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:.45rem .75rem;min-width:0}.brand .stats{grid-column:1/-1;margin:0}
-.mark{flex:none;display:grid;place-items:center;width:2.15rem;height:2.15rem;border-radius:11px;background:linear-gradient(145deg,#ffb23d,var(--accent) 70%);box-shadow:inset 0 1px 0 rgba(255,255,255,.4),inset 0 -2px 6px rgba(160,40,10,.18),0 6px 18px var(--ring)}
+.top{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:1rem .75rem;padding:1.1rem 1.25rem}
+.brand{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:.3rem .8rem;min-width:0}.brand .mark{grid-row:1/3}.brand h1,.brand .stats{grid-column:2;margin:0}
+.mark{flex:none;display:grid;place-items:center;width:2.85rem;height:2.85rem;border-radius:14px;background:linear-gradient(145deg,#ffb23d,var(--accent) 70%);box-shadow:inset 0 1px 0 rgba(255,255,255,.4),inset 0 -2px 6px rgba(160,40,10,.18),0 6px 18px var(--ring)}
 h1{display:flex;align-items:baseline;gap:.6rem;font:700 1.3rem/1.15 var(--round);letter-spacing:-.015em;margin:0}
-h1 .task{font:600 12.5px/1 var(--round);letter-spacing:0;padding:.3rem .6rem;border-radius:999px;background:var(--s2);color:var(--dim);align-self:center}
-.stats .at time{font:600 12px var(--round);color:var(--text)}.stats .at .sep{margin:0 .4rem}
-.stats{display:flex;flex-wrap:wrap;gap:.15rem .8rem;list-style:none;margin:.3rem 0 0;padding:0;font-size:12px;color:var(--faint)}.stats b{font:700 12px var(--round);color:var(--text)}
+.stats .at time{font:600 12px var(--round);color:var(--text)}.stats .at .sep{margin:0 .35rem}
+.stats{display:flex;flex-wrap:wrap;gap:.15rem .7rem;list-style:none;margin:.3rem 0 0;padding:0;font-size:12px;color:var(--faint)}.stats b{font:700 12px var(--round);color:var(--text)}
 .pills{justify-self:end;display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:.3rem;list-style:none;margin:0;padding:0}.pills>li,.stats>li{white-space:nowrap}
 .pill{display:flex;align-items:center;gap:.4rem;padding:.42rem .7rem;border-radius:999px;background:color-mix(in srgb,var(--tone) 12%,transparent);font-size:12px;color:var(--dim)}
-.brand,.pills{margin-top:.2rem}.mid{justify-self:center;display:grid;justify-items:center;gap:.35rem}
+.mid{justify-self:center}
 .tabs{display:flex;gap:.2rem;padding:.25rem;border-radius:999px;background:var(--s2)}
 .tabs a{display:inline-flex;align-items:center;gap:.5rem;padding:.4rem 1rem;border-radius:999px;color:var(--dim);font-size:13px;font-weight:600}.tabs a:hover{text-decoration:none;color:var(--text)}
 .tabs a span{display:grid;place-items:center;min-width:1.35rem;height:1.35rem;padding:0 .35rem;font:700 11px/1 var(--round);border-radius:999px;background:var(--s3);color:var(--dim)}.tabs a span.has{background:var(--grad);color:var(--on)}
@@ -20561,14 +20558,14 @@ h1 .task{font:600 12.5px/1 var(--round);letter-spacing:0;padding:.3rem .6rem;bor
 .vblock{padding:.95rem 1.1rem;border-radius:14px;background:var(--s1);box-shadow:var(--shadow)}.vblock+.vblock{margin-top:.6rem}
 .vblock h4{display:flex;align-items:center;gap:.7rem;margin:0 0 .5rem;font:700 14px var(--round)}.vwhy{margin:0 0 .6rem;font-size:12.5px;color:var(--faint)}.vblock>.quiet{font-size:13.5px}
 .face{position:relative}.flag{position:absolute;top:.35rem;right:.35rem;display:grid;place-items:center;width:1.1rem;height:1.1rem;border-radius:50%;background:var(--warn);color:#fff;font:800 11px/1 var(--round);box-shadow:0 2px 6px rgba(0,0,0,.2)}
-.focus{display:flex;align-items:center;gap:.45rem;padding:.3rem .6rem;border-radius:999px;font-size:12px;font-weight:600;color:var(--dim);cursor:pointer;user-select:none}
+.focus{position:absolute;left:1.5rem;bottom:1rem;z-index:4;display:flex;align-items:center;gap:.45rem;padding:.35rem .7rem .35rem .5rem;border-radius:999px;background:var(--bg);font-size:12px;font-weight:600;color:var(--dim);cursor:pointer;user-select:none}
 .focus:hover{background:var(--s2)}.focus input{appearance:none;margin:0;width:1.05rem;height:1.05rem;border-radius:6px;background:var(--s1);box-shadow:inset 0 0 0 1.5px var(--faint);display:grid;place-items:center;cursor:pointer}
 .focus input:checked{background:var(--bad);box-shadow:none}.focus input:checked::after{content:"";width:.28rem;height:.55rem;border:solid #fff;border-width:0 2px 2px 0;rotate:45deg;translate:0 -1px}
-.focus input:disabled,.focus:has(input:disabled){cursor:default;opacity:.55}.focus span{font:700 11px/1 var(--round);color:var(--bad)}.focus:has(input:disabled) span{color:var(--faint)}
+
 .app:has(#focus-errors:checked) .track li:not(.err){opacity:.35;filter:grayscale(1)}
 .app:has(#focus-errors:checked) .track li.err .face{box-shadow:0 0 0 2px var(--bad),0 6px 16px color-mix(in srgb,var(--bad) 25%,transparent)}
 .app:has(#focus-errors:checked) .track li.err .t{color:var(--bad)}
-.app:has(#overview:target) .track{display:none}.app:has(#overview:target) .focus{visibility:hidden}.app:has(#overview:target) .keys{display:none}
+.app:has(#overview:target) .track{display:none}.app:has(#overview:target) .focus{display:none}.app:has(#overview:target) .keys{display:none}
 .keys{display:flex;align-items:center;gap:.25rem;margin-right:.4rem;font-size:11px;color:var(--faint)}.keys span{margin:0 .35rem 0 .1rem}.keys span:last-child{margin-right:0}
 kbd{display:inline-grid;place-items:center;min-width:1.3rem;height:1.3rem;padding:0 .3rem;border-radius:6px;background:var(--s1);box-shadow:0 0 0 1px var(--hair),0 1.5px 0 var(--s3);font:600 10.5px/1 var(--sans);color:var(--dim)}.overview>.doc{grid-area:auto;grid-column:1/-1;grid-row:1}
 .center{display:grid;grid-template-columns:minmax(0,1fr) minmax(20rem,25rem);grid-template-areas:"stage panel";gap:0 .75rem;padding:0 .75rem;min-height:0;position:relative;z-index:1}
@@ -20619,7 +20616,7 @@ kbd{display:inline-grid;place-items:center;min-width:1.3rem;height:1.3rem;paddin
 .term .stream{margin:0 1.2rem 1rem}.term .quiet,.term-note{margin:0 1.2rem 1.1rem;font-size:12.5px;color:var(--faint)}
 .stream .label{display:block;margin-bottom:.35rem}.stream pre,.plain,.command{background:var(--s2);border-radius:12px;padding:.75rem .9rem;max-height:14rem;overflow:auto;color:var(--text)}
 .panel{grid-area:panel;min-height:0;display:grid;grid-template-rows:minmax(0,1fr)}
-.panel-scroll{overflow:auto;padding:1.25rem .75rem 2.5rem 1rem;scrollbar-width:thin;scrollbar-color:var(--s3) transparent;--fade:linear-gradient(transparent,#000 1.25rem,#000 calc(100% - 2.5rem),transparent);-webkit-mask-image:var(--fade);mask-image:var(--fade)}
+.panel-scroll{overflow:auto;padding:1.25rem .5rem 2.5rem 1rem;scrollbar-width:thin;scrollbar-color:var(--s3) transparent;--fade:linear-gradient(transparent,#000 1.25rem,#000 calc(100% - 2.5rem),transparent);-webkit-mask-image:var(--fade);mask-image:var(--fade)}
 .panel .stream pre,.panel .plain,.panel .command{background:var(--s1);box-shadow:0 0 0 1px var(--hair),0 1px 2px rgba(90,50,20,.05);padding:.8rem .95rem}
 .stephead{display:flex;align-items:center;gap:.75rem}.stepno{margin:0;font:700 1.45rem/1.2 var(--round);letter-spacing:-.015em;color:var(--faint)}
 .stepno .n{color:var(--text)}.stepno .of{font-size:1rem;font-weight:600}
@@ -20678,7 +20675,7 @@ kbd{display:inline-grid;place-items:center;min-width:1.3rem;height:1.3rem;paddin
 @media(max-width:960px){.top{grid-template-columns:minmax(0,1fr)}.pills{justify-self:center;justify-content:center}.app{height:auto;min-height:100vh;overflow:visible}.center{grid-template-columns:minmax(0,1fr);grid-template-areas:"stage" "panel";gap:.75rem}
 .stage{min-height:60vh}.view{padding:.5rem 3.75rem 1rem}.track{position:sticky;bottom:0;background:var(--bg)}}
 @supports (corner-shape:squircle){*,*::before,*::after,::backdrop{corner-shape:squircle}.dot,.verdict i,.arrow,.q,.flag,.close,.dots i,.lb-nav .dir,
-:focus-visible,h1 .task,.pill,.tabs,.tabs a,.tabs a span,.reasons .steps a,.took,.badge,.face .role,.focus,.lb-cap,.lb-nav,.enlarge,.permalink,.exit{corner-shape:round}}
+:focus-visible,.pill,.tabs,.tabs a,.tabs a span,.reasons .steps a,.took,.badge,.face .role,.focus,.lb-cap,.lb-nav,.enlarge,.permalink,.exit{corner-shape:round}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 @media print{.app{height:auto;display:block}.track,.arrow,.mid,.lightbox,.enlarge{display:none}.center{display:block}.step{display:block!important;break-inside:avoid;margin-bottom:1rem}.view{display:flex!important}.stage{background:none}}`;
 
