@@ -54,8 +54,8 @@ export interface ReviewPageModel {
   reasons: { snapshots: Reason[]; execution: Reason[] };
   steps: ReviewPageStep[];
   details: ReadonlyMap<string, StepDetail>;
-  /** Declared extractions, by package path. */
-  outputs: { path: string; bytes: number }[];
+  /** Declared extractions, by package path, with the text of those the page shows. */
+  outputs: { path: string; bytes: number; text?: string }[];
 }
 
 export const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
@@ -275,6 +275,7 @@ ${command && step.snapshots ? `<section class="block"><h3>Command</h3><pre class
 }
 
 const linkIcon = `<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M6.6 9.4l2.8-2.8M7.2 4.6l.9-.9a2.8 2.8 0 0 1 4 4l-.9.9M8.8 11.4l-.9.9a2.8 2.8 0 0 1-4-4l.9-.9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+const downloadIcon = `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7.2 8 10.4l3.2-3.2M3 13h10" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
 /** One step of the bottom track: a thumbnail per view (before and after, or the command) over the step's caption. */
 function thumb(step: ReviewPageStep, detail: StepDetail | undefined, number: string, flagged: boolean, views: View[]) {
@@ -303,11 +304,14 @@ const keys = `(()=>{const views=()=>[...document.querySelectorAll(".center .view
   + `const still=()=>matchMedia("(prefers-reduced-motion: reduce)").matches,body=box=>box.querySelector(".lb-body>*");`
   + `const sourceOf=box=>{for(const o of document.querySelectorAll(".zoom,.enlarge,.gthumb")){if(o.getAttribute("popovertarget")!==box.id)continue;`
   + `const s=o.classList.contains("enlarge")?o.closest(".term"):o.querySelector("img");if(s&&s.getBoundingClientRect().width)return s}return null};`
+  // A contained image shows its picture inside its box, not across it.
+  + `const shown=s=>{const r=s.getBoundingClientRect();if(s.tagName!=="IMG"||getComputedStyle(s).objectFit!=="contain"||!s.naturalWidth||!s.naturalHeight)return r;`
+  + `const k=Math.min(r.width/s.naturalWidth,r.height/s.naturalHeight),w=s.naturalWidth*k,h=s.naturalHeight*k;return{left:r.left+(r.width-w)/2,top:r.top+(r.height-h)/2,width:w,height:h}};`
   // The transform that lays an element over the source's rectangle, measured
   // from the element's own untransformed place; the element keeps its current
   // (possibly mid-flight) look until the caller animates it.
   + `const from=(el,src)=>{const now=getComputedStyle(el).transform;el.style.transition="none";el.style.transform="none";`
-  + `const b=el.getBoundingClientRect(),a=src.getBoundingClientRect();el.style.transform=now==="none"?"":now;el.getBoundingClientRect();el.style.transition="";`
+  + `const b=el.getBoundingClientRect(),a=shown(src);el.style.transform=now==="none"?"":now;el.getBoundingClientRect();el.style.transition="";`
   + `if(!b.width)return"";const k=a.width/b.width;return"translate("+(a.left+a.width/2-b.left-b.width*k/2)+"px,"+(a.top+a.height/2-b.top-b.height*k/2)+"px) scale("+k+")"};`
   + `let hidden=null,token=0;const unhide=()=>{if(hidden)hidden.style.visibility="";hidden=null};`
   + `const open=box=>{token++;unhide();const src=still()?null:sourceOf(box);box.toggleAttribute("data-flip",!!src);box.showPopover();const el=body(box);`
@@ -322,9 +326,14 @@ const keys = `(()=>{const views=()=>[...document.querySelectorAll(".center .view
   + `if(box)box.hidePopover();const s=next.dataset.step;if(s&&decodeURIComponent(location.hash.slice(1))!==s)location.hash=encodeURIComponent(s);`
   + `const el=body(next);if(el)el.style.transform="";next.showPopover();const src=sourceOf(next);if(src){src.style.visibility="hidden";hidden=src}`
   + `setTimeout(()=>instant.forEach(x=>x.removeAttribute("data-instant")),60)};`
+  // A page opened from disk cannot download the file beside it (the browser
+  // opens it instead), so the window downloads the text it holds.
+  + `const save=dl=>{const p=dl.closest(".fwin").querySelector(".fw-body"),raw=dl.dataset.raw??(p.querySelector(".quiet")?"":p.textContent);`
+  + `const u=URL.createObjectURL(new Blob([raw],{type:"text/plain"})),a=document.createElement("a");a.href=u;a.download=dl.getAttribute("download");document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1e3)};`
   + `document.addEventListener("click",e=>{const t=e.target instanceof Element?e.target:null;const b=t&&t.closest(".lb-nav");if(b){e.preventDefault();go(b);return}`
+  + `const dl=t&&t.closest(".fw-dl");if(dl){e.preventDefault();save(dl);return}`
   + `const o=t&&t.closest(".zoom,.enlarge,.gthumb"),lb=o&&document.getElementById(o.getAttribute("popovertarget"));if(lb){e.preventDefault();open(lb);return}`
-  + `if(t&&t.classList.contains("lightbox"))t.hidePopover()});`
+  + `if(t&&(t.classList.contains("lightbox")||t.classList.contains("fwin")))t.hidePopover()});`
   + `try{document.querySelectorAll("time[data-local]").forEach(t=>{const d=new Date(t.dateTime);if(isNaN(d.getTime())||!d.getTimezoneOffset())return;`
   + `t.textContent=new Intl.DateTimeFormat(undefined,{...(d.getFullYear()!==d.getUTCFullYear()?{year:"numeric"}:{}),month:"short",day:"numeric",hour:"numeric",minute:"2-digit",timeZoneName:"short"}).format(d);const li=t.closest("[hidden]");if(li)li.hidden=false})}catch{}`
   + `const current=()=>{let el=null;try{el=document.getElementById(decodeURIComponent(location.hash.slice(1)))}catch{}if(!el)return 0;`
@@ -377,17 +386,29 @@ export function renderReviewPage(model: ReviewPageModel): string {
   // name. The transfer id is the relay's own bookkeeping, so a file reads as
   // its guest path under that name.
   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-  const byName = new Map<string, { path: string; bytes: number; label: string }[]>();
+  const byName = new Map<string, { path: string; bytes: number; text?: string; label: string }[]>();
   for (const output of model.outputs) {
     const [, declared = "", ...rest] = output.path.split("/");
-    byName.set(declared, [...(byName.get(declared) ?? []), { ...output, label: rest.filter(part => !uuid.test(part)).join("/") }]);
+    byName.set(declared, [...(byName.get(declared) ?? []), { ...output, label: rest.filter(part => !uuid.test(part)).join("/") || output.path.split("/").at(-1)! }]);
   }
-  const outputBoxes: Box[] = [];
+  const outputBoxes: Box[] = [], windows: string[] = [];
+  // A text output opens in a window that shows it and offers the original for
+  // download; JSON is laid out for reading when that changes it, and then the
+  // original rides along for the download. The window's text starts after a
+  // newline, which the parser drops, so a leading newline of the file survives.
+  const file = (f: { path: string; bytes: number; text?: string; label: string }) => {
+    if (f.text === undefined) return `<a href="${src(f.path)}">${escapeHtml(f.label)}</a>`;
+    let text = f.text, formatted = false;
+    if (/\.json$/i.test(f.path)) try { const pretty = JSON.stringify(JSON.parse(f.text), null, 2); formatted = pretty !== f.text.trimEnd(); if (formatted) text = pretty; } catch { formatted = false; }
+    const id = `window-output-${windows.length + 1}`, name = f.label.split("/").at(-1)!;
+    windows.push(`<div class="fwin" id="${id}" data-step="overview" popover aria-label="${escapeHtml(f.label)}"><div class="fw-card"><div class="fw-bar"><span class="fw-name" title="${escapeHtml(f.label)}">${escapeHtml(f.label)}</span>${formatted ? `<span class="fw-note" title="The download is the original file">Formatted</span>` : ""}<span class="size">${size(f.bytes)}</span><a class="fw-dl" href="${src(f.path)}" download="${escapeHtml(name)}"${formatted ? ` data-raw="${escapeHtml(f.text)}"` : ""}>${downloadIcon}Download</a><button type="button" class="close" popovertarget="${id}" popovertargetaction="hide" aria-label="Close">×</button></div><pre class="fw-body">\n${text ? escapeHtml(text) : `<span class="quiet">Empty file.</span>`}</pre></div></div>`);
+    return `<button type="button" class="fopen" popovertarget="${id}" title="View ${escapeHtml(name)}">${escapeHtml(f.label)}</button>`;
+  };
   const outputs = [...byName].map(([declared, files]) => {
     const images = files.filter(f => /\.(png|jpe?g|webp|gif)$/i.test(f.path)), others = files.filter(f => !images.includes(f));
     const total = files.reduce((sum, f) => sum + f.bytes, 0);
     // A long list of outputs folds each declared name; a short one shows everything.
-    return `<details class="group"${model.outputs.length <= 12 ? " open" : ""}><summary><span class="where">${escapeHtml(declared)}</span><span class="count">${plural(files.length, "file")} · ${size(total)}</span></summary>${others.length ? `<ul class="flist">${others.map(f => `<li><a href="${src(f.path)}">${escapeHtml(f.label)}</a><span>${size(f.bytes)}</span></li>`).join("")}</ul>` : ""}${images.length ? `<div class="gallery">${images.map(f => {
+    return `<details class="group"${model.outputs.length <= 12 ? " open" : ""}><summary><span class="where">${escapeHtml(declared)}</span><span class="count">${plural(files.length, "file")} · ${size(total)}</span></summary>${others.length ? `<ul class="flist">${others.map(f => `<li>${file(f)}<span>${size(f.bytes)}</span></li>`).join("")}</ul>` : ""}${images.length ? `<div class="gallery">${images.map(f => {
       const id = `lightbox-output-${outputBoxes.length + 1}`, name = f.label.split("/").at(-1)!;
       outputBoxes.push({ id, step: "overview", label: declared, title: f.label, nav: name, body: `<img loading="lazy" alt="${escapeHtml(f.label)}, enlarged" src="${src(f.path)}">`, caption: `<span class="file">${escapeHtml(f.label)}</span><span class="size">${size(f.bytes)}</span><a href="${src(f.path)}">Open the original</a>` });
       return `<button type="button" class="gthumb" popovertarget="${id}" title="Enlarge ${escapeHtml(name)}"><img loading="lazy" alt="${escapeHtml(f.label)}" src="${src(f.path)}"><span>${escapeHtml(name)}<small>${size(f.bytes)}</small></span></button>`;
@@ -426,7 +447,7 @@ ${overview}</main>
 <footer class="track" aria-label="Steps"><ol>${steps.map(step => thumb(step, model.details.get(step.id), numbers.get(step.id)!, concerns.has(step.id), views.filter(v => v.step === step))).join("")}</ol></footer>
 </div>
 ${lightboxes(trajectoryBoxes(steps, model, numbers))}
-${lightboxes(outputBoxes)}
+${lightboxes(outputBoxes)}${windows.join("")}
 <script>${keys}</script></body></html>
 `;
 }
@@ -594,6 +615,23 @@ kbd{display:inline-grid;place-items:center;min-width:1.3rem;height:1.3rem;paddin
 @media(max-width:960px){.top{grid-template-columns:minmax(0,1fr)}.pills{justify-self:center;justify-content:center}.app{height:auto;min-height:100vh;overflow:visible}.center{grid-template-columns:minmax(0,1fr);grid-template-areas:"stage" "panel";gap:.75rem}
 .stage{min-height:60vh}.view{padding:.5rem 3.75rem 1rem}.track{position:sticky;bottom:0;background:var(--bg)}}
 @supports (corner-shape:squircle){*,*::before,*::after,::backdrop{corner-shape:squircle}.dot,.verdict i,.arrow,.q,.flag,.close,.dots i,.lb-nav .dir,
-:focus-visible,.pill,.tabs,.tabs a,.tabs a span,.reasons .steps a,.took,.badge,.face .role,.focus,.lb-cap,.lb-nav,.enlarge,.permalink,.exit{corner-shape:round}}
+:focus-visible,.pill,.tabs,.tabs a,.tabs a span,.reasons .steps a,.took,.badge,.face .role,.focus,.lb-cap,.lb-nav,.enlarge,.permalink,.exit,.fw-dl{corner-shape:round}}
+.fopen{all:unset;cursor:pointer;color:var(--accent);overflow-wrap:anywhere;min-width:0}.fopen:hover{text-decoration:underline}.fopen:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.fwin{position:fixed;inset:0;width:auto;height:auto;max-width:none;max-height:none;margin:0;padding:2rem;border:0;background:none;place-items:center;overflow:hidden;transition:overlay .28s allow-discrete,display .28s allow-discrete}
+.fwin:popover-open{display:grid}
+.fwin::backdrop{background:rgba(42,29,21,0);transition:background .28s ease,overlay .28s allow-discrete,display .28s allow-discrete}
+.fwin:popover-open::backdrop{background:rgba(42,29,21,.3)}
+@starting-style{.fwin:popover-open::backdrop{background:rgba(42,29,21,0)}}
+.fw-card{width:min(52rem,100%);max-height:min(42rem,100%);display:grid;grid-template-rows:auto minmax(0,1fr);background:var(--s1);border-radius:18px;box-shadow:0 1px 2px rgba(90,50,20,.08),0 24px 64px rgba(60,30,10,.24);overflow:hidden;opacity:0;scale:.96;translate:0 .75rem;transition:opacity .22s ease,scale .28s cubic-bezier(.3,.9,.3,1),translate .28s cubic-bezier(.3,.9,.3,1)}
+.fwin:popover-open .fw-card{opacity:1;scale:1;translate:0}
+@starting-style{.fwin:popover-open .fw-card{opacity:0;scale:.96;translate:0 .75rem}}
+.fw-bar{display:flex;align-items:center;gap:.75rem;padding:.7rem .7rem .7rem 1.15rem;border-bottom:1px solid var(--hair)}
+.fw-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 13px var(--mono);color:var(--text)}
+.fw-bar .size,.fw-note{flex:none;font:12px var(--mono);color:var(--faint)}
+.fw-note{font-family:var(--sans)}
+.fw-dl{flex:none;display:inline-flex;align-items:center;gap:.4rem;padding:.4rem .85rem .4rem .7rem;border-radius:999px;background:var(--grad);color:var(--on);font-size:12.5px;font-weight:600}
+.fw-dl:hover{text-decoration:none;filter:brightness(1.05)}
+.fw-dl:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.fw-body{margin:0;padding:1rem 1.15rem 1.25rem;overflow:auto;background:var(--bg);font:12.5px/1.6 var(--mono);color:var(--text);white-space:pre-wrap;overflow-wrap:anywhere;tab-size:2}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 @media print{.app{height:auto;display:block}.track,.arrow,.mid,.lightbox,.enlarge{display:none}.center{display:block}.step{display:block!important;break-inside:avoid;margin-bottom:1rem}.view{display:flex!important}.stage{background:none}}`;

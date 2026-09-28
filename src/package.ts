@@ -18,6 +18,9 @@ export interface DeliveryResult {
 }
 type Obj = Record<string, any>;
 type Step = ReviewStep & { because?: string; actionId: string; inputMode: string };
+/** Outputs the page shows as text: readable, small, and within one page's budget. */
+const textOutput = /\.(json|jsonl|ndjson|log|txt|md|csv|tsv|ya?ml|xml|toml)$/i, textLimit = 256 * 1024, textBudget = 2 * 1024 * 1024;
+
 type Analysis = {
   snapshots: SnapshotArtifact[];
   steps: Step[];
@@ -27,7 +30,7 @@ type Analysis = {
   execution: DeliveryResult["execution"];
   // Page-only evidence, kept out of trajectory.json so its schema is unchanged.
   details: Map<string, StepDetail>;
-  outputs: { path: string; bytes: number }[];
+  outputs: { path: string; bytes: number; text?: string }[];
   /** Why snapshots are not complete and execution has not passed, in plain words, with the steps concerned. */
   reasons: { snapshots: Reason[]; execution: Reason[] };
 };
@@ -342,8 +345,20 @@ async function analyze(root: string, options: DeliverPackageOptions, files: stri
     ...(execution === "uncertain" && completeness === "incomplete" ? [{ text: "Snapshot evidence is incomplete, so the relay does not confirm the run as a whole, even when every step reports completed. See why snapshots are incomplete.", stepIds: [] }] : []),
     ...(execution === "uncertain" && unsettled.length ? [{ text: "These steps did not report a final execution outcome.", stepIds: unsettled }] : []),
   ];
-  const outputs = [];
-  for (const path of files.filter(p => p.startsWith("extractions/")).sort()) outputs.push({ path, bytes: (await lstat(join(root, path))).size });
+  // A page opened from disk cannot read the files beside it, so small text
+  // outputs are embedded for the page to show; larger ones stay links.
+  const outputs: Analysis["outputs"] = [];
+  let budget = textBudget;
+  for (const path of files.filter(p => p.startsWith("extractions/")).sort()) {
+    const stat = await lstat(join(root, path));
+    let text: string | undefined;
+    if (stat.isFile() && textOutput.test(path) && stat.size <= Math.min(textLimit, budget)) {
+      try { text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(await readFile(join(root, path))); } catch { text = undefined; }
+      if (text?.includes("\0")) text = undefined;
+      if (text !== undefined) budget -= stat.size;
+    }
+    outputs.push({ path, bytes: stat.size, ...(text !== undefined ? { text } : {}) });
+  }
   return { snapshots, steps, incompleteGroups, findings, completeness, execution, details, outputs, reasons: { snapshots: snapshotReasons, execution: executionReasons } };
 }
 

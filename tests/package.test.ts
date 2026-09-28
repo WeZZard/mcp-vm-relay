@@ -138,6 +138,8 @@ test("review page orders steps by time and reads commands, exit status, output s
   await save(root, "host/diagnostics/early.request.json", { executionId: "early", evidenceMode: "diagnostic", at: "2026-09-12T23:59:00.000Z", because: "Inspect the guest before acting", argv: ["/bin/zsh", "-c", "ls -la workspace"] });
   await save(root, "host/diagnostics/early.receipt.json", { executionId: "early", evidenceMode: "diagnostic", outcome: { kind: "completed", exitStatus: { code: 3, signal: null } }, stdout: "listing", stderr: "denied", timeoutMs: 1000 });
   await save(root, "extractions/evidence/run-1/result.json", { passed: false });
+  await save(root, "extractions/evidence/run-1/big.log", "x".repeat(256 * 1024 + 1));
+  await save(root, "extractions/evidence/run-1/trace.txt", "\nfirst <line>\n");
   await deliverPackage(root, options);
   const html = await readFile(join(root, "index.html"), "utf8");
   // The diagnostic ran first, so it is step 01 even though the trajectory lists actions first.
@@ -211,7 +213,19 @@ test("review page orders steps by time and reads commands, exit status, output s
   assert.match(track, /<li class="ok"><div class="faces"><a data-t="1" [^>]+><span class="face"><img [^>]+><span class="role">Before<\/span><\/span><\/a><a data-t="2" [^>]+><span class="face"><img [^>]+><span class="role">After<\/span>/);
   assert.match(track.split('<li class="ok">')[1]!, /<span class="took">\d+\.\d s<\/span><\/span>/);
   assert.doesNotMatch(track.split('<li class="ok">')[0]!, /class="took"/);
-  assert.match(html, /<span class="where">evidence<\/span><span class="count">1 file · [^<]+<\/span><\/summary><ul class="flist"><li><a href="extractions\/evidence\/run-1\/result.json">run-1\/result.json<\/a>/);
+  // Small text outputs open in a window that shows them and offers the original for download; larger ones stay links.
+  assert.match(html, /<span class="where">evidence<\/span><span class="count">3 files · [^<]+<\/span><\/summary><ul class="flist"><li><a href="extractions\/evidence\/run-1\/big.log">run-1\/big.log<\/a>/);
+  const opener = /<li><button type="button" class="fopen" popovertarget="(window-output-\d+)" title="View result.json">run-1\/result.json<\/button><span>/.exec(html);
+  assert.ok(opener);
+  const window1 = html.split(`<div class="fwin" id="${opener[1]}" data-step="overview" popover aria-label="run-1/result.json">`)[1]!.split('<div class="fwin"')[0]!;
+  assert.match(window1, /<span class="fw-note" [^>]+>Formatted<\/span>/);
+  assert.match(window1, /<a class="fw-dl" href="extractions\/evidence\/run-1\/result.json" download="result.json" data-raw="\{&quot;passed&quot;:false\}">/);
+  assert.ok(window1.includes('<pre class="fw-body">\n{\n  &quot;passed&quot;: false\n}</pre>'));
+  const window2 = html.split('aria-label="run-1/trace.txt">')[1]!;
+  assert.doesNotMatch(window2.split("</pre>")[0]!, /Formatted|data-raw/);
+  assert.ok(window2.includes('<pre class="fw-body">\n\nfirst &lt;line&gt;\n</pre>'));
+  assert.doesNotMatch(html, /aria-label="run-1\/big.log"/);
+  assert.match(html, /<button type="button" class="fopen" popovertarget="window-output-\d+" title="View app.log">app.log<\/button>/);
   assert.doesNotMatch(withoutKeyScript(html), /<script|https?:\/\/|fetch\(/);
   assert.equal((await verifyDeliveredPackage(root)).deliveryVerified, true);
 });
