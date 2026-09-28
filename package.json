@@ -38,6 +38,13 @@
   "bin": {
     "mcp-vm-relay": "./dist/server.mjs"
   },
+  "exports": {
+    "./review-data": {
+      "types": "./dist/review-data.d.ts",
+      "import": "./dist/review-data.mjs"
+    },
+    "./package.json": "./package.json"
+  },
   "pi": {
     "mcp": "./pi-mcp.json",
     "prompts": [

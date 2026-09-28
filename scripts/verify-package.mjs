@@ -85,6 +85,13 @@ try {
     check(client.getServerVersion()?.version === pkg.version, `the server reports version ${client.getServerVersion()?.version}, not ${pkg.version}`);
   } finally { await client.close(); }
 
+  // 6. The review data export resolves to a module that derives a package's review data, with its types.
+  const exported = pkg.exports?.['./review-data'];
+  check(exported?.import === './dist/review-data.mjs' && exported?.types === './dist/review-data.d.ts', `package.json exports ./review-data as ${JSON.stringify(exported)}`);
+  check(has('dist/review-data.d.ts') && has('dist/review-page.d.ts'), 'the review data types are missing');
+  if (has('dist/review-data.mjs')) check(typeof (await import(join(root, 'dist', 'review-data.mjs'))).reviewData === 'function', 'dist/review-data.mjs does not export reviewData');
+  else failures.push('dist/review-data.mjs is missing');
+
   if (failures.length) { console.error(`Package check failed for ${tarball}:\n- ${failures.join('\n- ')}`); process.exitCode = 1; }
   else console.log(`Package check passed for ${tarball} (${pkg.name}@${pkg.version})`);
 } finally {

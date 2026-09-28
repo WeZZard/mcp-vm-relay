@@ -315,7 +315,10 @@ page captures), `manifest.json`, which checksums everything, and `OPENING.txt`.
 The package is the raw evidence only; `/mcp-vm-relay:trajectory <directory>`
 (the `relay_trajectory` tool) verifies it and opens the review app on it, served by
 the relay on 127.0.0.1 while it runs. The steps and verdicts are derived from the
-evidence when you review it, so an earlier package is reviewed with today's rules. No network, VM or external assets are
+evidence when you review it, so an earlier package is reviewed with today's rules.
+A program that reads relay packages gets the same derivation from
+`@wezzard/mcp-vm-relay/review-data`: `await reviewData(<directory>)` returns the
+steps (with each snapshot's package path), the verdicts and their reasons. No network, VM or external assets are
 needed. Diagnostic commands appear in the trajectory
 as command-only steps without screenshots. `finish` verifies the package before
 destroying the VM; a failed delivery removes only the derived files it created

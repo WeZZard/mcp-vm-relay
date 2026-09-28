@@ -29,7 +29,7 @@ test('nothing reachable from the core imports an agent runtime: the relay is pla
 
 test('the built bundles carry no agent-runtime dependency and are all listed with their hashes', async () => {
   const integrity = JSON.parse(await readFile('dist/integrity.json', 'utf8'));
-  assert.deepEqual(Object.keys(integrity).sort(), ['doctor.mjs', 'mcp-host.mjs', 'receiver.mjs', 'server.mjs']);
+  assert.deepEqual(Object.keys(integrity).sort(), ['doctor.mjs', 'mcp-host.mjs', 'receiver.mjs', 'review-data.mjs', 'server.mjs']);
   for (const name of Object.keys(integrity)) {
     const bundle = await readFile(join('dist', name), 'utf8');
     assert.doesNotMatch(bundle, /@earendil-works/, name);
