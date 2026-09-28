@@ -20406,9 +20406,9 @@ function stage(view, detail, numbers, around) {
   const arrows = arrow(around.previous, "prev", "all") + arrow(around.next, "next", "all") + arrow(around.previousError, "prev", "errs") + arrow(around.nextError, "next", "errs");
   const span = took(detail);
   const at = view.role === "command" ? time3(detail?.at) ? `${time3(detail?.at)} UTC` : void 0 : preciseTime(view.role === "before" ? detail?.beforeAt : detail?.afterAt);
-  const label = `<div class="vlabel"><span class="badge" data-role="${view.role}"><span class="role">${roleName(view)}</span>${at ? `<time>${at}</time>` : ""}</span>
-<p class="sname"><span class="d">${number3}</span><span class="h">${escapeHtml(headline)}</span>${span ? `<span class="took" title="Time from the before snapshot to the after snapshot">${span}</span>` : ""}</p></div>`;
-  const open7 = `<section class="stage view${view.role === "command" ? " terminal" : ""}${view.first ? " first" : ""}" id="${escapeHtml(view.id)}" data-v="${view.index}" aria-label="Step ${number3}, ${roleName(view).toLowerCase()}">${arrows}`;
+  const label = `<div class="vlabel"><span class="badge" data-role="${view.role}"><span class="role">${roleName(view)}</span>${at ? `<time>${at}</time>` : ""}</span></div>`;
+  const title = `<h2 class="sname" title="${escapeHtml(headline)}"><span class="d">${number3}</span><span class="h">${escapeHtml(headline)}</span>${span ? `<span class="took" title="Time from the before snapshot to the after snapshot">${span}</span>` : ""}</h2>`;
+  const open7 = `<section class="stage view${view.role === "command" ? " terminal" : ""}${view.first ? " first" : ""}" id="${escapeHtml(view.id)}" data-v="${view.index}" aria-label="Step ${number3}, ${roleName(view).toLowerCase()}">${arrows}${title}`;
   if (view.role === "command") {
     return `${open7}<div class="term"><div class="term-bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span>${step2.inputMode === "diagnostic" ? "Diagnostic command" : "Command"} \xB7 no snapshots</span><button type="button" class="enlarge" popovertarget="${escapeHtml(boxId(step2, "command"))}" title="Enlarge the command">${expandIcon}Enlarge</button></div>
 <pre class="term-cmd"><span class="prompt" aria-hidden="true">$</span>${escapeHtml(command2 ?? headline)}</pre>${detail?.output ? streamsOf(detail.output) || `<p class="quiet">No output.</p>` : ""}
@@ -20425,7 +20425,7 @@ function panel(step2, detail, number3, total, concerns) {
   const fact = (term, value) => `<div><dt>${term}</dt><dd>${value}</dd></div>`;
   return `<aside class="panel" aria-label="Step ${number3} details"><div class="panel-scroll">
 <p class="eyebrow"><span>Step <span class="d">${number3}</span> <span class="of">of <span class="d">${String(total).padStart(2, "0")}</span></span></span><span>${kind}</span>${at ? `<time>${at} UTC</time>` : ""}<a class="permalink" href="${escapeHtml(link2(step2))}" title="Stable link to this step" aria-label="Stable link to step ${number3}">${linkIcon}</a></p>
-<h2>${escapeHtml(headline)}</h2><p class="state"><span class="sr">Execution: </span>${verdict(step2.execution)}</p>
+<p class="state"><span class="sr">Execution: </span>${verdict(step2.execution)}</p>
 ${concerns.length ? `<section class="concern"><h3>Why this step affects the verdicts</h3><ul>${concerns.map((c) => `<li><span class="label">${escapeHtml(c.verdict)}</span><p>${escapeHtml(c.text)}</p></li>`).join("")}</ul></section>` : ""}
 ${reasonShown ? `<section class="block"><h3>Reason</h3><p>${escapeHtml(step2.because ?? "Not present in retained host metadata")}</p></section>` : ""}
 ${command2 && step2.snapshots ? `<section class="block"><h3>Command</h3><pre class="command">${escapeHtml(command2)}</pre></section>` : ""}
@@ -20583,7 +20583,7 @@ kbd{display:inline-grid;place-items:center;min-width:1.3rem;height:1.3rem;paddin
 .vlabel{display:grid;justify-items:center;gap:.55rem;min-width:0}
 .badge{display:inline-flex;align-items:center;gap:.65rem;padding:.32rem .85rem;border-radius:999px;background:var(--s1);box-shadow:0 0 0 1px var(--hair),0 1px 3px rgba(90,50,20,.07)}
 .badge .role{font:600 11px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--dim)}.badge[data-role="after"] .role{color:var(--accent)}.badge time{font:12px/1 var(--mono);color:var(--faint)}
-.sname{display:flex;align-items:baseline;gap:.6rem;max-width:100%;margin:0;font:600 15px/1.35 var(--round);color:var(--text)}
+.sname{flex:none;display:flex;align-items:baseline;gap:.6rem;max-width:100%;margin:0;font:700 17px/1.35 var(--round);letter-spacing:-.005em;color:var(--text)}
 .sname .d{flex:none;font-size:13px;color:var(--faint)}.sname .h{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sname .took{flex:none;align-self:center;padding:.18rem .5rem;border-radius:999px;background:color-mix(in srgb,var(--accent) 11%,transparent);font:700 11.5px/1 var(--round);color:var(--accent)}
 .lightbox{position:fixed;inset:0;width:auto;height:auto;max-width:none;max-height:none;margin:0;padding:1.5rem 1.5rem 1.25rem;border:0;background:none;color:var(--text);overflow:hidden;transition:overlay .36s allow-discrete,display .36s allow-discrete}
@@ -20625,7 +20625,7 @@ kbd{display:inline-grid;place-items:center;min-width:1.3rem;height:1.3rem;paddin
 .eyebrow>span:first-child{font:700 12.5px var(--round);background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}.eyebrow .of{-webkit-text-fill-color:var(--faint);color:var(--faint);font-weight:500}.eyebrow time{font-family:var(--mono)}
 .permalink{margin-left:auto;display:grid;place-items:center;width:1.9rem;height:1.9rem;margin-block:-.4rem;border-radius:999px;color:var(--faint)}.permalink:hover{background:var(--s3);color:var(--accent)}
 .panel h2{font:700 1.35rem/1.3 var(--round);letter-spacing:-.012em;margin:.55rem 0 .6rem;overflow-wrap:anywhere}
-.state{margin:0}
+.state{margin:.7rem 0 0}
 .block{margin-top:1.5rem}.block h3{margin:0 0 .45rem}.block p{margin:0;color:var(--dim)}.panel .block{margin-top:1.75rem}.panel .block h3{margin-bottom:.55rem}.panel .block p{font-size:14px;line-height:1.6}
 .command{font-size:12px;max-height:9rem}
 .receipts{list-style:none;margin:0 0 .4rem;padding:0;display:grid;gap:.45rem}.receipts li{display:flex;flex-wrap:wrap;gap:.4rem .8rem;align-items:center}.diag{font-size:13px;color:var(--dim)}

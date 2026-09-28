@@ -144,7 +144,9 @@ test("review page orders steps by time and reads commands, exit status, output s
   assert.ok(html.indexOf('id="step-diagnostic-early"') < html.indexOf('id="step-step-0"'));
   const diagnostic = html.split('<article id="step-diagnostic-early"')[1]!.split("</article>")[0]!;
   assert.match(diagnostic, /<span>Step <span class="d">01<\/span> <span class="of">of <span class="d">02<\/span><\/span><\/span><span>Diagnostic<\/span><time>23:59:00 UTC<\/time>/);
-  assert.match(diagnostic, /<h2>Inspect the guest before acting<\/h2>/);
+  // The step's name heads its views; the panel beside them carries no heading of its own.
+  assert.match(diagnostic, /<h2 class="sname" title="Inspect the guest before acting"><span class="d">01<\/span><span class="h">Inspect the guest before acting<\/span><\/h2>/);
+  assert.doesNotMatch(diagnostic.split('<aside class="panel"')[1]!, /<h2/);
   // A step without snapshots shows its command and output in the viewport, and its exit status in the panel.
   assert.match(diagnostic, /<pre class="term-cmd"><span class="prompt" aria-hidden="true">\$<\/span>\/bin\/zsh -c &#39;ls -la workspace&#39;<\/pre>/);
   assert.match(diagnostic, /<span class="exit bad">exit 3<\/span>/);
@@ -162,13 +164,14 @@ test("review page orders steps by time and reads commands, exit status, output s
   assert.match(html, /<article id="step-diagnostic-early" data-first="0" class="step bad err">/);
   assert.match(html, /<li class="bad diagnostic err"><div class="faces"><a data-t="0" href="#step-diagnostic-early--command"/);
   const action = html.split('<article id="step-step-0"')[1]!.split("</article>")[0]!;
-  // Each view shows one snapshot, with a capsule naming it and its capture time, and the step's name and
-  // duration centered below. A step's own fragment selects its first view.
+  // Each view shows one snapshot under the step's name and duration, with a capsule naming the snapshot
+  // and its capture time right below it. A step's own fragment selects its first view.
   const before = action.split('id="step-step-0--before"')[1]!.split("</section>")[0]!, after = action.split('id="step-step-0--after"')[1]!.split("</section>")[0]!;
   assert.match(action, /<section class="stage view first" id="step-step-0--before" data-v="1" aria-label="Step 02, before">/);
   assert.match(action, /<section class="stage view" id="step-step-0--after" data-v="2" aria-label="Step 02, after">/);
   assert.match(before, /<div class="solo"><button type="button" class="zoom" popovertarget="lightbox-step-0--before" title="Enlarge the before snapshot"><img alt="Before dispatch snapshot" src="[^"]+"><\/button><\/div>/);
-  assert.match(before, /<div class="vlabel"><span class="badge" data-role="before"><span class="role">Before<\/span><time>[^<]+<\/time><\/span>\n<p class="sname"><span class="d">02<\/span><span class="h">[^<]+<\/span><span class="took" title="Time from the before snapshot to the after snapshot">\d+\.\d s<\/span><\/p><\/div>/);
+  assert.match(before, /<h2 class="sname" title="[^"]+"><span class="d">02<\/span><span class="h">[^<]+<\/span><span class="took" title="Time from the before snapshot to the after snapshot">\d+\.\d s<\/span><\/h2><div class="solo">/);
+  assert.match(before, /<\/div><div class="vlabel"><span class="badge" data-role="before"><span class="role">Before<\/span><time>[^<]+<\/time><\/span><\/div>$/);
   assert.doesNotMatch(action, /class="(pair|seg)"/);
   // Pressing a snapshot opens it in a lightbox, which links to the original. The lightboxes form one
   // sequence in step order, commands included, and each one's arrows name the item before and after it.
