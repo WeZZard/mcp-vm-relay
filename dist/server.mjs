@@ -18460,7 +18460,7 @@ var StdioServerTransport = class {
 
 // src/manager.ts
 import { randomUUID as randomUUID7 } from "node:crypto";
-import { mkdir as mkdir10, readFile as readFile10, cp, access } from "node:fs/promises";
+import { mkdir as mkdir10, readFile as readFile10, cp, access, statfs } from "node:fs/promises";
 import { dirname as dirname9, join as join14, resolve as resolve9 } from "node:path";
 
 // src/config.ts
@@ -19499,9 +19499,25 @@ import { randomUUID as randomUUID3 } from "node:crypto";
 // src/util.ts
 import { spawn as spawn3 } from "node:child_process";
 import { createHash as createHash3, randomUUID as randomUUID2 } from "node:crypto";
-import { mkdir as mkdir3, readFile as readFile4, rename as rename3, lstat as lstat2, readdir as readdir2, open as open3 } from "node:fs/promises";
+import { mkdir as mkdir3, rename as rename3, lstat as lstat2, readdir as readdir2, open as open3 } from "node:fs/promises";
 import { dirname as dirname4, join as join6, resolve as resolve4, relative as relative3, isAbsolute as isAbsolute3 } from "node:path";
 var hash = (bytes) => createHash3("sha256").update(bytes).digest("hex");
+async function hashFile(path) {
+  const file = await open3(path, "r");
+  try {
+    const digest = createHash3("sha256"), chunk = Buffer.alloc(8 * 1024 * 1024);
+    let bytes = 0;
+    for (; ; ) {
+      const { bytesRead } = await file.read(chunk, 0, chunk.length, null);
+      if (!bytesRead) break;
+      digest.update(chunk.subarray(0, bytesRead));
+      bytes += bytesRead;
+    }
+    return { sha256: digest.digest("hex"), bytes };
+  } finally {
+    await file.close();
+  }
+}
 async function jsonFile(path, value) {
   await mkdir3(dirname4(path), { recursive: true, mode: 448 });
   const tmp = `${path}.${randomUUID2()}.tmp`;
@@ -19535,8 +19551,8 @@ async function inventory(root) {
     if (info.isDirectory()) {
       for (const name of (await readdir2(path)).sort()) await walk(join6(path, name));
     } else if (info.isFile()) {
-      const bytes = await readFile4(path);
-      result2.push({ path: relative3(root, path), sha256: hash(bytes), bytes: bytes.length });
+      const { sha256, bytes } = await hashFile(path);
+      result2.push({ path: relative3(root, path), sha256, bytes });
     } else throw new Error(`Not a regular file: ${path}`);
   }
   await walk(root);
@@ -19577,7 +19593,8 @@ async function command(argv2, options2 = {}) {
 }
 
 // src/transfer.ts
-var MAX_BYTES = 512 * 1024 * 1024;
+var STAGING_MAX_BYTES = 512 * 1024 * 1024;
+var STAGING_MAX_FILES = 1e4;
 var MAX_IMAGE_BYTES = 64 * 1024 * 1024;
 var MAX_IMAGE_METADATA_BYTES = 4 * 1024 * 1024;
 var ImageTransferError = class extends Error {
@@ -19626,9 +19643,11 @@ async function assertHostPath(root, target2, allowMissing = false) {
   }
 }
 var GUEST_PATH = `function check(root,target,missing=false){root=p.resolve(root);target=p.resolve(target);const rel=p.relative(root,target);if(rel==='..'||rel.startsWith('../')||p.isAbsolute(rel))throw Error('Path must be inside '+root+': '+target);let f=root;for(const part of ['',...(rel?rel.split('/'):[])]){if(part)f=p.join(f,part);try{if(fs.lstatSync(f).isSymbolicLink())throw Error('symlink ancestor '+f);}catch(e){if(missing&&e.code==='ENOENT')return;throw e;}}}`;
+var GUEST_DIGEST = `function digest(f,size){const fd=fs.openSync(f,'r');try{const h=c.createHash('sha256'),b=Buffer.alloc(8388608);let n=0,r;while((r=fs.readSync(fd,b,0,b.length,null))>0){h.update(b.subarray(0,r));n+=r;}if(n!==size)throw Error('Source changed during inventory');return h.digest('hex');}finally{fs.closeSync(fd);}}`;
 var PREPARE = `const fs=require('fs'),p=require('path');${GUEST_PATH}const [root,target]=process.argv.slice(1);check(root,target,true);fs.mkdirSync(p.dirname(target),{recursive:true,mode:448});check(root,target,true);`;
-var SCAN = `const fs=require('fs'),p=require('path'),c=require('crypto');${GUEST_PATH}const [root,approved,frame,frameRoot]=process.argv.slice(1),out=[];let total=0;check(approved,root);function walk(f){let s=fs.lstatSync(f);if(s.isSymbolicLink())throw Error('symlink '+f);if(s.isDirectory()){for(const n of fs.readdirSync(f).sort())walk(p.join(f,n));}else if(s.isFile()){total+=s.size;if(total>536870912||out.length>=10000)throw Error('extraction exceeds 512MiB / 10000 files');const b=fs.readFileSync(f);if(b.length!==s.size)throw Error('Source changed during inventory');out.push({path:p.relative(root,f),sha256:c.createHash('sha256').update(b).digest('hex'),bytes:b.length});}else throw Error('special file '+f);}walk(root);check(approved,root);check(frameRoot,frame,true);fs.mkdirSync(p.dirname(frame),{recursive:true,mode:448});check(frameRoot,frame,true);const b=Buffer.from(JSON.stringify(out));fs.writeFileSync(frame,b,{flag:'wx',mode:384});console.log(JSON.stringify({path:frame,sha256:c.createHash('sha256').update(b).digest('hex'),bytes:b.length}));`;
-var FILE_FACT = `const fs=require('fs'),p=require('path'),c=require('crypto');${GUEST_PATH}const [root,file]=process.argv.slice(1);check(root,file);const s=fs.lstatSync(file);if(!s.isFile()||s.size>536870912)throw Error('Invalid frame file');const b=fs.readFileSync(file);if(b.length!==s.size)throw Error('Source changed during inventory');check(root,file);console.log(JSON.stringify({path:file,sha256:c.createHash('sha256').update(b).digest('hex'),bytes:b.length}));`;
+var SCAN = `const fs=require('fs'),p=require('path'),c=require('crypto');${GUEST_PATH}${GUEST_DIGEST}const [root,approved,frame,frameRoot]=process.argv.slice(1),out=[];check(approved,root);function walk(f){let s=fs.lstatSync(f);if(s.isSymbolicLink())throw Error('symlink '+f);if(s.isDirectory()){for(const n of fs.readdirSync(f).sort())walk(p.join(f,n));}else if(s.isFile()){out.push({path:p.relative(root,f),sha256:digest(f,s.size),bytes:s.size});}else throw Error('special file '+f);}walk(root);check(approved,root);check(frameRoot,frame,true);fs.mkdirSync(p.dirname(frame),{recursive:true,mode:448});check(frameRoot,frame,true);const b=Buffer.from(JSON.stringify(out));fs.writeFileSync(frame,b,{flag:'wx',mode:384});console.log(JSON.stringify({path:frame,sha256:c.createHash('sha256').update(b).digest('hex'),bytes:b.length}));`;
+var FILE_FACT = `const fs=require('fs'),p=require('path'),c=require('crypto');${GUEST_PATH}${GUEST_DIGEST}const [root,file]=process.argv.slice(1);check(root,file);const s=fs.lstatSync(file);if(!s.isFile())throw Error('Invalid frame file');const sha256=digest(file,s.size);check(root,file);console.log(JSON.stringify({path:file,sha256,bytes:s.size}));`;
+var SIZE = `const fs=require('fs'),p=require('path');${GUEST_PATH}const [root,approved]=process.argv.slice(1);check(approved,root);let bytes=0,files=0;function walk(f){const s=fs.lstatSync(f);if(s.isSymbolicLink())throw Error('symlink '+f);if(s.isDirectory()){for(const n of fs.readdirSync(f))walk(p.join(f,n));}else if(s.isFile()){bytes+=s.size;files++;}else throw Error('special file '+f);}walk(root);console.log(JSON.stringify({bytes,files}));`;
 var REMOVE_FRAME = `const fs=require('fs'),p=require('path');${GUEST_PATH}const [root,file]=process.argv.slice(1);check(root,file,true);fs.rmSync(file,{force:true});`;
 var IMAGE_FACT = `const fs=require('fs'),p=require('path'),c=require('crypto');${GUEST_PATH}
 const [root,file,limit='67108864',kind='image']=process.argv.slice(1);
@@ -19651,9 +19670,14 @@ try {
   if(identity(fs.lstatSync(file))!==identity(s))fail('integrity-failed','Source changed after image hash');
   console.log(JSON.stringify({path:file,sha256:c.createHash('sha256').update(b).digest('hex'),bytes:b.length,identity:identity(s)}));
 }catch(e){console.log(JSON.stringify({error:e.imageCode||(e.code==='ENOENT'?'image-missing':/symlink|Path must be inside|ELOOP|ENOTDIR/.test(e.message)?'unsafe-path':'transfer-failed'),message:e.message}));}`;
+var SCAN_BASE_MS = 12e4;
+var SCAN_MS_PER_MIB = 125;
+function scanTimeoutMs(bytes) {
+  return SCAN_BASE_MS + Math.ceil(bytes / 1048576) * SCAN_MS_PER_MIB;
+}
 function validFact(value) {
   const f = value;
-  return !!f && typeof f === "object" && typeof f.path === "string" && typeof f.sha256 === "string" && /^[a-f0-9]{64}$/.test(f.sha256) && Number.isSafeInteger(f.bytes) && f.bytes >= 0 && f.bytes <= MAX_BYTES;
+  return !!f && typeof f === "object" && typeof f.path === "string" && typeof f.sha256 === "string" && /^[a-f0-9]{64}$/.test(f.sha256) && Number.isSafeInteger(f.bytes) && f.bytes >= 0;
 }
 var Transfer = class {
   constructor(vm, name, node2, options2 = {}) {
@@ -19695,7 +19719,7 @@ var Transfer = class {
     await assertHostPath(approvedLocalRoot, local);
     const info = await lstat3(local);
     if (!info.isFile()) throw new Error(`Expected regular file: ${local}`);
-    if (info.size > MAX_BYTES) throw new Error("Staging exceeds 512 MiB");
+    if (info.size > STAGING_MAX_BYTES) throw new Error("Staging exceeds 512 MiB");
     const bytes = await readFile5(local), before = hash(bytes);
     const guestRoot = this.options.guestRoot ?? dirname5(remote);
     await this.checked([this.node, "-e", PREPARE, guestRoot, remote]);
@@ -19706,14 +19730,14 @@ var Transfer = class {
     await assertHostPath(approvedLocalRoot, local);
     const after = await readFile5(local);
     if (hash(after) !== before || after.length !== bytes.length) throw new Error(`Staging source changed: ${local}`);
-    const facts = await this.scan(remote, guestRoot);
+    const facts = await this.scan(remote, guestRoot, bytes.length);
     if (facts.length !== 1 || facts[0].sha256 !== before || facts[0].bytes !== bytes.length) throw new Error(`Staging checksum mismatch: ${local}`);
     return { local, remote, sha256: before, bytes: facts[0].bytes };
   }
   async pushTree(local, remote, approvedLocalRoot = local) {
     await assertHostPath(approvedLocalRoot, local);
     const files = await inventory(local);
-    if (files.length > 1e4 || files.reduce((sum, file) => sum + file.bytes, 0) > MAX_BYTES) throw new Error("Staging exceeds 512MiB / 10000 files");
+    if (files.length > STAGING_MAX_FILES || files.reduce((sum, file) => sum + file.bytes, 0) > STAGING_MAX_BYTES) throw new Error("Staging exceeds 512MiB / 10000 files");
     const result2 = [];
     for (const file of files) {
       const staged = await this.pushFile(within(local, file.path), within(remote, file.path), approvedLocalRoot);
@@ -19981,8 +20005,18 @@ var Transfer = class {
       options2.signal?.removeEventListener("abort", abort);
     }
   }
-  async scan(remote, approvedRoot = remote) {
+  /** The total bytes of a guest tree, from a stat-only walk. */
+  async size(remote, approvedRoot) {
+    const size = JSON.parse(await this.checked([this.node, "-e", SIZE, remote, approvedRoot], SCAN_BASE_MS));
+    const bytes = size?.bytes;
+    if (typeof bytes !== "number" || !Number.isSafeInteger(bytes) || bytes < 0) throw new Error("Invalid remote inventory size");
+    return bytes;
+  }
+  /** `expectedBytes`, when the caller knows the size (a staged file, or the inventory
+   * before a pull), sets the timeout without the stat-only size walk. */
+  async scan(remote, approvedRoot = remote, expectedBytes) {
     const guestRoot = this.options.guestRoot ?? dirname5(remote);
+    const timeoutMs2 = scanTimeoutMs(expectedBytes ?? await this.size(remote, approvedRoot));
     const frame = join7(guestRoot, `.inventory-${randomUUID3()}.json`);
     const tempRoot = this.options.hostTempRoot ?? tmpdir();
     await assertHostPath(tempRoot, tempRoot, true);
@@ -19990,20 +20024,17 @@ var Transfer = class {
     await assertHostPath(tempRoot, tempRoot);
     const hostDirectory = await mkdtemp(join7(tempRoot, "relay-inventory-"));
     try {
-      const fact = JSON.parse(await this.checked([this.node, "-e", SCAN, remote, approvedRoot, frame, guestRoot], 12e4));
+      const fact = JSON.parse(await this.checked([this.node, "-e", SCAN, remote, approvedRoot, frame, guestRoot], timeoutMs2));
       if (!validFact(fact) || fact.path !== frame) throw new Error("Invalid remote inventory frame");
       const result2 = JSON.parse((await this.pullFrame(frame, join7(hostDirectory, "inventory.json"), guestRoot, tempRoot, fact)).toString("utf8"));
-      if (!Array.isArray(result2) || result2.length > 1e4) throw new Error("Invalid remote inventory");
-      let total = 0;
+      if (!Array.isArray(result2)) throw new Error("Invalid remote inventory");
       const paths2 = /* @__PURE__ */ new Set();
       for (const file of result2) {
         if (!validFact(file) || paths2.has(file.path)) throw new Error("Invalid remote file fact");
         if (file.path) within("/inventory", file.path);
         else if (result2.length !== 1) throw new Error("Invalid remote inventory root file");
         paths2.add(file.path);
-        total += file.bytes;
       }
-      if (total > MAX_BYTES) throw new Error("Extraction exceeds 512 MiB");
       return result2;
     } finally {
       try {
@@ -20014,9 +20045,11 @@ var Transfer = class {
       }
     }
   }
-  /** Capture source hashes before pull, compare host bytes, then source inventory again. */
-  async pullVerified(remote, local, approvedRoot = remote, localRoot = dirname5(local)) {
+  /** Capture source hashes before pull, compare host bytes, then source inventory again.
+   * `beforePull` sees the source inventory before any byte is pulled and may refuse the pull. */
+  async pullVerified(remote, local, approvedRoot = remote, localRoot = dirname5(local), options2 = {}) {
     const before = await this.scan(remote, approvedRoot);
+    await options2.beforePull?.(before);
     await assertHostPath(localRoot, local, true);
     await mkdir4(dirname5(local), { recursive: true, mode: 448 });
     await assertHostPath(localRoot, local, true);
@@ -20029,8 +20062,8 @@ var Transfer = class {
       await this.guestPath(approvedRoot, remote);
       await assertHostPath(localRoot, local);
       if (!(await lstat3(local)).isFile()) throw new Error("Invalid extraction file");
-      const bytes = await readFile5(local);
-      if (hash(bytes) !== before[0].sha256 || bytes.length !== before[0].bytes) throw new Error(`Extraction checksum mismatch: ${remote}`);
+      const pulled = await hashFile(local);
+      if (pulled.sha256 !== before[0].sha256 || pulled.bytes !== before[0].bytes) throw new Error(`Extraction checksum mismatch: ${remote}`);
     } else {
       await mkdir4(local, { recursive: true, mode: 448 });
       for (const file of before) {
@@ -20050,7 +20083,7 @@ var Transfer = class {
       await assertHostPath(localRoot, local);
       if (JSON.stringify(await inventory(local)) !== JSON.stringify(before)) throw new Error(`Extraction inventory mismatch: ${remote}`);
     }
-    if (JSON.stringify(await this.scan(remote, approvedRoot)) !== JSON.stringify(before)) throw new Error(`Source changed during extraction: ${remote}`);
+    if (JSON.stringify(await this.scan(remote, approvedRoot, before.reduce((sum, file) => sum + file.bytes, 0))) !== JSON.stringify(before)) throw new Error(`Source changed during extraction: ${remote}`);
     await assertHostPath(localRoot, local);
     return before;
   }
@@ -20076,6 +20109,8 @@ var VmTransport = class {
   because = "";
   timeoutMs = 12e4;
   diagnostic = false;
+  /** The current run's cancellation: a cancelled dispatch stops waiting for the receiver and is reported as uncertain. */
+  signal;
   response;
   async send(request) {
     if (!this.because.trim()) throw new Error("Run execution intent is required");
@@ -20100,7 +20135,7 @@ var VmTransport = class {
         INVOKE,
         join8(this.guestRoot, "receiver.mjs"),
         remote
-      ], this.timeoutMs + 18e4 + wait);
+      ], this.timeoutMs + 18e4 + wait, { signal: this.signal });
       if (result2.code !== 0) throw new Error(`Receiver exit ${result2.code}: ${result2.stderr.slice(0, 1e3)}`);
       const guestReceipt = join8(this.guestRoot, "state", "receiver", "receipts", `${request.executionId}.json`);
       const originalReceipt = join8(this.hostRoot, "receiver-receipts", `${request.executionId}.json`);
@@ -29477,7 +29512,7 @@ function overlaps2(a, b) {
   const path = relative5(a, b);
   return path === "" || !isAbsolute5(path) && path !== ".." && !path.startsWith("../");
 }
-async function refreshEvidenceState(incoming, destination, archiveRoot) {
+async function refreshEvidenceState(incoming, destination, archiveRoot, options2 = {}) {
   incoming = safePath(incoming);
   destination = safePath(destination);
   archiveRoot = safePath(archiveRoot);
@@ -29508,7 +29543,6 @@ async function refreshEvidenceState(incoming, destination, archiveRoot) {
     await rename4(destination, archived);
   }
   await directory(dirname8(destination), true);
-  await mkdir8(destination);
   const copy = async (source, tree) => {
     for (const [path, kind] of tree) {
       const target2 = join12(destination, path);
@@ -29519,7 +29553,17 @@ async function refreshEvidenceState(incoming, destination, archiveRoot) {
       }
     }
   };
-  await copy(incoming, fresh);
+  let moved = false;
+  try {
+    await (options2.rename ?? rename4)(incoming, destination);
+    moved = true;
+  } catch (error2) {
+    if (error2.code !== "EXDEV") throw error2;
+  }
+  if (!moved) {
+    await mkdir8(destination);
+    await copy(incoming, fresh);
+  }
   if (archived) await copy(archived, retained);
 }
 
@@ -29654,10 +29698,13 @@ function checkArguments(schema, args) {
 }
 
 // src/manager.ts
+var RENEWAL_WINDOW_MS = 15 * 6e4;
+var MIN_RENEWAL_MS = 0.1 * 36e5;
 var RELAY_RUN_OUTPUTS = "relay-run";
 var MCP_START_ALLOWANCE_MS = 6e4;
 var MAX_TOOL_IMAGES = 4;
 var instructions = "This server offers nineteen tools for one interruptive VM enclosure: relay_search, relay_probe, relay_acquisition_capabilities, relay_acquire, relay_stage, relay_run, relay_tools, the command tools relay_exec/relay_script/relay_code, relay_image, relay_extract, relay_finish, relay_release, relay_console_resolve, relay_console_open, relay_console_cancel, relay_status and relay_trajectory. relay_run sends the cua-driver, Playwright MCP or Chrome DevTools MCP tool calls you already know to that server inside the VM; evidence is automatic. Relay only interruptive computer-use or browser-use that would otherwise take over a real desktop or browser, judged for yourself from relay_probe facts; unknown is not idle, and non-disruptive or headless work stays with local tools. One task gets one enclosure: call relay_acquire once per task, never reused for a second task. Work an enclosure in order: relay_probe, then relay_acquire, then relay_stage, then relay_run or the command tools, then relay_image or relay_extract as needed, then relay_finish or relay_release. Always call relay_finish or relay_release explicitly before you return an answer; ending the session only pauses lease renewal, it does not destroy the VM, and the backend's own expiry is the last-resort safeguard. A refused, uncertain or nonzero operation keeps the VM so you can diagnose and submit a corrected operation; never replay input whose effect is uncertain. A tool result, an attached image or a verified evidence package, is evidence for a human reviewer, never the review itself. The relay never targets a physical or local display and offers no video or spawn API. Every tool's text result is capped at 50 KiB / 2000 lines; a larger result is retained whole in a local file the result names.";
+var NO_OWNED_LEASE = "This session owns no lease, so nothing was released. Each server process has its own session identity (a new random one unless MCP_VM_RELAY_SESSION sets it); a lease acquired under another identity is not visible here. Restart the server with that MCP_VM_RELAY_SESSION to reconcile and release it, or let the backend TTL expire it.";
 var RelayManager = class {
   constructor(options2) {
     this.options = options2;
@@ -29689,6 +29736,7 @@ var RelayManager = class {
   transport;
   timer;
   heartbeating = false;
+  renewal;
   queue = Promise.resolve();
   initialized = false;
   ownerLock;
@@ -30018,7 +30066,7 @@ var RelayManager = class {
         this.enclosure.acquisitionInFlight = true;
         await this.save();
         try {
-          this.enclosure.lease = await this.vm.acquire({ purpose, image: input.image, env: input.env ?? "none", ttl_hours: ttlHours, wait: true, ...input.vnc === void 0 ? {} : { vnc: input.vnc } }, { signal });
+          this.enclosure.lease = await this.vm.acquire({ purpose, image: input.image, env: input.env ?? "none", ttl_hours: Math.min(this.renewalWindowMs(), ttlHours * 36e5) / 36e5, wait: true, ...input.vnc === void 0 ? {} : { vnc: input.vnc } }, { signal });
           this.enclosure.acquisitionInFlight = false;
         } catch (error2) {
           if (signal?.aborted && error2 === signal.reason || error2 instanceof VmServiceError && error2.status !== void 0 && error2.status >= 400 && error2.status < 500) this.enclosure.acquisitionInFlight = false;
@@ -30030,11 +30078,11 @@ var RelayManager = class {
         }
         await this.save();
         if (input.vnc && (!this.enclosure.lease?.lease_id || !this.enclosure.lease.console?.console_id || this.enclosure.lease.console.status !== "ready")) throw new Error("VNC acquisition did not return a ready console and lease identity; ownership retained for reconciliation");
-        signal?.throwIfAborted();
         this.enclosure.guestState = this.enclosure.lease.state;
         this.enclosure.expiresAt = this.enclosure.lease.ttl_expires_at;
         this.startHeartbeat();
         await this.save();
+        if (signal?.aborted) throw new Error(`${String(signal.reason)}; the acquisition completed after it was cancelled: VM ${this.enclosure.lease.vm} is owned by this session, retained and renewed. Continue with relay_stage, or call relay_finish or relay_release.`, { cause: signal.reason });
         return { ...this.status(), guestRoot: this.enclosure.guestRoot, workspace: join14(this.enclosure.guestRoot, "workspace"), declarations: input.extractions };
       } catch (error2) {
         await this.fail(error2);
@@ -30042,23 +30090,58 @@ var RelayManager = class {
       }
     });
   }
+  renewalWindowMs() {
+    const ms = this.options.renewalWindowMs ?? RENEWAL_WINDOW_MS;
+    if (!Number.isFinite(ms) || ms < MIN_RENEWAL_MS) throw new Error("renewalWindowMs must be at least 0.1 hours");
+    return ms;
+  }
+  /** Milliseconds left until the lease's own deadline, startedAt + ttlHours. */
+  remainingMs(e) {
+    return Date.parse(e.startedAt) + e.ttlHours * 36e5 - Date.now();
+  }
   startHeartbeat() {
     if (this.timer || !this.enclosure?.lease) return;
+    if (this.remainingMs(this.enclosure) < MIN_RENEWAL_MS) {
+      this.enclosure.active = false;
+      return;
+    }
     this.enclosure.active = true;
-    const ms = this.options.heartbeatMs ?? Math.min(6e4, this.enclosure.ttlHours * 36e5 / 3);
+    const ms = this.options.heartbeatMs ?? Math.min(6e4, this.renewalWindowMs() / 3);
     this.timer = setInterval(() => {
       void this.heartbeat();
     }, ms);
     this.timer.unref();
   }
-  async heartbeat() {
+  heartbeat() {
     const e = this.enclosure;
-    if (!e?.lease || e.released || this.heartbeating) return;
+    if (!e?.lease || e.released || this.heartbeating) return this.renewal ?? Promise.resolve();
     this.heartbeating = true;
+    return this.renewal = this.renew(e, e.lease).finally(() => {
+      this.heartbeating = false;
+      this.renewal = void 0;
+    });
+  }
+  /** Stop renewing at the lease's own deadline; the VM is retained until the backend expires it. */
+  async stopRenewal(e) {
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = void 0;
+    }
+    if (this.enclosure !== e || e.released) return;
+    e.active = false;
+    await this.save();
+    await this.log("renewal-stopped", void 0, { reason: "the lease reached its own TTL", deadline: new Date(Date.parse(e.startedAt) + e.ttlHours * 36e5).toISOString(), expiresAt: e.expiresAt ?? e.lease?.ttl_expires_at });
+  }
+  async renew(e, lease) {
     try {
+      const remaining = this.remainingMs(e);
+      if (remaining < MIN_RENEWAL_MS) {
+        await this.stopRenewal(e);
+        return;
+      }
       this.assertBinding();
       await this.assertBackend();
-      const renewed = await this.vm.heartbeat(e.lease.vm, { ttl_hours: e.ttlHours }, { timeoutMs: 1e4 });
+      const renewed = await this.vm.heartbeat(lease.vm, { ttl_hours: Math.min(this.renewalWindowMs(), remaining) / 36e5 }, { timeoutMs: 1e4 });
       if (this.enclosure !== e || e.released) return;
       e.expiresAt = renewed.ttl_expires_at;
       e.guestState = renewed.state;
@@ -30079,8 +30162,6 @@ var RelayManager = class {
         }
       }).catch(() => {
       });
-    } finally {
-      this.heartbeating = false;
     }
   }
   async guarded(signal, fn) {
@@ -30147,7 +30228,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
         if (!Number.isSafeInteger(timeoutMs2) || timeoutMs2 < 1 || timeoutMs2 > 36e5) throw new Error("timeoutMs must be an integer from 1 to 3600000");
         if (input.diagnostic && input.kind !== "exec") throw new Error("diagnostic is only supported for exec");
         if (e.delivered) throw new Error("Evidence already sealed; release this VM explicitly");
-        if (input.diagnostic) return this.diagnostic(input, timeoutMs2);
+        if (input.diagnostic) return this.diagnostic(input, timeoutMs2, signal);
         if (e.pendingReset) throw new Error("Recording reset is pending; retry stage to reconcile it, or use diagnostic exec");
         if (!e.staged || !this.session || !this.transport) throw new Error("Use relay_stage before a run, or relay_exec diagnostic=true for setup diagnosis and repair");
         let argv2, callTimeoutMs = timeoutMs2;
@@ -30163,6 +30244,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
         this.transport.because = record3.because;
         this.transport.timeoutMs = input.kind === "mcp" ? callTimeoutMs + MCP_START_ALLOWANCE_MS + 15e3 : timeoutMs2;
         this.transport.diagnostic = false;
+        this.transport.signal = signal;
         const options2 = { step: record3.step, snapshots: record3.snapshots, cwd: join14(e.guestRoot, "workspace") };
         let result2;
         if (input.kind === "exec" || input.kind === "mcp") {
@@ -30460,7 +30542,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
     const marker = await transfer.checked([e.node, "-e", 'const fs=require("fs"),p=require("path");console.log(fs.existsSync(p.join(process.argv[1],"recordings",process.argv[2]))?"archived":"current");', e.guestRoot, reset.id]);
     const attempts = `${reset.from}.reset-attempts`;
     const incoming = join14(attempts, randomUUID7(), "state");
-    await transfer.pullVerified(marker.trim() === "archived" ? archive : join14(e.guestRoot, "state"), incoming, e.guestRoot, attempts);
+    await transfer.pullVerified(marker.trim() === "archived" ? archive : join14(e.guestRoot, "state"), incoming, e.guestRoot, attempts, { beforePull: (facts) => this.assertFreeSpace(reset.from, facts) });
     await this.imageStore().materializeDisplayOriginals(reset.from);
     await refreshEvidenceState(incoming, join14(reset.from, "state"), join14(attempts, "previous"));
     await this.log("recording-reset-intent", void 0, reset);
@@ -30496,6 +30578,29 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
       return this.extractInternal(names);
     }));
   }
+  /**
+   * finish's extraction: a declared output whose source does not exist in the
+   * guest (it was never produced) is recorded as incomplete and skipped, so a
+   * retry cannot fail the same way forever. Any other extraction failure, such
+   * as a transfer or checksum failure, still fails finish and keeps the VM,
+   * because the guest may hold the only good copy (docs/lifecycle-fixes.md).
+   */
+  async extractForFinish() {
+    const e = this.current(), incomplete = [];
+    for (const extraction of e.extractions) {
+      try {
+        await this.extractInternal([extraction.name]);
+      } catch (error2) {
+        const source = within(join14(e.guestRoot, "workspace"), extraction.path);
+        const missing = /ENOENT: no such file or directory, lstat '([^']+)'/.exec(String(error2))?.[1];
+        if (!missing || !(source === missing || source.startsWith(`${missing}/`))) throw error2;
+        incomplete.push({ name: extraction.name, path: extraction.path, error: String(error2) });
+        await this.log("extraction-incomplete", void 0, { name: extraction.name, path: extraction.path, missing: true, error: String(error2) });
+      }
+    }
+    if (e.fullWorkspace) await this.transfer().pullVerified(join14(e.guestRoot, "workspace"), join14(e.hostRoot, "extractions", "full-workspace", randomUUID7()), e.guestRoot, e.hostRoot);
+    return incomplete;
+  }
   async extractAvailable() {
     const e = this.current();
     for (const extraction of e.extractions) {
@@ -30515,12 +30620,25 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
       }
     }
   }
+  /**
+   * A precondition, not a limit (PS-D12): refuse to pull the relay state when
+   * the evidence volume cannot hold it, before any byte is pulled, so the disk
+   * is not filled part way and the VM stays for a retry after space is freed.
+   */
+  async assertFreeSpace(hostRoot, facts) {
+    const needed = facts.reduce((sum, fact) => sum + BigInt(fact.bytes), 0n);
+    const info = await (this.options.statfs ?? ((path) => statfs(path, { bigint: true })))(hostRoot);
+    const free = BigInt(info.bavail) * BigInt(info.bsize);
+    if (needed <= free) return;
+    const mib = (bytes) => `${(Number(bytes) / 1048576).toFixed(1)} MiB`;
+    throw new Error(`Not enough free space on the evidence volume at ${hostRoot}: the relay state needs ${needed} bytes (${mib(needed)}), ${free} bytes are free (${mib(free)}), short by ${needed - free} bytes (${mib(needed - free)}). Nothing of the state was pulled and the VM is kept; free space on that volume, then call relay_finish again.`);
+  }
   async packageInternal() {
     const e = this.current();
     if (!e.staged || !e.sessionId) throw new Error("No staged session to package");
     const attempts = `${e.hostRoot}.finalization-attempts`;
     const incoming = join14(attempts, randomUUID7(), "state");
-    await this.transfer().pullVerified(join14(e.guestRoot, "state"), incoming, e.guestRoot, attempts);
+    await this.transfer().pullVerified(join14(e.guestRoot, "state"), incoming, e.guestRoot, attempts, { beforePull: (facts) => this.assertFreeSpace(e.hostRoot, facts) });
     await this.imageStore().materializeDisplayOriginals(e.hostRoot);
     await refreshEvidenceState(incoming, join14(e.hostRoot, "state"), join14(attempts, "previous"));
     const result2 = await deliverPackage(e.hostRoot, { packageId: `pkg-${e.purpose}`, sessionId: e.sessionId, taskId: e.purpose });
@@ -30532,14 +30650,14 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
     return this.serialized(() => this.guarded(signal, async () => {
       const e = this.current();
       await this.log("finish");
+      let incomplete = [];
       if (!e.delivered) {
         await this.stopMcpHost("finish");
-        await this.extractInternal(e.extractions.map((item) => item.name));
-        if (e.fullWorkspace) await this.transfer().pullVerified(join14(e.guestRoot, "workspace"), join14(e.hostRoot, "extractions", "full-workspace", randomUUID7()), e.guestRoot, e.hostRoot);
+        incomplete = await this.extractForFinish();
       }
       const result2 = e.delivered ?? await this.packageInternal();
       await this.releaseInternal("finished");
-      return result2;
+      return incomplete.length ? { ...result2, incompleteExtractions: incomplete } : result2;
     }));
   }
   async fail(error2) {
@@ -30549,7 +30667,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
     await this.save();
     await this.log("operation-failed", void 0, { error: String(error2), leaseRetained: !e.released });
   }
-  async diagnostic(input, timeoutMs2) {
+  async diagnostic(input, timeoutMs2, signal) {
     const e = this.current();
     if (!input.argv?.length || input.snapshots?.group) throw new Error("Diagnostic exec requires argv and cannot join a snapshot group");
     const executionId = `diagnostic-${randomUUID7()}`;
@@ -30558,7 +30676,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
     let result2;
     try {
       const argv2 = e.staged ? ["/bin/sh", "-c", 'cd "$1" || exit; shift; exec "$@"', "relay-diagnostic", join14(e.guestRoot, "workspace"), ...input.argv] : input.argv;
-      const r = await this.channel.exec(e.lease.vm, argv2, timeoutMs2);
+      const r = await this.channel.exec(e.lease.vm, argv2, timeoutMs2, { signal });
       result2 = { executionId, outcome: { kind: "completed", exitStatus: { code: r.code, signal: null } }, output: r.stdout, outputStreams: "stdout and stderr combined" };
     } catch (error2) {
       result2 = { executionId, outcome: { kind: "uncertain", diagnostic: String(error2) }, output: "", outputStreams: "stdout and stderr combined" };
@@ -30573,6 +30691,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
       await this.init();
       this.assertBinding();
       await this.assertBackend();
+      if (!this.enclosure) return { active: false, ownedLease: false, released: false, diagnostic: NO_OWNED_LEASE };
       try {
         await this.log("release");
         if (this.enclosure?.staged && !this.enclosure.delivered) {
@@ -30660,14 +30779,52 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
       clearInterval(this.timer);
       this.timer = void 0;
     }
-    if (this.enclosure) {
-      this.enclosure.active = false;
+    const e = this.enclosure;
+    if (e) {
+      await this.finalRenewal(e);
+      e.active = false;
       await this.save();
-      await this.log("renewal-paused", void 0, { reason: reason2, expiresAt: this.enclosure.expiresAt ?? this.enclosure.lease?.ttl_expires_at });
+      await this.log("renewal-paused", void 0, { reason: reason2, expiresAt: e.expiresAt ?? e.lease?.ttl_expires_at });
+    }
+  }
+  /**
+   * H6: renewal renews only a short window, so pausing it renews once for the
+   * rest of the lease's own TTL, and the paused VM is retained until that TTL
+   * for an explicit finish or release. A failure is recorded, not thrown.
+   */
+  async finalRenewal(e) {
+    if (!e.lease || e.released) return;
+    await this.renewal?.catch(() => {
+    });
+    const remaining = this.remainingMs(e);
+    if (remaining < MIN_RENEWAL_MS) return;
+    try {
+      const renewed = await this.vm.heartbeat(e.lease.vm, { ttl_hours: remaining / 36e5 }, { timeoutMs: 1e4 });
+      if (this.enclosure === e && !e.released) {
+        e.expiresAt = renewed.ttl_expires_at;
+        e.guestState = renewed.state;
+      }
+    } catch (error2) {
+      await this.log("final-renewal-failed", void 0, { error: String(error2), expiresAt: e.expiresAt ?? e.lease.ttl_expires_at }).catch(() => {
+      });
     }
   }
   async settle() {
     return this.serialized(() => this.pause("Agent settled; VM retained until explicit release or backend expiration"));
+  }
+  /**
+   * Shutdown's last resort when an operation does not settle: pause renewal
+   * and release the owner lock without waiting for the queue. The process
+   * exits right after, so the abandoned operation cannot save again.
+   */
+  async pauseNow(reason2) {
+    this.shuttingDown = true;
+    try {
+      await this.pause(`${reason2}; an in-flight operation did not settle and was abandoned`);
+    } finally {
+      this.initialized = false;
+      await this.unlock();
+    }
   }
   async cleanup(reason2) {
     return this.serialized(async () => {
@@ -30887,14 +31044,14 @@ var relayTools = [
     action: "finish",
     title: "Finish and deliver evidence",
     annotations: acts(false, true),
-    description: "Complete the task: extract every declared output, deliver and verify a portable evidence package, then destroy the VM and unregister it. The result reports delivery, snapshot completeness, execution outcome and human review as separate facts; a verified package is not a passing test, and a delivered package is not itself human approval. Call this, or relay_release, explicitly before you return, since ending the session does not do it for you. A failed delivery keeps the VM for a corrected attempt."
+    description: "Complete the task: extract every declared output, deliver and verify a portable evidence package, then destroy the VM and unregister it. The result reports delivery, snapshot completeness, execution outcome and human review as separate facts; a verified package is not a passing test, and a delivered package is not itself human approval. Call this, or relay_release, explicitly before you return, since ending the session does not do it for you. A declared output that was never produced is listed in `incompleteExtractions` and does not stop the delivery; any other failed extraction or delivery keeps the VM for a corrected attempt."
   },
   {
     name: "relay_release",
     action: "release",
     title: "Release the VM",
     annotations: acts(false, true),
-    description: "Abandon the task: destroy the owned VM and unregister it, retaining whatever evidence already exists, without claiming the task succeeded. Use this instead of relay_finish when the task is not being completed. Safe to retry if a previous release attempt failed; a failed release keeps ownership until destruction is verified."
+    description: "Abandon the task: destroy the owned VM and unregister it, retaining whatever evidence already exists, without claiming the task succeeded. Use this instead of relay_finish when the task is not being completed. Safe to retry if a previous release attempt failed; a failed release keeps ownership until destruction is verified. When this session owns no lease, the result is an error saying that nothing was released; a lease acquired under another session identity is never guessed at."
   },
   {
     name: "relay_console_resolve",
@@ -31009,9 +31166,10 @@ async function relayCall(host, raw, options2 = {}) {
     case "finish":
       value = await manager.finish(signal);
       break;
-    case "release":
-      value = await manager.release();
-      break;
+    case "release": {
+      const released = await manager.release();
+      return { ...await renderRelayResult(released), isError: "ownedLease" in released && released.ownedLease === false };
+    }
   }
   return { ...await renderRelayResult(value), isError: false };
 }
@@ -31333,7 +31491,7 @@ var ReviewServer = class {
 
 // src/server.ts
 var SERVER_NAME = "relay";
-var SERVER_VERSION = true ? "0.6.1" : JSON.parse(readFileSync(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8")).version;
+var SERVER_VERSION = true ? "0.6.2" : JSON.parse(readFileSync(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8")).version;
 var STATUS_TOOL = "relay_status";
 var TRAJECTORY_TOOL = "relay_trajectory";
 var PLUGIN_TOOL_PREFIX = "mcp__plugin_mcp-vm-relay_relay__";
@@ -31370,6 +31528,8 @@ function allToolDefinitions() {
     trajectoryToolDefinition
   ];
 }
+var SHUTDOWN_GRACE_MS = 12e4;
+var SHUTDOWN_CANCEL_MS = 5e3;
 var reviewApp = true ? async () => 'var Z=e=>({...e,details:new Map(Object.entries(e.details))}),se=/\\.(json|jsonl|ndjson|log|txt|md|csv|tsv|ya?ml|xml|toml)$/i,l=e=>String(e??"").replace(/[&<>"\']/g,t=>({"&":"&amp;","<":"&lt;",">":"&gt;",\'"\':"&quot;","\'":"&#39;"})[t]),j=e=>l(e.split("/").map(encodeURIComponent).join("/")),Q=e=>`#step-${encodeURIComponent(e.id)}`,F=e=>e&&Number.isFinite(Date.parse(e))?new Date(e).toISOString().slice(11,19):void 0,ee=e=>e&&Number.isFinite(Date.parse(e))?new Date(e).toISOString().slice(11,23):void 0,te=e=>e<6e4?`${(e/1e3).toFixed(1)} s`:`${Math.floor(e/6e4)} min ${Math.round(e%6e4/1e3)} s`,le=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],K=(e,t=!1)=>{let i=new Date(e),a=o=>String(o).padStart(2,"0");return`${le[i.getUTCMonth()]} ${i.getUTCDate()}, ${t?`${i.getUTCFullYear()}, `:""}${a(i.getUTCHours())}:${a(i.getUTCMinutes())} UTC`},de=\'<svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><rect x="3.5" y="4.5" width="11.5" height="9" rx="1.5" fill="none" stroke="#fff" stroke-width="1.6"/><rect x="9" y="10.5" width="11.5" height="9" rx="1.5" fill="#fff"/><path d="M12 15h5M15.2 13.2l1.8 1.8-1.8 1.8" fill="none" stroke="#007aff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>\',H=e=>e>=1e6?`${(e/1e6).toFixed(1)} MB`:e>=1e3?`${(e/1e3).toFixed(1)} kB`:`${e} B`,O=(e,t)=>e===1?t:`${t}s`,ce=(e,t)=>`${e} ${O(e,t)}`,q=e=>D(e.execution)!=="ok",D=e=>["passed","complete","completed"].includes(e)?"ok":["failed","refused"].includes(e)?"bad":"warn",N=e=>`<span class="verdict ${D(e)}"><i aria-hidden="true"></i>${l(e)}</span>`,pe=e=>/^[\\w@%+=:,./-]+$/.test(e)?e:`\'${e.replace(/\'/g,"\'\\\\\'\'")}\'`;function me(e){let t=i=>Date.parse(e.details.get(i.id)?.at??"");return e.steps.map((i,a)=>({step:i,index:a})).sort((i,a)=>(Number.isFinite(t(i.step))?t(i.step):1/0)-(Number.isFinite(t(a.step))?t(a.step):1/0)||i.index-a.index).map(({step:i})=>i)}function ge(e){let t=new Map;for(let a of e){let o=/^(diagnostic|request|action) (\\S+) (.*)$/.exec(a),g=o?`${o[1]} ${o[3]}`:a,m=t.get(g)??{sentence:a,ids:[]};o&&m.ids.push(o[2]),t.set(g,m)}let i=a=>a.replace(/^./,o=>o.toUpperCase());return[...t.entries()].map(([a,o])=>{if(o.ids.length<2)return{text:i(o.sentence),ids:[]};let[g,...m]=a.split(" "),h=m.join(" ").replace(/^has /,"have ").replace(/^is /,"are ").replace(/^lacks /,"lack ");return{text:`${o.ids.length} ${g}s ${h}`,ids:o.ids}})}function W(e,t){let i=t?.argv?.length?t.argv.map(pe).join(" "):void 0,a=!!i&&(e.title==="Diagnostic command"||e.title.startsWith("exec ")),o=a&&e.because?e.because:e.title,g=o.split(`\n`)[0].trimEnd(),m=g.length>140?`${g.slice(0,139).trimEnd()}\\u2026`:g===o?o:`${g} \\u2026`,h=e.inputMode==="diagnostic"?"Diagnostic":i&&!e.snapshots?"Command":"Action";return{headline:m,command:i??(m===o?void 0:o),reasonShown:!(a&&e.because),kind:h}}function fe(e){let t=/^Authoritative receipt outcomes: (\\[.*\\])$/m.exec(e??"");if(t)try{let i=new Set;return JSON.parse(t[1]).filter(a=>{let o=JSON.stringify(a);return i.has(o)?!1:(i.add(o),!0)})}catch{return}}var Y=(e,t)=>`<span class="exit ${e.code===0&&!t?"ok":"bad"}">exit ${l(e.code??"none")}${e.signal?` \\xB7 ${l(e.signal)}`:""}${t?" \\xB7 timed out":""}</span>`;function ue(e,t,i=!0){let a=l(e.observed??"No confirmed result"),o=`<details class="raw"><summary>Receipt as recorded</summary><pre>${a}</pre></details>`;if(t){let m=t.exit===void 0?"":Y({code:t.exit,signal:t.signal},t.timedOut),h=i?_(t):"";return`${m}${h||(i?\'<p class="quiet">No output.</p>\':"")}${o}`}let g=fe(e.observed);return g?.length?`<ul class="receipts">${g.map(m=>`<li>${N(m.execution??m.outcome?.kind??"unknown")}${m.outcome?.exitStatus?Y(m.outcome.exitStatus):""}${m.outcome?.diagnostic?`<span class="diag">${l(m.outcome.diagnostic)}</span>`:""}</li>`).join("")}</ul>${o}`:`<pre class="plain">${a}</pre>`}var _=e=>["stdout","stderr"].filter(t=>e[t]?.trim()).map(t=>`<div class="stream"><span class="label">${t}</span><pre>${l(e[t].trimEnd())}</pre></div>`).join("");function U(e){let t=Date.parse(e?.afterAt??"")-Date.parse(e?.beforeAt??"");return Number.isFinite(t)&&t>=0?te(t):void 0}var V=(e,t)=>`lightbox-${e.id}--${t}`,G=e=>l(e).replace(/^Step (\\d+)/,\'Step <span class="d">$1</span>\'),he=\'<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M9.5 2.5h4v4M6.5 13.5h-4v-4M13.5 2.5 9 7M2.5 13.5 7 9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>\';function X(e){let t=(i,a)=>i?`<button type="button" class="lb-nav ${a}" popovertarget="${l(i.id)}" aria-label="${a==="prev"?"Previous":"Next"}: ${l(i.label)}, ${l(i.title)}"><span class="dir" aria-hidden="true">${a==="prev"?"\\u2039":"\\u203A"}</span><span class="role">${G(i.nav??i.label)}</span></button>`:"";return e.map((i,a)=>`<div class="lightbox" id="${l(i.id)}" data-step="${l(i.step)}" popover><div class="lb-body">${i.body}</div>${t(e[a-1],"prev")}<p class="lb-cap"><span class="label">${G(i.label)}</span>${i.caption}<button type="button" class="close" popovertarget="${l(i.id)}" popovertargetaction="hide" aria-label="Close">\\xD7</button></p>${t(e[a+1],"next")}</div>`).join(`\n`)}function be(e,t,i){return e.flatMap(a=>{let o=t.details.get(a.id),g=i.get(a.id),{headline:m,command:h}=W(a,o),b=c=>`step-${a.id}--${c}`;if(!a.snapshots){let c=F(o?.at);return[{id:V(a,"command"),step:b("command"),label:`Step ${g} \\xB7 ${a.inputMode==="diagnostic"?"Diagnostic":"Command"}`,title:m,body:`<div class="lb-term"><pre class="lb-cmd"><span class="prompt" aria-hidden="true">$</span>${l(h??m)}</pre>${o?.output?_(o.output)||\'<p class="quiet">No output.</p>\':""}</div>`,caption:c?`<time>${c} UTC</time>`:""}]}return["before","after"].filter(c=>a.snapshots?.[c]).map(c=>{let w=a.snapshots[c],x=c==="before"?"Before":"After",y=ee(c==="before"?o?.beforeAt:o?.afterAt);return{id:V(a,c),step:b(c),label:`Step ${g} \\xB7 ${x}`,title:m,body:`<img loading="lazy" alt="${x} dispatch snapshot, enlarged" src="${j(w)}">`,caption:`${y?`<time>${y}</time>`:""}<a href="${j(w)}">Open the original</a>`}})})}function ve(e){let t=[];for(let i of e)(i.snapshots?["before","after"]:["command"]).forEach((a,o)=>t.push({step:i,role:a,id:`step-${i.id}--${a}`,index:t.length,first:o===0}));return t}var re=e=>`#${encodeURIComponent(e.id)}`,I=e=>e.role==="before"?"Before":e.role==="after"?"After":e.step.inputMode==="diagnostic"?"Diagnostic":"Command";function xe(e,t,i,a){let o=e.step,{headline:g,command:m}=W(o,t),h=i.get(o.id),b=r=>i.get(r.step.id),c=(r,s,d)=>r?`<a class="arrow ${s} ${d}" href="${l(re(r))}" aria-label="${s==="prev"?"Previous":"Next"}${d==="errs"?" with errors":""}: step ${b(r)}, ${I(r).toLowerCase()}">${s==="prev"?"\\u2039":"\\u203A"}</a>`:"",w=c(a.previous,"prev","all")+c(a.next,"next","all")+c(a.previousError,"prev","errs")+c(a.nextError,"next","errs"),x=U(t),y=e.role==="command"?F(t?.at)?`${F(t?.at)} UTC`:void 0:ee(e.role==="before"?t?.beforeAt:t?.afterAt),E=`<div class="vlabel"><span class="badge" data-role="${e.role}"><span class="role">${I(e)}</span>${y?`<time>${y}</time>`:""}</span></div>`,T=`<h2 class="sname" title="${l(g)}"><span class="d">${h}</span><span class="h">${l(g)}</span>${x?`<span class="took" title="Time from the before snapshot to the after snapshot">${x}</span>`:""}</h2>`,C=`<section class="stage view${e.role==="command"?" terminal":""}${e.first?" first":""}" id="${l(e.id)}" data-v="${e.index}" aria-label="Step ${h}, ${I(e).toLowerCase()}">${w}${T}`;if(e.role==="command")return`${C}<div class="term"><div class="term-bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span>${o.inputMode==="diagnostic"?"Diagnostic command":"Command"} \\xB7 no snapshots</span><button type="button" class="enlarge" popovertarget="${l(V(o,"command"))}" title="Enlarge the command">${he}Enlarge</button></div>\n<pre class="term-cmd"><span class="prompt" aria-hidden="true">$</span>${l(m??g)}</pre>${t?.output?_(t.output)||\'<p class="quiet">No output.</p>\':""}\n<p class="term-note">${o.inputMode==="diagnostic"?"Screenshots were not requested for this diagnostic.":"No snapshots were captured for this step."}</p></div>${E}</section>`;let R=o.snapshots?.[e.role],L=R?`<button type="button" class="zoom" popovertarget="${l(V(o,e.role))}" title="Enlarge the ${e.role} snapshot"><img alt="${I(e)} dispatch snapshot" src="${j(R)}"></button>`:`<div class="void">${I(e)}: unavailable \\u2014 incomplete evidence</div>`;return`${C}<div class="solo">${L}</div>${E}</section>`}var ae=e=>e?`<p class="do"><b>What you can do:</b> ${l(e)}</p>`:"";function we(e,t,i,a,o){let{headline:g,command:m,reasonShown:h,kind:b}=W(e,t),c=e.snapshots?.declaredAfterIntervalMs,w=F(t?.at),x=(y,E)=>`<div><dt>${y}</dt><dd>${E}</dd></div>`;return`<aside class="panel" aria-label="Step ${i} details"><div class="panel-scroll">\n<div class="stephead"><h2 class="stepno"><span class="n">Step <span class="d">${i}</span></span> <span class="of">of <span class="d">${String(a).padStart(2,"0")}</span></span></h2><a class="permalink" href="${l(Q(e))}" title="Stable link to this step" aria-label="Stable link to step ${i}">${ye}</a></div>\n<p class="meta"><span>${b}</span>${w?`<time>${w} UTC</time>`:""}<span class="state"><span class="sr">Execution: </span>${N(e.execution)}</span></p>\n${o.length?`<section class="concern"><h3>Why this step affects the verdicts</h3><ul>${o.map(y=>`<li><span class="label">${l(y.verdict)}</span><p>${l(y.text)}</p>${ae(y.action)}</li>`).join("")}</ul></section>`:""}\n${h?`<section class="block"><h3>Reason</h3><p>${l(e.because??"Not present in retained host metadata")}</p></section>`:""}\n${m&&e.snapshots?`<section class="block"><h3>Command</h3><pre class="command">${l(m)}</pre></section>`:""}\n<section class="block"><h3>Expected</h3><p>${l(e.expected||"Not supplied")}</p></section>\n<section class="block"><h3>Observed</h3>${ue(e,t?.output,!!e.snapshots)}</section>\n<dl class="facts">${x("State",l(e.state))}${x("Input",l(e.inputMode))}${x("After interval",c===void 0?"unavailable":`${c} ms`)}${U(t)?x("Before to after",U(t)):""}${e.snapshots?.groupId?x("Group",l(e.snapshots.groupId)):""}</dl>\n</div></aside>`}var ye=\'<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M6.6 9.4l2.8-2.8M7.2 4.6l.9-.9a2.8 2.8 0 0 1 4 4l-.9.9M8.8 11.4l-.9.9a2.8 2.8 0 0 1-4-4l.9-.9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>\',$e=\'<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7.2 8 10.4l3.2-3.2M3 13h10" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>\';function ke(e,t,i,a,o){let{headline:g,command:m}=W(e,t),h=U(t),b=o.map((c,w)=>{let x=c.role==="command"?void 0:e.snapshots?.[c.role],y=c.role==="command"?`<pre aria-hidden="true"><span class="prompt">$</span>${l(m??g)}</pre>`:x?`<img loading="lazy" alt="" src="${j(x)}">`:`<span class="none">No ${c.role} snapshot</span>`;return`<a data-t="${c.index}" href="${l(re(c))}" title="${l(`Step ${i} \\xB7 ${I(c)} \\xB7 ${g}`)}"><span class="face${c.role==="command"?" text":""}">${y}${c.role==="command"?"":`<span class="role">${I(c)}</span>`}${a&&w===0?\'<span class="flag" title="This step affects the verdicts">!</span>\':""}</span></a>`}).join("");return`<li class="${D(e.execution)}${e.inputMode==="diagnostic"?" diagnostic":""}${q(e)?" err":""}"><div class="faces">${b}</div><span class="cap"><span class="n">${i}</span><i class="dot" aria-hidden="true"></i><span class="t">${l(g)}</span>${h?`<span class="took">${h}</span>`:""}</span><span class="sr">${l(e.execution)}</span></li>`}var Se=(e,t,i)=>e?Array.from({length:e},(a,o)=>`.app:has(.center>.step:nth-of-type(${o+1}):target) .track li:nth-child(${o+1}),.app:has(.center>.step:nth-of-type(${o+1}) :target) .track li:nth-child(${o+1})`).join(",")+",.app:not(:has(.center :target)) .track li:first-child{background:rgba(0,122,255,.08)}"+[...Array.from({length:i},(a,o)=>`.app:has([data-v="${o}"]:target) .track [data-t="${o}"] .face`),...t.map(a=>`.app:has(.center>.step[data-first="${a}"]:target) .track [data-t="${a}"] .face`),\'.app:not(:has(.center :target)) .track [data-t="0"] .face\'].join(",")+"{box-shadow:0 0 0 1px var(--ink),0 0 0 4px var(--tab)}":"";function Me(e,t){let i=l(t.label);return`<div class="fwin" id="${e}" data-step="overview" data-src="${t.href}" popover aria-label="${i}"><div class="fw-card"><div class="fw-bar"><span class="fw-name" title="${i}">${i}</span><span class="fw-note" title="The download is the original file" hidden>Formatted</span><span class="size">${H(t.bytes)}</span><a class="fw-dl" href="${t.href}" download="${l(t.name)}">${$e}<span>Download</span></a><button type="button" class="close" popovertarget="${e}" popovertargetaction="hide" aria-label="Close">\\xD7</button></div><pre class="fw-body"><span class="quiet">Reading the file\\u2026</span></pre></div></div>`}function ne(e){let t=me(e),i=new Map(t.map((n,p)=>[n.id,String(p+1).padStart(2,"0")])),a=ve(t),o=t.map(n=>Date.parse(e.details.get(n.id)?.at??"")).filter(Number.isFinite),g=t.filter(n=>n.inputMode==="diagnostic").length,m=t.length-g,h=t.filter(q).length,b=o.length?new Date(Math.min(...o)).toISOString():void 0,c=new Map,w=e.reasons.defects??[];for(let[n,p]of[["snapshots",`Snapshots ${e.completeness}`],["execution",`Execution ${e.execution}`],["defects","Relay defect"]])for(let f of n==="defects"?w:e.reasons[n])for(let M of f.stepIds)c.set(M,[...c.get(M)??[],{verdict:p,text:f.text,action:f.action}]);let x=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,y=new Map;for(let n of e.outputs){let[,p="",...f]=n.path.split("/");y.set(p,[...y.get(p)??[],{...n,label:f.filter(M=>!x.test(M)).join("/")||n.path.split("/").at(-1)}])}let E=[],T=[],C=(n,p)=>(T.push(Me(n,p)),`<button type="button" class="fopen" popovertarget="${n}" title="View ${l(p.name)}">${l(p.label)}</button>`),R=n=>se.test(n.path)?C(`window-output-${T.length+1}`,{href:j(n.path),label:n.label,name:n.label.split("/").at(-1),bytes:n.bytes}):`<a href="${j(n.path)}">${l(n.label)}</a>`,L=[...y].map(([n,p])=>{let f=p.filter(k=>/\\.(png|jpe?g|webp|gif)$/i.test(k.path)),M=p.filter(k=>!f.includes(k)),oe=p.reduce((k,P)=>k+P.bytes,0);return`<details class="group"${e.outputs.length<=12?" open":""}><summary><span class="where">${l(n)}</span><span class="count">${ce(p.length,"file")} \\xB7 ${H(oe)}</span></summary>${M.length?`<ul class="flist">${M.map(k=>`<li>${R(k)}<span>${H(k.bytes)}</span></li>`).join("")}</ul>`:""}${f.length?`<div class="gallery">${f.map(k=>{let P=`lightbox-output-${E.length+1}`,J=k.label.split("/").at(-1);return E.push({id:P,step:"overview",label:n,title:k.label,nav:J,body:`<img loading="lazy" alt="${l(k.label)}, enlarged" src="${j(k.path)}">`,caption:`<span class="file">${l(k.label)}</span><span class="size">${H(k.bytes)}</span><a href="${j(k.path)}">Open the original</a>`}),`<button type="button" class="gthumb" popovertarget="${P}" title="Enlarge ${l(J)}"><img loading="lazy" alt="${l(k.label)}" src="${j(k.path)}"><span>${l(J)}<small>${H(k.bytes)}</small></span></button>`}).join("")}</div>`:""}</details>`}).join(""),r={"manifest.json":"Checksums of every artifact","OPENING.txt":"How to review this package","summary.json":"Verdicts as an earlier relay derived them","trajectory.json":"Steps as an earlier relay derived them","walkthrough.json":"Steps as an earlier relay derived them"},s=e.files.map(n=>`<li>${C(`window-${n.path.replace(/\\W+/g,"-")}`,{href:j(n.path),label:n.path,name:n.path.split("/").at(-1),bytes:n.bytes})}${r[n.path]?`<span>${r[n.path]}</span>`:""}</li>`).join(""),d=(n,p)=>`<li><b>${p}</b>${n?` <span>${n}</span>`:""}</li>`,u=n=>[...n.reduce((p,f)=>p.set(f.text,{...f,stepIds:[...new Set([...p.get(f.text)?.stepIds??[],...f.stepIds])]}),new Map).values()],$=n=>n.map(p=>`<a href="${l(`#step-${encodeURIComponent(p)}`)}">Step <span class="d">${i.get(p)??"?"}</span></a>`).join(""),v=n=>`<ul class="reasons">${u(n).map(p=>`<li><p>${l(p.text)}</p>${ae(p.action)}${p.stepIds.length?`<p class="steps">${$(p.stepIds)}</p>`:""}</li>`).join("")}</ul>`,S=(n,p)=>n==="snapshots"?`Why snapshots are ${p}`:p==="failed"?"Why execution failed":`Why execution is ${p}`,z=(n,p,f)=>e.reasons[n].length?`<li class="pill ${D(f)}"><button type="button" popovertarget="why-${n}" title="${S(n,f)}"><span>${p}</span>${N(f)}<span class="q" aria-hidden="true">?</span></button><div class="why" id="why-${n}" popover><h3>${S(n,f)}</h3>${v(e.reasons[n])}</div></li>`:`<li class="pill ${D(f)}"><span>${p}</span>${N(f)}</li>`,A=(n,p,f,M)=>`<div class="vblock"><h4>${p} ${N(f)}</h4>${e.reasons[n].length?`<p class="vwhy">${S(n,f)}:</p>${v(e.reasons[n])}`:`<p class="quiet">${M}</p>`}</div>`,B=`<article class="step overview" id="overview"><section class="stage doc" aria-label="Package overview"><div class="doc-in">\n<h2>Overview</h2><p class="lede">Delivery integrity is separate from execution success. Snapshots are dispatch-time evidence, not continuous video: each shows the screen just before a step was sent and shortly after it returned.</p>\n<section class="block"><h3>Verdicts</h3>${A("snapshots","Snapshots",e.completeness,"Every snapshot the steps declared is present and tied to its step.")}${A("execution","Execution",e.execution,"Every step completed, and every retained receipt confirms it.")}</section>\n${w.length?`<section class="block"><h3>Relay defects <span class="count">${u(w).length}</span></h3><div><p class="vwhy">These are faults in the relay\'s own records, not in the run, and they change no verdict.</p>${v(w)}</div></section>`:""}\n<section class="block"><h3>Findings as recorded <span class="count">${e.findings.length}</span></h3>${e.findings.length?`<ul class="findings">${ge(e.findings).map(n=>`<li>${n.ids.length?`<details><summary>${l(n.text)}</summary><code>${n.ids.map(l).join("<br>")}</code></details>`:l(n.text)}</li>`).join("")}</ul>`:\'<p class="quiet">No findings.</p>\'}</section>\n<section class="block"><h3>Declared outputs <span class="count">${e.outputs.length}</span></h3>${L?`<div class="outputs">${L}</div>`:\'<p class="quiet">No declared outputs were delivered.</p>\'}</section>\n<section class="block"><h3>Package</h3><div class="package"><dl class="ids"><div><dt>Package</dt><dd>${l(e.packageId)}</dd></div><div><dt>Task</dt><dd>${l(e.taskId)}</dd></div><div><dt>Session</dt><dd>${l(e.sessionId)}</dd></div>${b?`<div><dt>Started</dt><dd>${K(b,!0)}</dd></div>`:""}</dl>\n<ul class="files">${s}</ul></div></section></div></section></article>`;return{title:`Relay review: ${e.packageId}`,selection:Se(t.length,a.filter(n=>n.first).map(n=>n.index),a.length),html:`<div class="app">\n<header class="top"><div class="brand"><span class="mark" aria-hidden="true">${de}</span><h1 title="${l(e.packageId)}">Relay</h1>\n<ul class="stats">${d(O(t.length,"step"),String(t.length))}${d(O(m,"action"),String(m))}${d(O(g,"diagnostic"),String(g))}${b?`<li class="at"><time datetime="${b}" title="Started ${b}">${K(b)}</time><span class="local" hidden><span class="sep" aria-hidden="true">\\xB7</span><time datetime="${b}" data-local title="Started, in your time zone"></time></span></li>`:""}${o.length?d("",te(Math.max(...o)-Math.min(...o))):""}</ul></div>\n<nav class="tabs mid" aria-label="View"><a class="t-traj" href="${t[0]?l(Q(t[0])):"#"}">Trajectory</a><a class="t-over" href="#overview">Overview<span class="${e.findings.length?"has":""}">${e.findings.length}</span></a></nav>\n<ul class="pills"><li class="keys" title="Keyboard shortcuts"><kbd aria-label="Left arrow">\\u2190</kbd><kbd aria-label="Right arrow">\\u2192</kbd><span>Steps</span><kbd>Space</kbd><span>Enlarge</span></li>${z("snapshots","Snapshots",e.completeness)}${z("execution","Execution",e.execution)}</ul></header>\n<main class="center">${h?\'<label class="focus" title="Highlight the steps with errors, and move between them with the arrows"><input type="checkbox" id="focus-errors">Focus on errors</label>\':""}${t.map(n=>{let p=a.filter(f=>f.step===n);return`<article id="step-${l(n.id)}" data-first="${p[0].index}" class="step ${D(n.execution)}${q(n)?" err":""}">${p.map(f=>xe(f,e.details.get(n.id),i,{previous:a[f.index-1],next:a[f.index+1],previousError:a.slice(0,f.index).findLast(M=>q(M.step)),nextError:a.slice(f.index+1).find(M=>q(M.step))})).join("")}${we(n,e.details.get(n.id),i.get(n.id),t.length,c.get(n.id)??[])}</article>`}).join(`\n`)}\n${B}</main>\n<footer class="track" aria-label="Steps"><ol>${t.map(n=>ke(n,e.details.get(n.id),i.get(n.id),c.has(n.id),a.filter(p=>p.step===n))).join("")}</ol></footer>\n</div>\n${X(be(t,e,i))}\n${X(E)}${T.join("")}`}}function ie(e=document){let t=()=>[...e.querySelectorAll(".center .view")],i=()=>matchMedia("(prefers-reduced-motion: reduce)").matches,a=r=>r.querySelector(".lb-body>*"),o=r=>r?e.getElementById(r.getAttribute("popovertarget")??""):null,g=r=>{for(let s of e.querySelectorAll(".zoom,.enlarge,.gthumb")){if(s.getAttribute("popovertarget")!==r.id)continue;let d=s.classList.contains("enlarge")?s.closest(".term"):s.querySelector("img");if(d&&d.getBoundingClientRect().width)return d}return null},m=r=>{let s=r.getBoundingClientRect();if(!(r instanceof HTMLImageElement)||getComputedStyle(r).objectFit!=="contain"||!r.naturalWidth||!r.naturalHeight)return s;let d=Math.min(s.width/r.naturalWidth,s.height/r.naturalHeight),u=r.naturalWidth*d,$=r.naturalHeight*d;return{left:s.left+(s.width-u)/2,top:s.top+(s.height-$)/2,width:u,height:$}},h=(r,s)=>{let d=getComputedStyle(r).transform;r.style.transition="none",r.style.transform="none";let u=r.getBoundingClientRect(),$=m(s);if(r.style.transform=d==="none"?"":d,r.getBoundingClientRect(),r.style.transition="",!u.width)return"";let v=$.width/u.width;return`translate(${$.left+$.width/2-u.left-u.width*v/2}px,${$.top+$.height/2-u.top-u.height*v/2}px) scale(${v})`},b=null,c=0,w=()=>{b&&(b.style.visibility=""),b=null},x=r=>{c++,w();let s=i()?null:g(r);r.toggleAttribute("data-flip",!!s),r.showPopover();let d=a(r);if(d&&(d.style.opacity=""),s&&d){let u=h(d,s);d.style.transition="none",d.style.transform=u,d.getBoundingClientRect(),d.style.transition="",d.style.transform="",s.style.visibility="hidden",b=s}},y=r=>{if(r.hasAttribute("data-instant"))return;let s=a(r),d=b,u=++c;d&&s&&!i()&&d.getBoundingClientRect().width?(r.setAttribute("data-flip",""),s.style.transform=h(s,d),setTimeout(()=>{u===c&&(w(),s.style.transition="transform .36s cubic-bezier(.3,.9,.3,1),opacity .1s linear",s.style.opacity="0")},240)):(r.removeAttribute("data-flip"),w()),setTimeout(()=>{u===c&&!r.matches(":popover-open")&&s&&(s.style.transform="",s.style.transition="",s.style.opacity="")},520)};e.querySelectorAll(".lightbox").forEach(r=>r.addEventListener("beforetoggle",s=>{s.newState==="closed"&&y(r)}));let E=r=>{let s=r.closest(".lightbox"),d=o(r);if(!d)return;let u=[s,d].filter(z=>!!z);u.forEach(z=>z.setAttribute("data-instant","")),c++,w(),s&&s.hidePopover();let $=d.dataset.step;$&&decodeURIComponent(location.hash.slice(1))!==$&&(location.hash=encodeURIComponent($));let v=a(d);v&&(v.style.transform="",v.style.transition="",v.style.opacity=""),d.showPopover();let S=g(d);S&&(S.style.visibility="hidden",b=S),setTimeout(()=>u.forEach(z=>z.removeAttribute("data-instant")),60)};e.querySelectorAll(".fwin").forEach(r=>r.addEventListener("beforetoggle",s=>{s.newState==="open"&&Ee(r)})),e.addEventListener("click",r=>{let s=r.target instanceof Element?r.target:null,d=s?.closest(".lb-nav");if(d){r.preventDefault(),E(d);return}let u=o(s?.closest(".zoom,.enlarge,.gthumb")??null);if(u){r.preventDefault(),x(u);return}s instanceof HTMLElement&&(s.classList.contains("lightbox")||s.classList.contains("fwin"))&&s.hidePopover()});try{e.querySelectorAll("time[data-local]").forEach(r=>{let s=new Date(r.dateTime);if(isNaN(s.getTime())||!s.getTimezoneOffset())return;r.textContent=new Intl.DateTimeFormat(void 0,{...s.getFullYear()!==s.getUTCFullYear()?{year:"numeric"}:{},month:"short",day:"numeric",hour:"numeric",minute:"2-digit",timeZoneName:"short"}).format(s);let d=r.closest("[hidden]");d&&(d.hidden=!1)})}catch{}let T=()=>{let r=null;try{r=e.getElementById(decodeURIComponent(location.hash.slice(1)))}catch{}if(!r)return 0;let s=r.classList.contains("step")?r.querySelector(".view.first"):r.closest(".view");return s?t().indexOf(s):-1},C=()=>!!e.getElementById("focus-errors")?.checked,R="",L=()=>{let r=T();r<0||(R=location.hash,e.querySelector(`.track a[data-t="${r}"]`)?.scrollIntoView({block:"nearest",inline:"nearest"}))};e.addEventListener("keydown",r=>{if(r.defaultPrevented||r.altKey||r.ctrlKey||r.metaKey||r.shiftKey)return;let s=r.target;if(s instanceof HTMLElement&&(s.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(s.tagName)))return;let d=e.querySelector(".lightbox:popover-open");if(r.key===" "){if(d){r.preventDefault(),r.repeat||d.hidePopover();return}let S=s instanceof Element?s.closest(".zoom,.enlarge,.gthumb"):null;if(s instanceof Element&&!S&&(s.closest("summary")||s.closest("button"))||(r.preventDefault(),r.repeat))return;if(S?.classList.contains("gthumb")){let n=o(S);n&&x(n);return}let z=T(),A=z<0?null:t()[z],B=A&&e.getElementById(A.id.replace(/^step-/,"lightbox-"));B&&x(B);return}let u=r.key==="ArrowRight"?1:r.key==="ArrowLeft"?-1:0;if(!u)return;if(d){r.preventDefault();let S=d.querySelector(u<0?".lb-nav.prev":".lb-nav.next");S&&E(S);return}let $=t(),v=T();if(!(v<0)){do v+=u;while(v>=0&&v<$.length&&C()&&!$[v].closest(".step").classList.contains("err"));v<0||v>=$.length||(r.preventDefault(),location.hash=encodeURIComponent($[v].id))}}),e.querySelector(".tabs .t-traj")?.addEventListener("click",r=>{R&&(r.preventDefault(),location.hash=R)}),addEventListener("hashchange",()=>{let r="";try{r=decodeURIComponent(location.hash.slice(1))}catch{}e.querySelectorAll(":popover-open").forEach(s=>{s.dataset.step!==r&&s.hidePopover()}),L()}),L()}async function Ee(e){if(e.dataset.filled)return;e.dataset.filled="reading";let t=e.querySelector(".fw-body"),i=e.querySelector(".fw-note");try{let a=await fetch(e.dataset.src);if(!a.ok)throw new Error(`${a.status}`);let o=new Uint8Array(await a.arrayBuffer()),g=o.length>1e6,m=new TextDecoder().decode(g?o.subarray(0,1e6):o);if(!g&&/\\.json$/i.test(e.dataset.src))try{let h=JSON.stringify(JSON.parse(m),null,2);h!==m.trimEnd()&&(m=h,i.hidden=!1)}catch{}t.textContent=m,m||(t.innerHTML=\'<span class="quiet">Empty file.</span>\'),g&&t.insertAdjacentHTML("beforeend",`\n<span class="quiet">Showing the first megabyte; download the file for the rest.</span>`),e.dataset.filled="done"}catch{t.innerHTML=\'<span class="quiet">The file could not be read.</span>\',delete e.dataset.filled}}async function ze(){let[,e="",t=""]=location.pathname.split("/");try{let i=await fetch(`/.api/${e}/${t}.json`);if(!i.ok)throw new Error(`The review server answered ${i.status}.`);let a=ne(Z(await i.json()));document.title=a.title;let o=new CSSStyleSheet;o.replaceSync(a.selection),document.adoptedStyleSheets=[...document.adoptedStyleSheets,o],document.body.innerHTML=a.html}catch(i){let a=document.createElement("p");a.className="loading",a.textContent=`The trajectory could not be loaded. ${i instanceof Error?i.message:""}`,document.body.replaceChildren(a);return}location.hash&&location.replace(location.hash),ie()}ze();\n' : /* @__PURE__ */ (() => {
   let script;
   return () => script ??= null.then((m) => m.buildReviewApp());
@@ -31396,6 +31556,7 @@ function createRelayServer(options2 = {}) {
     const service = environment?.profile.vmServiceUrl ?? process.env.MCP_VM_RELAY_URL ?? "http://localhost:6240";
     return { ...manager ? manager.status() : { active: false }, project, service, environment: environment?.identity };
   };
+  const shutdownController = new AbortController();
   const server = new Server({ name: SERVER_NAME, version: SERVER_VERSION }, { capabilities: { tools: {} }, instructions });
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: allToolDefinitions() }));
   server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
@@ -31412,7 +31573,7 @@ function createRelayServer(options2 = {}) {
         await (options2.open ?? openInBrowser)(address);
         return text3(`Opened the review of verified package ${root} at ${address}. It is served while this relay runs. Human review remains pending.`);
       }
-      if (relayTools.some((tool) => tool.name === name)) return relayContent(await relayCall(get, relayToolInput(name, args ?? {}), { signal: extra.signal, toolCallId: String(extra.requestId) }));
+      if (relayTools.some((tool) => tool.name === name)) return relayContent(await relayCall(get, relayToolInput(name, args ?? {}), { signal: AbortSignal.any([extra.signal, shutdownController.signal]), toolCallId: String(extra.requestId) }));
       throw new Error(`Unknown tool: ${name}`);
     } catch (error2) {
       return text3(message(error2), true);
@@ -31425,7 +31586,13 @@ function createRelayServer(options2 = {}) {
       manager = void 0;
     }
   };
-  return { server, sessionId, project, cleanup, status: () => manager ? manager.status() : { active: false } };
+  const cancel = (reason2) => {
+    shutdownController.abort(new Error(`Cancelled: ${reason2}`));
+  };
+  const pauseNow = async (reason2) => {
+    await manager?.pauseNow(reason2);
+  };
+  return { server, sessionId, project, cleanup, cancel, pauseNow, status: () => manager ? manager.status() : { active: false } };
 }
 async function main(args) {
   if (args.includes("--instructions")) {
@@ -31440,10 +31607,20 @@ async function main(args) {
   }
   if (args.length) throw new Error("Usage: server.mjs [--instructions | --schema]; with no argument the MCP server speaks on stdin/stdout");
   const relay = createRelayServer();
+  const grace = Number(process.env.MCP_VM_RELAY_SHUTDOWN_GRACE_MS ?? SHUTDOWN_GRACE_MS);
+  if (!Number.isSafeInteger(grace) || grace < 0) throw new Error("MCP_VM_RELAY_SHUTDOWN_GRACE_MS must be a nonnegative integer of milliseconds");
+  const settledWithin = (work, ms) => Promise.race([work.then(() => true), new Promise((done) => setTimeout(done, ms, false).unref())]);
   let closing;
   const shutdown = (reason2, code) => closing ??= (async () => {
     try {
-      await relay.cleanup(reason2);
+      const cleanup = relay.cleanup(reason2);
+      if (await settledWithin(cleanup, grace)) return;
+      process.stderr.write(`mcp-vm-relay: an operation was still running ${grace} ms after the session ended; cancelling it
+`);
+      relay.cancel(reason2);
+      if (await settledWithin(cleanup, SHUTDOWN_CANCEL_MS)) return;
+      process.stderr.write("mcp-vm-relay: the cancelled operation did not stop; pausing renewal without it\n");
+      await relay.pauseNow(reason2);
     } catch (error2) {
       process.stderr.write(`mcp-vm-relay: cleanup failed: ${message(error2)}
 `);
@@ -31455,6 +31632,15 @@ async function main(args) {
   relay.server.onclose = () => {
     void shutdown("Enclosure session ended", 0);
   };
+  process.stdin.once("end", () => {
+    void shutdown("Enclosure session ended: the client closed standard input", 0);
+  });
+  process.stdin.once("close", () => {
+    void shutdown("Enclosure session ended: the client closed standard input", 0);
+  });
+  process.stdout.on("error", (error2) => {
+    void shutdown(`Enclosure session ended: standard output failed (${error2.code ?? message(error2)})`, 0);
+  });
   process.once("SIGTERM", () => {
     void shutdown("Enclosure session terminated", 0);
   });
@@ -31474,6 +31660,8 @@ export {
   PLUGIN_TOOL_PREFIX,
   SERVER_NAME,
   SERVER_VERSION,
+  SHUTDOWN_CANCEL_MS,
+  SHUTDOWN_GRACE_MS,
   STATUS_TOOL,
   TRAJECTORY_TOOL,
   allToolDefinitions,

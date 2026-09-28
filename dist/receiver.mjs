@@ -3,7 +3,7 @@ import { createRequire as __createRequire } from 'node:module'; const require = 
 // src/guest/receiver.ts
 import { spawn, execFile } from "node:child_process";
 import { createHash as createHash2, randomUUID } from "node:crypto";
-import { mkdir as mkdir3, open, readFile as readFile2, rename as rename3, rm as rm2, stat as stat2, realpath } from "node:fs/promises";
+import { mkdir as mkdir3, open, readFile as readFile2, rename as rename3, rm, stat as stat2, realpath } from "node:fs/promises";
 import { dirname as dirname2, isAbsolute, join as join3, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -91,11 +91,7 @@ var JournalWriter = class _JournalWriter {
     handle.unref?.();
     return writer;
   }
-  /**
-   * Append one record. `durable` fsyncs before returning (start records).
-   * The whole line is written or the call rejects; a rejected append may
-   * leave a partial line, which readers report as a damaged tail.
-   */
+  /** Append one record. `durable` fsyncs before returning (start records). */
   async append(record, options = {}) {
     if (!this.handle)
       throw new Error("journal writer is closed");
@@ -104,15 +100,8 @@ var JournalWriter = class _JournalWriter {
       seq: this.seq++,
       writtenAt: (/* @__PURE__ */ new Date()).toISOString()
     };
-    const line = Buffer.from(JSON.stringify(full) + "\n", "utf8");
-    let offset = 0;
-    while (offset < line.length) {
-      const { bytesWritten } = await this.handle.write(line, offset, line.length - offset, null);
-      if (!(bytesWritten > 0)) {
-        throw new Error(`journal write made no progress after ${offset} of ${line.length} bytes (seq ${full.seq})`);
-      }
-      offset += bytesWritten;
-    }
+    const line = JSON.stringify(full) + "\n";
+    await this.handle.write(line, null, "utf8");
     if (options.durable) {
       await this.handle.sync();
     }
@@ -302,36 +291,6 @@ var RecordStore = class _RecordStore {
     });
   }
   /**
-   * Close an admitted action whose callable never ran (for example, the
-   * before-snapshot could not be captured after the durable start). The
-   * `action-refusal` record states that no input was dispatched; it is not a
-   * tool completion and carries no tool outcome (D26).
-   */
-  async retainActionRefusal(params) {
-    const record = await this.getAction(params.actionId);
-    if (!record)
-      throw new Error(`unknown action ${params.actionId}`);
-    if (record.state !== "admitted") {
-      throw new Error(`action ${params.actionId} is not admitted (state: ${record.state})`);
-    }
-    await this.appendJournal({
-      kind: "action-refusal",
-      sessionId: record.sessionId,
-      attemptId: record.attemptId,
-      stepId: record.stepId,
-      executionId: record.executionId,
-      actionId: record.actionId,
-      state: "refused",
-      inputDispatched: false,
-      diagnostic: params.diagnostic
-    }, { durable: true });
-    await this.putAction({
-      ...record,
-      state: "refused",
-      evidenceStatus: "not-applicable"
-    });
-  }
-  /**
    * Mark an admitted action uncertain (process/transport lost before
    * completion). Never resolves the outcome; recovery may later find the
    * original record.
@@ -365,7 +324,7 @@ var RecordStore = class _RecordStore {
 };
 
 // node_modules/@wezzard/relay-driver-remote-runtime/dist/src/snapshots.js
-import { mkdir as mkdir2, stat, rename as rename2, rm } from "node:fs/promises";
+import { mkdir as mkdir2, stat, rename as rename2 } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { join as join2 } from "node:path";
 function isoStamp(d) {
@@ -408,8 +367,6 @@ var SnapshotStore = class {
       await this.capture(tmpPath);
       await rename2(tmpPath, finalPath);
     } catch (err) {
-      await rm(tmpPath, { force: true }).catch(() => {
-      });
       throw new SnapshotCaptureError(`screenshot capture failed for ${role}-snapshot: ${err instanceof Error ? err.message : String(err)}`);
     }
     const statInfo = await stat(finalPath);
@@ -754,11 +711,7 @@ var AdmissionEngine = class {
         await this.store.retainActionSnapshots(actionId, snapshots, snapPlan);
       }
     } catch (err) {
-      if (err instanceof AdmissionRefusedError) {
-        await this.retainRefusalAfterStart(actionId, err);
-        throw err;
-      }
-      if (err instanceof EvidenceWriteError) {
+      if (err instanceof AdmissionRefusedError || err instanceof EvidenceWriteError) {
         throw err;
       }
       toolOutcome = { kind: "failure", error: err };
@@ -786,28 +739,6 @@ var AdmissionEngine = class {
       throw toolOutcome.error;
     }
     return toolOutcome.value;
-  }
-  /**
-   * Retain the refusal of an action whose start was already retained. A
-   * failure to retain it is an evidence failure: input is disabled (D17).
-   */
-  async retainRefusalAfterStart(actionId, refusal) {
-    try {
-      await this.store.retainActionRefusal({ actionId, diagnostic: refusal.message });
-    } catch (err) {
-      this.evidenceFailed = true;
-      this.evidenceFailureDiagnostic = String(err);
-      await this.store.appendJournal({
-        kind: "evidence-failure",
-        sessionId: this.ids.sessionId,
-        attemptId: this.ids.attemptId,
-        actionId,
-        state: "incomplete",
-        diagnostic: String(err)
-      }).catch(() => {
-      });
-      throw new EvidenceWriteError(actionId, { kind: "refused", diagnostic: refusal.message }, err);
-    }
   }
 };
 function serializeOutcome(outcome) {
@@ -1234,7 +1165,7 @@ async function receive(input, options = {}) {
       } catch (error) {
         return await refuse(message(error));
       } finally {
-        await rm2(probe, { force: true });
+        await rm(probe, { force: true });
       }
     }
     gate.update({ ready: true, observedAtMonotonic: Date.now() });
@@ -1306,7 +1237,7 @@ async function receive(input, options = {}) {
     } catch {
       keepLock = true;
     }
-    if (ownsLock && !keepLock) await rm2(lock, { recursive: true, force: true }).catch(() => {
+    if (ownsLock && !keepLock) await rm(lock, { recursive: true, force: true }).catch(() => {
     });
     else if (ownsLock) await markLock(true, true).catch(() => {
     });
