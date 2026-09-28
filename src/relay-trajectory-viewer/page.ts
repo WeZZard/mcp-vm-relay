@@ -76,8 +76,8 @@ const utcStamp = (iso: string, year = false) => {
   const d = new Date(iso), two = (n: number) => String(n).padStart(2, "0");
   return `${months[d.getUTCMonth()]} ${d.getUTCDate()}, ${year ? `${d.getUTCFullYear()}, ` : ""}${two(d.getUTCHours())}:${two(d.getUTCMinutes())} UTC`;
 };
-/** The relay's mark and app icon: a 1980s badge, a cream rim around a black square with continuous corners, across which the palette's eight stripes run in from the left and turn upward around a cream point, a trajectory making its turn. */
-const markBody = `<clipPath id="relay-face"><path d="M3 21C3 7.5 7.5 3 21 3H43C56.5 3 61 7.5 61 21V43C61 56.5 56.5 61 43 61H21C7.5 61 3 56.5 3 43Z"/></clipPath><path d="M0 20C0 5 5 0 20 0H44C59 0 64 5 64 20V44C64 59 59 64 44 64H20C5 64 0 59 0 44Z" fill="#f2c9a0"/><path d="M3 21C3 7.5 7.5 3 21 3H43C56.5 3 61 7.5 61 21V43C61 56.5 56.5 61 43 61H21C7.5 61 3 56.5 3 43Z" fill="#11161d"/><g clip-path="url(#relay-face)" fill="none" stroke-width="3.42"><path d="M-4 32.15H27A5.15 5.15 0 0 0 32.15 27V-4" stroke="#1b3a5e"/><path d="M-4 35.45H27A8.45 8.45 0 0 0 35.45 27V-4" stroke="#25597f"/><path d="M-4 38.75H27A11.75 11.75 0 0 0 38.75 27V-4" stroke="#4a8497"/><path d="M-4 42.05H27A15.05 15.05 0 0 0 42.05 27V-4" stroke="#6fb6b5"/><path d="M-4 45.35H27A18.35 18.35 0 0 0 45.35 27V-4" stroke="#f2c9a0"/><path d="M-4 48.65H27A21.65 21.65 0 0 0 48.65 27V-4" stroke="#ea9a3a"/><path d="M-4 51.95H27A24.95 24.95 0 0 0 51.95 27V-4" stroke="#b3301f"/><path d="M-4 55.25H27A28.25 28.25 0 0 0 55.25 27V-4" stroke="#8c1e1a"/></g><circle cx="27" cy="27" r="2.4" fill="#f2c9a0"/>`;
+/** The relay's mark and app icon: a 1980s badge, a cream rim around a black square with continuous corners, across which the palette's eight stripes run in from the left and turn upward around a cream circle, a trajectory making its turn. */
+const markBody = `<clipPath id="relay-face"><path d="M3 21C3 7.5 7.5 3 21 3H43C56.5 3 61 7.5 61 21V43C61 56.5 56.5 61 43 61H21C7.5 61 3 56.5 3 43Z"/></clipPath><path d="M0 20C0 5 5 0 20 0H44C59 0 64 5 64 20V44C64 59 59 64 44 64H20C5 64 0 59 0 44Z" fill="#f2c9a0"/><path d="M3 21C3 7.5 7.5 3 21 3H43C56.5 3 61 7.5 61 21V43C61 56.5 56.5 61 43 61H21C7.5 61 3 56.5 3 43Z" fill="#11161d"/><g clip-path="url(#relay-face)" fill="none" stroke-width="2.92"><path d="M-4 33.9H24A9.9 9.9 0 0 0 33.9 24V-4" stroke="#1b3a5e"/><path d="M-4 36.7H24A12.7 12.7 0 0 0 36.7 24V-4" stroke="#25597f"/><path d="M-4 39.5H24A15.5 15.5 0 0 0 39.5 24V-4" stroke="#4a8497"/><path d="M-4 42.3H24A18.3 18.3 0 0 0 42.3 24V-4" stroke="#6fb6b5"/><path d="M-4 45.1H24A21.1 21.1 0 0 0 45.1 24V-4" stroke="#f2c9a0"/><path d="M-4 47.9H24A23.9 23.9 0 0 0 47.9 24V-4" stroke="#ea9a3a"/><path d="M-4 50.7H24A26.7 26.7 0 0 0 50.7 24V-4" stroke="#b3301f"/><path d="M-4 53.5H24A29.5 29.5 0 0 0 53.5 24V-4" stroke="#8c1e1a"/></g><circle cx="24" cy="24" r="6.5" fill="#f2c9a0"/>`;
 const relayMark = `<svg viewBox="0 0 64 64" width="40" height="40" aria-hidden="true">${markBody}</svg>`;
 export const relayIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">${markBody}</svg>`;
 const size = (bytes: number) => bytes >= 1e6 ? `${(bytes / 1e6).toFixed(1)} MB` : bytes >= 1e3 ? `${(bytes / 1e3).toFixed(1)} kB` : `${bytes} B`;
@@ -254,7 +254,7 @@ function stage(view: View, detail: StepDetail | undefined, numbers: ReadonlyMap<
     const kind = step.inputMode === "diagnostic" ? "Diagnostic command" : "Command";
     return `${open}<div class="monitor"><div class="term"><pre class="term-cmd"><span class="prompt" aria-hidden="true">$</span>${escapeHtml(command ?? headline)}</pre>${detail?.output ? streamsOf(detail.output) || `<p class="quiet">No output.</p>` : ""}
 <p class="term-note">${step.inputMode === "diagnostic" ? "Screenshots were not requested for this diagnostic." : "No snapshots were captured for this step."}</p></div>
-<div class="chin"><span class="plate" aria-hidden="true"></span><p class="info"><b>${kind}</b>${at ? `<time>${at}</time>` : ""}</p><button type="button" class="enlarge" popovertarget="${escapeHtml(boxId(step, "command"))}" title="Enlarge the command">${expandIcon}Enlarge</button><i class="led" aria-hidden="true"></i></div></div></section>`;
+<div class="chin"><img class="plate" src="/.app/icon.svg" alt="" width="24" height="24"><p class="info"><b>${kind}</b>${at ? `<time>${at}</time>` : ""}</p><button type="button" class="enlarge" popovertarget="${escapeHtml(boxId(step, "command"))}" title="Enlarge the command">${expandIcon}Enlarge</button><i class="led" aria-hidden="true"></i></div></div></section>`;
   }
   const path = step.snapshots?.[view.role];
   const picture = path
@@ -414,14 +414,14 @@ ${lightboxes(outputBoxes)}${windows.join("")}` };
 // display shows the terminal, the chin the step's info and controls. Controls
 // are raised cream keys that sink when pressed; labels are panel legends,
 // badges are label tape, indicators are lit lights, counts are tiny displays,
-// and code sits on small dark screens. The eight stripes rule the
-// header, the monitor's badge and the Overview's title. Spacing steps by 8 px and the
+// and code sits on small dark screens. The eight stripes appear only in the
+// app icon, which the monitor's chin carries; a solid navy rules the header,
+// the Overview's title and the concern card. Spacing steps by 8 px and the
 // Overview sits on twelve columns. Type: two faces, weights 400 and 700, sizes
 // 12, 14, 16, 20 and 32 px. Every corner is continuous (corner-shape:
 // squircle); only status dots stay round.
 export const reviewCss = `:root{color-scheme:light;
 --navy:#1b3a5e;--blue:#25597f;--steel:#4a8497;--teal:#6fb6b5;--cream:#f2c9a0;--orange:#ea9a3a;--red:#b3301f;--oxblood:#8c1e1a;--black:#11161d;
---stripe:linear-gradient(90deg,var(--navy) 0 12.5%,var(--blue) 0 25%,var(--steel) 0 37.5%,var(--teal) 0 50%,var(--cream) 0 62.5%,var(--orange) 0 75%,var(--red) 0 87.5%,var(--oxblood) 0);
 --canvas:#ebe9e5;--paper:#f8f1e7;--s1:#fffaf3;--s2:#f3e9db;--s3:#e6d8c5;--hair:#dccbb4;
 --ink:#13253a;--text:var(--ink);--dim:#34465a;--faint:#56616c;
 --chrome:oklch(from var(--paper) l c h / .94);--aura:color-mix(in oklch,var(--steel) 16%,var(--s1));
@@ -451,8 +451,8 @@ b,time,.n,.exit,dd,.took{font-variant-numeric:tabular-nums}.d{font-family:var(--
 .verdict{display:inline-flex;align-items:center;gap:.4rem;font:700 12px/1 var(--sans);color:var(--tone,var(--dim));text-transform:capitalize}
 .verdict i{flex:none;width:8px;height:8px;border-radius:50%;background:var(--dotc,currentColor)}
 .app{height:100vh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;grid-template-columns:minmax(0,1fr);overflow:clip}.track{min-width:0;position:relative;z-index:0;display:grid}
-.top{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:1rem;padding:1rem 1.5rem calc(1rem + 4px);position:relative;z-index:2;background:var(--chrome);-webkit-backdrop-filter:saturate(160%) blur(20px);backdrop-filter:saturate(160%) blur(20px)}
-.top::after{content:"";position:absolute;left:0;right:0;bottom:0;height:4px;background:var(--stripe)}
+.top{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:1rem;padding:1rem 1.5rem calc(1rem + 3px);position:relative;z-index:2;background:var(--chrome);-webkit-backdrop-filter:saturate(160%) blur(20px);backdrop-filter:saturate(160%) blur(20px)}
+.top::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--navy)}
 .brand{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:0 .75rem;min-width:0}.mark{grid-row:1/3}.brand h1,.brand .stats{grid-column:2;margin:0}
 .mark{flex:none;display:grid;place-items:center;width:2.5rem;height:2.5rem;filter:drop-shadow(0 1px 1px oklch(from var(--shade) l c h / .18))}
 h1{display:flex;align-items:baseline;gap:.6rem;font:700 20px/1.05 var(--sans);letter-spacing:-.02em;margin:0}
@@ -531,7 +531,7 @@ kbd{display:inline-grid;place-items:center;min-width:1.4rem;height:1.4rem;paddin
 .terminal .monitor{flex:0 1 auto;min-height:0;display:flex;flex-direction:column;width:min(100%,60rem);padding:1.5rem 1.5rem 0;background:linear-gradient(var(--case-hi),var(--case));border-radius:24px;box-shadow:inset 0 1px 0 #fff9,inset 0 -3px 0 oklch(from var(--case-edge) l c h / .6),0 0 0 1px var(--case-edge),0 16px 40px oklch(from var(--shade) l c h / .14)}
 .monitor .term{flex:0 1 auto;min-height:0;width:100%;border-radius:12px;background:radial-gradient(120% 90% at 50% 40%,oklch(from var(--navy) l c h / .35),transparent 70%),var(--term);box-shadow:0 0 0 6px var(--bezel),0 0 0 7px var(--case-edge),inset 0 0 48px oklch(from var(--black) l c h / .8)}
 .chin{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;gap:1rem;padding:1rem .25rem 1rem}
-.plate{width:3rem;height:.75rem;border-radius:3px;background:var(--stripe);box-shadow:0 0 0 1px oklch(from var(--shade) l c h / .12)}
+.plate{display:block;width:1.5rem;height:1.5rem}
 .chin .info{display:flex;align-items:baseline;gap:1rem;min-width:0;margin:0;font:400 12px var(--sans);color:var(--dim)}.chin .info b{font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text)}.chin .info time{font-family:var(--mono)}
 .led{width:.5rem;height:.5rem;border-radius:50%;background:var(--teal);box-shadow:0 0 0 2px oklch(from var(--teal) l c h / .25),0 0 6px var(--teal)}
 .term{width:min(100%,56rem);max-height:100%;overflow:auto;background:var(--term);color:var(--term-text);border-radius:16px;box-shadow:0 0 0 1px oklch(from var(--black) l c h / .6),0 16px 40px oklch(from var(--shade) l c h / .22);scrollbar-color:var(--term-line) transparent}
@@ -559,7 +559,7 @@ kbd{display:inline-grid;place-items:center;min-width:1.4rem;height:1.4rem;paddin
 .files{list-style:none;margin:0;padding:0;display:grid;gap:.5rem}.files li{display:grid;justify-items:start}.files .fopen{font:12px var(--mono)}.files span{font-size:12px;color:var(--faint)}
 .doc{display:block;overflow:auto;font-size:16px;line-height:1.6;background:var(--dotgrid),var(--canvas)}
 .doc-in{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));column-gap:1.5rem;width:min(100% - 4rem,62rem);margin:3rem auto 4rem;padding:3rem 3rem 3rem;background:var(--s1);border-radius:28px;box-shadow:var(--lift)}
-.doc-in>h2{grid-column:1/-1;justify-self:center;margin:0;padding:0 .25rem .5rem;padding-bottom:.6rem;background:var(--stripe) bottom/100% 4px no-repeat;font:700 32px/1.1 var(--sans);letter-spacing:-.03em}
+.doc-in>h2{grid-column:1/-1;justify-self:center;margin:0;padding:0 .25rem .5rem;padding-bottom:.6rem;background:linear-gradient(var(--navy),var(--navy)) bottom/100% 4px no-repeat;font:700 32px/1.1 var(--sans);letter-spacing:-.03em}
 .doc-in>.lede{grid-column:1/-1;justify-self:center;max-width:40rem;text-align:center;color:var(--dim);margin:1.5rem 0 0;font:400 16px/1.55 var(--sans)}
 .doc .block{grid-column:1/-1;display:grid;grid-template-columns:subgrid;margin-top:2.5rem;padding-top:.75rem;border-top:2px solid var(--ink)}.doc .block>*{grid-column:4/-1}
 .doc .block>h3{grid-column:1/4;display:block;margin:0;font:700 20px/1.3 var(--sans);letter-spacing:-.015em;text-transform:none;color:var(--text)}
@@ -640,6 +640,6 @@ kbd{display:inline-grid;place-items:center;min-width:1.4rem;height:1.4rem;paddin
 .flag{background:radial-gradient(circle at 35% 30%,#fffc 0 16%,transparent 48%),var(--amber);box-shadow:0 0 0 2px var(--s1),0 0 0 3px oklch(from var(--shade) l c h / .25),0 0 8px var(--amber)}
 .tabs a span,.doc h3 .count{display:inline-grid;place-items:center;min-width:1.5rem;height:1.25rem;padding:0 .35rem;border-radius:4px;font:700 12px/1 var(--mono);letter-spacing:0;background:var(--term);color:var(--term-dim);box-shadow:inset 0 1px 2px #000c,0 1px 0 #fff8;vertical-align:.15em}
 .tabs a span.has,.doc h3 .count{color:var(--orange);text-shadow:0 0 4px oklch(from var(--orange) l c h / .6)}
-.concern{padding-top:calc(1rem + 4px);background:var(--stripe) top/100% 4px no-repeat,var(--s1);box-shadow:0 0 0 1px var(--key-edge),0 2px 6px oklch(from var(--shade) l c h / .08)}
+.concern{padding-top:calc(1rem + 4px);background:linear-gradient(var(--navy),var(--navy)) top/100% 4px no-repeat,var(--s1);box-shadow:0 0 0 1px var(--key-edge),0 2px 6px oklch(from var(--shade) l c h / .08)}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 @media print{.app{height:auto;display:block}.track,.arrow,.mid,.lightbox,.enlarge{display:none}.center{display:block}.step{display:block!important;break-inside:avoid;margin-bottom:1rem}.view{display:flex!important}.stage{background:none}}`;
