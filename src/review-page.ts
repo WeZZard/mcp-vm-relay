@@ -275,7 +275,8 @@ function thumb(step: ReviewPageStep, detail: StepDetail | undefined, number: str
 // the previous and next step with errors while "Focus on errors" is checked.
 // The track keeps the selected thumbnail in view, and the Trajectory tab
 // returns to the step last shown. Space opens the selected step's lightbox,
-// at its before snapshot, and closes it again. While a lightbox is open, the
+// at its before snapshot (in the Overview, the focused image's), and closes
+// any open lightbox wherever the focus is. While a lightbox is open, the
 // arrow keys and its arrows move through its sequence, and the page follows
 // to the item's step. The run's time is shown in the reader's own time zone. Links
 // alone cannot bind keys or read the reader's time zone.
@@ -314,8 +315,11 @@ const keys = `(()=>{const steps=()=>[...document.querySelectorAll(".center>.step
   + `document.addEventListener("keydown",e=>{if(e.defaultPrevented||e.altKey||e.ctrlKey||e.metaKey||e.shiftKey)return;`
   + `const t=e.target;if(t instanceof HTMLElement&&(t.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)))return;`
   + `let box=null;try{box=document.querySelector(".lightbox:popover-open")}catch{}`
-  + `if(e.key===" "){if(t instanceof Element&&(t.closest("summary")||(t.closest("button")&&!t.closest(".zoom,.enlarge,.lb-nav,.close"))))return;`
-  + `e.preventDefault();if(e.repeat)return;if(box){box.hidePopover();return}const i=current(),step=steps()[i<0?-1:i];if(!step)return;`
+  + `if(e.key===" "){if(box){e.preventDefault();if(!e.repeat)box.hidePopover();return}`
+  + `const opener=t instanceof Element?t.closest(".zoom,.enlarge,.gthumb"):null;`
+  + `if(t instanceof Element&&!opener&&(t.closest("summary")||t.closest("button")))return;e.preventDefault();if(e.repeat)return;`
+  + `if(opener&&opener.classList.contains("gthumb")){const g=document.getElementById(opener.getAttribute("popovertarget"));if(g)open(g);return}`
+  + `const i=current(),step=steps()[i<0?-1:i];if(!step)return;`
   + `const base=step.id.replace(/^step-/,"lightbox-");const lb=["--before","--after","--command"].map(r=>document.getElementById(base+r)).find(Boolean);`
   + `if(lb)open(lb);return}`
   + `const d=e.key==="ArrowRight"?1:e.key==="ArrowLeft"?-1:0;if(!d)return;`
