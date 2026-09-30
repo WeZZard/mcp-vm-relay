@@ -12,12 +12,12 @@ jobs:
   check:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # vmctl backs tests/environment-parity.test.ts; that test skips itself
       # with a reason when the binary is absent, so this is best-effort, not
       # a hard requirement.
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: WeZZard/vm-service
           path: .ci/vm-service
