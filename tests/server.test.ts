@@ -10,11 +10,11 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { instructions, relayTools } from '../src/core.js';
 import type { RelayManager } from '../src/manager.js';
-import { PLUGIN_TOOL_PREFIX, STATUS_TOOL, TRAJECTORY_TOOL, createRelayServer, projectDirectory, relayContent } from '../src/server.js';
+import { PLUGIN_TOOL_PREFIX, STATUS_TOOL, createRelayServer, projectDirectory, relayContent } from '../src/server.js';
 
 const run = promisify(execFile);
 const server = resolve('dist/server.mjs');
-const allToolNames = [...relayTools.map(tool => tool.name), STATUS_TOOL, TRAJECTORY_TOOL];
+const allToolNames = [...relayTools.map(tool => tool.name), STATUS_TOOL];
 const runTools = ['relay_exec', 'relay_script', 'relay_code', 'relay_run'];
 
 test('the project directory comes from the plugin, unless the placeholder was never expanded', () => {
@@ -55,10 +55,10 @@ async function fixture(t: { after(fn: () => Promise<unknown>): void }) {
   return { root, project, client };
 }
 
-test('over stdio the server offers exactly the nineteen tools, each with a title, annotations and a plain-object schema with no root combinator', async t => {
+test('over stdio the server offers exactly the eighteen tools, each with a title, annotations and a plain-object schema with no root combinator', async t => {
   const { client } = await fixture(t);
   const { tools } = await client.listTools();
-  assert.equal(tools.length, 19);
+  assert.equal(tools.length, 18);
   assert.deepEqual(tools.map(tool => tool.name).sort(), [...allToolNames].sort());
   for (const tool of tools) {
     assert.ok(tool.title && tool.title.length > 0, tool.name);
@@ -122,17 +122,6 @@ test('a valid call that reaches an unreachable service is an error result, not a
   assert.equal(JSON.parse(status.content[0].text).active, false);
 });
 
-test('trajectory refuses an absent or unverified package and never opens a browser for it', async t => {
-  const { client, project } = await fixture(t);
-  const missing: any = await client.callTool({ name: TRAJECTORY_TOOL, arguments: { directory: 'no-such-package' } });
-  assert.equal(missing.isError, true);
-  await mkdir(join(project, 'bad-package'));
-  const bad: any = await client.callTool({ name: TRAJECTORY_TOOL, arguments: { directory: 'bad-package' } });
-  assert.equal(bad.isError, true);
-  const blank: any = await client.callTool({ name: TRAJECTORY_TOOL, arguments: {} });
-  assert.equal(blank.isError, true); assert.match(blank.content[0].text, /directory is required/);
-});
-
 test('the server offers no MCP prompts: the user commands are host command files', async t => {
   const { client } = await fixture(t);
   assert.equal(client.getServerCapabilities()?.prompts, undefined);
@@ -184,7 +173,6 @@ test('the plugin files name the server the tests spoke to and ship the built bun
   const agent = await readFile('agents/vm-relay-operator.md', 'utf8');
   for (const tool of relayTools) assert.match(agent, new RegExp(`${PLUGIN_TOOL_PREFIX}${tool.name}(?![A-Za-z0-9_])`), tool.name);
   assert.match(agent, new RegExp(`${PLUGIN_TOOL_PREFIX}${STATUS_TOOL}(?![A-Za-z0-9_])`));
-  assert.doesNotMatch(agent, new RegExp(`${PLUGIN_TOOL_PREFIX}${TRAJECTORY_TOOL}(?![A-Za-z0-9_])`));
   for (const name of ['server.mjs', 'receiver.mjs', 'mcp-host.mjs', 'doctor.mjs', 'integrity.json', 'build-info.json', 'NOTICE.txt']) assert.ok((await stat(join('dist', name))).isFile(), name);
   const bundle = await readFile('dist/server.mjs', 'utf8');
   assert.doesNotMatch(bundle, /@earendil-works/);

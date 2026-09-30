@@ -4,25 +4,22 @@
  * Everything the relay does lives in mcp-vm-relay's host-agnostic core (the
  * manager, the vm-service client, the registry, the strict contract, the
  * action dispatch and the bounded result rendering). This file binds that
- * core to MCP over standard input and output: nineteen `relay_*` tools, each
- * with its own schema, title and annotations. The two user commands (status
- * and trajectory) are not MCP prompts: pi's adapter can only name those
+ * core to MCP over standard input and output: eighteen `relay_*` tools, each
+ * with its own schema, title and annotations. The user command (status) is not
+ * an MCP prompt: pi's adapter can only name those
  * `/mcp__<package>__<server>__<prompt>`, so each host gets its own command file
  * instead, generated from scripts/host-commands.mjs. There is no skill and no
  * hook.
  */
 import { randomUUID } from 'node:crypto';
-import { execFile } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { realpath } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { promisify } from 'node:util';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { RelayManager, Registry, instructions, relayCall, relayToolInput, relayToolInputSchema, relayTools, selectedEnvironment, verifyDeliveredPackage, type RelayCallResult, type RelayToolAnnotations } from './core.js';
-import { ReviewServer, type AppScript } from './relay-trajectory-viewer/server.js';
+import { RelayManager, Registry, instructions, relayCall, relayToolInput, relayToolInputSchema, relayTools, selectedEnvironment, type RelayCallResult, type RelayToolAnnotations } from './core.js';
 
 export const SERVER_NAME = 'relay';
 /** The build injects this from package.json (esbuild define); under tsx it falls back to reading the file directly. */
@@ -30,7 +27,6 @@ declare const __MCP_VM_RELAY_VERSION__: string;
 export const SERVER_VERSION = typeof __MCP_VM_RELAY_VERSION__ !== 'undefined' ? __MCP_VM_RELAY_VERSION__
   : (JSON.parse(readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8')) as { version: string }).version;
 export const STATUS_TOOL = 'relay_status';
-export const TRAJECTORY_TOOL = 'relay_trajectory';
 /** How the plugin's MCP server names its tools once Claude Code scopes them. */
 export const PLUGIN_TOOL_PREFIX = 'mcp__plugin_mcp-vm-relay_relay__';
 
@@ -49,7 +45,6 @@ export function projectDirectory(env: NodeJS.ProcessEnv = process.env, cwd = pro
 }
 
 const readOnlyStatus: RelayToolAnnotations = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
-const trajectoryAnnotations: RelayToolAnnotations = { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false };
 const statusToolDefinition = {
   name: STATUS_TOOL,
   title: 'Show relay status',
@@ -57,18 +52,11 @@ const statusToolDefinition = {
   inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   annotations: readOnlyStatus,
 };
-const trajectoryToolDefinition = {
-  name: TRAJECTORY_TOOL,
-  title: 'Open the trajectory viewer',
-  description: 'Verify a delivered relay evidence package (every artifact, hash and reference) and open its trajectory review in the local browser, served by this relay on 127.0.0.1 from the package\'s data. Human review remains pending.',
-  inputSchema: { type: 'object', properties: { directory: { type: 'string', description: 'The package directory, absolute or relative to the project.' } }, required: ['directory'], additionalProperties: false },
-  annotations: trajectoryAnnotations,
-};
 /** Every MCP tool this server offers, for `tools/list` and `--schema`. */
 export function allToolDefinitions() {
   return [
     ...relayTools.map(tool => ({ name: tool.name, title: tool.title, description: tool.description, inputSchema: relayToolInputSchema(tool), annotations: tool.annotations })),
-    statusToolDefinition, trajectoryToolDefinition,
+    statusToolDefinition,
   ];
 }
 
@@ -81,27 +69,12 @@ export const SHUTDOWN_GRACE_MS = 120000;
 /** How long shutdown waits for a cancelled operation before it pauses renewal without it. */
 export const SHUTDOWN_CANCEL_MS = 5000;
 
-export interface RelayServerOptions { sessionId?: string; project?: string; open?: (url: string) => Promise<void>; manager?: () => RelayManager; review?: ReviewServer }
-
-// The published relay carries the review app's script, built with it; from
-// source (development, tests) it is built on first use.
-declare const __REVIEW_APP__: string | undefined;
-const reviewApp: AppScript = typeof __REVIEW_APP__ === 'string' ? async () => __REVIEW_APP__ as string : (() => {
-  let script: Promise<string> | undefined;
-  return () => script ??= import('./relay-trajectory-viewer/build.js').then(m => m.buildReviewApp());
-})();
-
-async function openInBrowser(url: string): Promise<void> {
-  const run = promisify(execFile);
-  if (process.platform === 'darwin') await run('/usr/bin/open', ['-a', 'Google Chrome', url]);
-  else await run('xdg-open', [url]);
-}
+export interface RelayServerOptions { sessionId?: string; project?: string; manager?: () => RelayManager }
 
 export function createRelayServer(options: RelayServerOptions = {}) {
   const sessionId = options.sessionId ?? process.env.MCP_VM_RELAY_SESSION ?? randomUUID();
   const project = options.project ?? projectDirectory();
   let manager: RelayManager | undefined;
-  const review = options.review ?? new ReviewServer(reviewApp);
   // A selected environment (VM_ENVIRONMENT_FILE) binds the backend, the image
   // store and the state directories together; it is resolved once, at the
   // first call, so an invalid selection is reported rather than falling back.
@@ -128,16 +101,6 @@ export function createRelayServer(options: RelayServerOptions = {}) {
     const { name, arguments: args } = request.params;
     try {
       if (name === STATUS_TOOL) return text(JSON.stringify(statusPayload(), null, 2));
-      if (name === TRAJECTORY_TOOL) {
-        const directory = (args as { directory?: unknown } | undefined)?.directory;
-        if (typeof directory !== 'string' || !directory.trim()) throw new Error('directory is required');
-        const root = resolve(project, directory.trim());
-        const verified = await verifyDeliveredPackage(root);
-        if (!verified.deliveryVerified) throw new Error(`Package failed verification; refusing to open the review: ${JSON.stringify(verified)}`);
-        const address = await review.add(root);
-        await (options.open ?? openInBrowser)(address);
-        return text(`Opened the review of verified package ${root} at ${address}. It is served while this relay runs. Human review remains pending.`);
-      }
       if (relayTools.some(tool => tool.name === name)) return relayContent(await relayCall(get, relayToolInput(name, (args ?? {}) as Record<string, unknown>), { signal: AbortSignal.any([extra.signal, shutdownController.signal]), toolCallId: String(extra.requestId) }));
       throw new Error(`Unknown tool: ${name}`);
     } catch (error) { return text(message(error), true); }

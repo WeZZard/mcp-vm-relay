@@ -1502,37 +1502,37 @@ var require_dataType = __commonJS({
       DataType2[DataType2["Wrong"] = 1] = "Wrong";
     })(DataType || (exports.DataType = DataType = {}));
     function getSchemaTypes(schema) {
-      const types2 = getJSONTypes(schema.type);
-      const hasNull = types2.includes("null");
+      const types = getJSONTypes(schema.type);
+      const hasNull = types.includes("null");
       if (hasNull) {
         if (schema.nullable === false)
           throw new Error("type: null contradicts nullable: false");
       } else {
-        if (!types2.length && schema.nullable !== void 0) {
+        if (!types.length && schema.nullable !== void 0) {
           throw new Error('"nullable" cannot be used without "type"');
         }
         if (schema.nullable === true)
-          types2.push("null");
+          types.push("null");
       }
-      return types2;
+      return types;
     }
     exports.getSchemaTypes = getSchemaTypes;
     function getJSONTypes(ts) {
-      const types2 = Array.isArray(ts) ? ts : ts ? [ts] : [];
-      if (types2.every(rules_1.isJSONType))
-        return types2;
-      throw new Error("type must be JSONType or JSONType[]: " + types2.join(","));
+      const types = Array.isArray(ts) ? ts : ts ? [ts] : [];
+      if (types.every(rules_1.isJSONType))
+        return types;
+      throw new Error("type must be JSONType or JSONType[]: " + types.join(","));
     }
     exports.getJSONTypes = getJSONTypes;
-    function coerceAndCheckDataType(it, types2) {
+    function coerceAndCheckDataType(it, types) {
       const { gen, data, opts } = it;
-      const coerceTo = coerceToTypes(types2, opts.coerceTypes);
-      const checkTypes = types2.length > 0 && !(coerceTo.length === 0 && types2.length === 1 && (0, applicability_1.schemaHasRulesForType)(it, types2[0]));
+      const coerceTo = coerceToTypes(types, opts.coerceTypes);
+      const checkTypes = types.length > 0 && !(coerceTo.length === 0 && types.length === 1 && (0, applicability_1.schemaHasRulesForType)(it, types[0]));
       if (checkTypes) {
-        const wrongType = checkDataTypes(types2, data, opts.strictNumbers, DataType.Wrong);
+        const wrongType = checkDataTypes(types, data, opts.strictNumbers, DataType.Wrong);
         gen.if(wrongType, () => {
           if (coerceTo.length)
-            coerceData(it, types2, coerceTo);
+            coerceData(it, types, coerceTo);
           else
             reportTypeError(it);
         });
@@ -1541,15 +1541,15 @@ var require_dataType = __commonJS({
     }
     exports.coerceAndCheckDataType = coerceAndCheckDataType;
     var COERCIBLE = /* @__PURE__ */ new Set(["string", "number", "integer", "boolean", "null"]);
-    function coerceToTypes(types2, coerceTypes) {
-      return coerceTypes ? types2.filter((t) => COERCIBLE.has(t) || coerceTypes === "array" && t === "array") : [];
+    function coerceToTypes(types, coerceTypes) {
+      return coerceTypes ? types.filter((t) => COERCIBLE.has(t) || coerceTypes === "array" && t === "array") : [];
     }
-    function coerceData(it, types2, coerceTo) {
+    function coerceData(it, types, coerceTo) {
       const { gen, data, opts } = it;
       const dataType = gen.let("dataType", (0, codegen_1._)`typeof ${data}`);
       const coerced = gen.let("coerced", (0, codegen_1._)`undefined`);
       if (opts.coerceTypes === "array") {
-        gen.if((0, codegen_1._)`${dataType} == 'object' && Array.isArray(${data}) && ${data}.length == 1`, () => gen.assign(data, (0, codegen_1._)`${data}[0]`).assign(dataType, (0, codegen_1._)`typeof ${data}`).if(checkDataTypes(types2, data, opts.strictNumbers), () => gen.assign(coerced, data)));
+        gen.if((0, codegen_1._)`${dataType} == 'object' && Array.isArray(${data}) && ${data}.length == 1`, () => gen.assign(data, (0, codegen_1._)`${data}[0]`).assign(dataType, (0, codegen_1._)`typeof ${data}`).if(checkDataTypes(types, data, opts.strictNumbers), () => gen.assign(coerced, data)));
       }
       gen.if((0, codegen_1._)`${coerced} !== undefined`);
       for (const t of coerceTo) {
@@ -1625,19 +1625,19 @@ var require_dataType = __commonJS({
         return checkDataType(dataTypes[0], data, strictNums, correct);
       }
       let cond;
-      const types2 = (0, util_1.toHash)(dataTypes);
-      if (types2.array && types2.object) {
+      const types = (0, util_1.toHash)(dataTypes);
+      if (types.array && types.object) {
         const notObj = (0, codegen_1._)`typeof ${data} != "object"`;
-        cond = types2.null ? notObj : (0, codegen_1._)`!${data} || ${notObj}`;
-        delete types2.null;
-        delete types2.array;
-        delete types2.object;
+        cond = types.null ? notObj : (0, codegen_1._)`!${data} || ${notObj}`;
+        delete types.null;
+        delete types.array;
+        delete types.object;
       } else {
         cond = codegen_1.nil;
       }
-      if (types2.number)
-        delete types2.integer;
-      for (const t in types2)
+      if (types.number)
+        delete types.integer;
+      for (const t in types)
         cond = (0, codegen_1.and)(cond, checkDataType(t, data, strictNums, correct));
       return cond;
     }
@@ -2442,9 +2442,9 @@ var require_validate = __commonJS({
     function typeAndKeywords(it, errsCount) {
       if (it.opts.jtd)
         return schemaKeywords(it, [], false, errsCount);
-      const types2 = (0, dataType_1.getSchemaTypes)(it.schema);
-      const checkedTypes = (0, dataType_1.coerceAndCheckDataType)(it, types2);
-      schemaKeywords(it, types2, !checkedTypes, errsCount);
+      const types = (0, dataType_1.getSchemaTypes)(it.schema);
+      const checkedTypes = (0, dataType_1.coerceAndCheckDataType)(it, types);
+      schemaKeywords(it, types, !checkedTypes, errsCount);
     }
     function checkRefsAndKeywords(it) {
       const { schema, errSchemaPath, opts, self } = it;
@@ -2494,7 +2494,7 @@ var require_validate = __commonJS({
       if (items instanceof codegen_1.Name)
         gen.assign((0, codegen_1._)`${evaluated}.items`, items);
     }
-    function schemaKeywords(it, types2, typeErrors, errsCount) {
+    function schemaKeywords(it, types, typeErrors, errsCount) {
       const { gen, schema, data, allErrors, opts, self } = it;
       const { RULES } = self;
       if (schema.$ref && (opts.ignoreKeywordsWithRef || !(0, util_1.schemaHasRulesButRef)(schema, RULES))) {
@@ -2502,7 +2502,7 @@ var require_validate = __commonJS({
         return;
       }
       if (!opts.jtd)
-        checkStrictTypes(it, types2);
+        checkStrictTypes(it, types);
       gen.block(() => {
         for (const group of RULES.rules)
           groupKeywords(group);
@@ -2514,7 +2514,7 @@ var require_validate = __commonJS({
         if (group.type) {
           gen.if((0, dataType_2.checkDataType)(group.type, data, opts.strictNumbers));
           iterateKeywords(it, group);
-          if (types2.length === 1 && types2[0] === group.type && typeErrors) {
+          if (types.length === 1 && types[0] === group.type && typeErrors) {
             gen.else();
             (0, dataType_2.reportTypeError)(it);
           }
@@ -2538,27 +2538,27 @@ var require_validate = __commonJS({
         }
       });
     }
-    function checkStrictTypes(it, types2) {
+    function checkStrictTypes(it, types) {
       if (it.schemaEnv.meta || !it.opts.strictTypes)
         return;
-      checkContextTypes(it, types2);
+      checkContextTypes(it, types);
       if (!it.opts.allowUnionTypes)
-        checkMultipleTypes(it, types2);
+        checkMultipleTypes(it, types);
       checkKeywordTypes(it, it.dataTypes);
     }
-    function checkContextTypes(it, types2) {
-      if (!types2.length)
+    function checkContextTypes(it, types) {
+      if (!types.length)
         return;
       if (!it.dataTypes.length) {
-        it.dataTypes = types2;
+        it.dataTypes = types;
         return;
       }
-      types2.forEach((t) => {
+      types.forEach((t) => {
         if (!includesType(it.dataTypes, t)) {
           strictTypesError(it, `type "${t}" not allowed by context "${it.dataTypes.join(",")}"`);
         }
       });
-      narrowSchemaTypes(it, types2);
+      narrowSchemaTypes(it, types);
     }
     function checkMultipleTypes(it, ts) {
       if (ts.length > 1 && !(ts.length === 2 && ts.includes("null"))) {
@@ -2984,7 +2984,7 @@ var require_compile = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve12.call(this, root, ref);
+      let _sch = resolve11.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a3 = root.localRefs) === null || _a3 === void 0 ? void 0 : _a3[ref];
         const { schemaId } = this.opts;
@@ -3011,7 +3011,7 @@ var require_compile = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve12(root, ref) {
+    function resolve11(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -3841,7 +3841,7 @@ var require_fast_uri = __commonJS({
       }
       return uri;
     }
-    function resolve12(baseURI, relativeURI, options2) {
+    function resolve11(baseURI, relativeURI, options2) {
       const schemelessOptions = options2 ? Object.assign({ scheme: "null" }, options2) : { scheme: "null" };
       const {
         parsed: baseParsed,
@@ -4209,7 +4209,7 @@ var require_fast_uri = __commonJS({
     var fastUri = {
       SCHEMES,
       normalize: normalize2,
-      resolve: resolve12,
+      resolve: resolve11,
       resolveComponent,
       equal,
       serialize,
@@ -7172,8 +7172,8 @@ var require_dist = __commonJS({
         return ajv;
       }
       const [formats2, exportName] = opts.mode === "fast" ? [formats_1.fastFormats, fastName] : [formats_1.fullFormats, fullName];
-      const list2 = opts.formats || formats_1.formatNames;
-      addFormats2(ajv, list2, formats2, exportName);
+      const list = opts.formats || formats_1.formatNames;
+      addFormats2(ajv, list, formats2, exportName);
       if (opts.keywords)
         (0, limit_1.default)(ajv);
       return ajv;
@@ -7185,11 +7185,11 @@ var require_dist = __commonJS({
         throw new Error(`Unknown format "${name}"`);
       return f;
     };
-    function addFormats2(ajv, list2, fs, exportName) {
+    function addFormats2(ajv, list, fs, exportName) {
       var _a3;
       var _b;
       (_a3 = (_b = ajv.opts.code).formats) !== null && _a3 !== void 0 ? _a3 : _b.formats = (0, codegen_1._)`require("ajv-formats/dist/formats").${exportName}`;
-      for (const f of list2)
+      for (const f of list)
         ajv.addFormat(f, fs[f]);
     }
     module.exports = exports = formatsPlugin;
@@ -7213,7 +7213,7 @@ function toPosix(p) {
   return p.split("\\").join("/").replace(/^\.\//, "");
 }
 async function probeMedia(path) {
-  return new Promise((resolve12) => {
+  return new Promise((resolve11) => {
     const child = spawn("ffprobe", [
       "-v",
       "error",
@@ -7228,21 +7228,21 @@ async function probeMedia(path) {
     child.stdout.on("data", (c) => stdout += c);
     child.stderr.on("data", (c) => stderr += c);
     child.on("error", (err) => {
-      resolve12({ decode: "unchecked", decodeDiagnostic: `ffprobe unavailable: ${err.message}` });
+      resolve11({ decode: "unchecked", decodeDiagnostic: `ffprobe unavailable: ${err.message}` });
     });
     child.on("close", (code) => {
       if (code !== 0) {
-        resolve12({ decode: "damaged", decodeDiagnostic: stderr.trim().slice(0, 500) });
+        resolve11({ decode: "damaged", decodeDiagnostic: stderr.trim().slice(0, 500) });
         return;
       }
       try {
         const parsed = JSON.parse(stdout);
         const video = parsed.streams?.find((s) => s.codec_name);
         if (!video) {
-          resolve12({ decode: "damaged", decodeDiagnostic: "no decodable stream" });
+          resolve11({ decode: "damaged", decodeDiagnostic: "no decodable stream" });
           return;
         }
-        resolve12({
+        resolve11({
           decode: "playable",
           media: {
             durationSeconds: parsed.format?.duration ? Number(parsed.format.duration) : void 0,
@@ -7252,7 +7252,7 @@ async function probeMedia(path) {
           }
         });
       } catch (err) {
-        resolve12({ decode: "damaged", decodeDiagnostic: `probe parse failure: ${String(err)}` });
+        resolve11({ decode: "damaged", decodeDiagnostic: `probe parse failure: ${String(err)}` });
       }
     });
   });
@@ -8726,10 +8726,8 @@ var require__2 = __commonJS({
 
 // src/server.ts
 import { randomUUID as randomUUID9 } from "node:crypto";
-import { execFile as execFile2 } from "node:child_process";
-import { realpath as realpath3 } from "node:fs/promises";
-import { resolve as resolve11 } from "node:path";
-import { promisify as promisify2 } from "node:util";
+import { realpath as realpath2 } from "node:fs/promises";
+import { resolve as resolve10 } from "node:path";
 
 // node_modules/zod/v4/core/util.js
 var util_exports = {};
@@ -12045,7 +12043,7 @@ var recursive = /* @__PURE__ */ new WeakMap();
 var NONE = 0;
 var ASSUMED = 1;
 var PROVEN = 2;
-function isRecursive(inst, stack, resolve12) {
+function isRecursive(inst, stack, resolve11) {
   const cached2 = recursive.get(inst);
   if (cached2 !== void 0)
     return cached2 ? PROVEN : NONE;
@@ -12055,7 +12053,7 @@ function isRecursive(inst, stack, resolve12) {
   let result2 = NONE;
   const check = (child) => {
     if (result2 !== PROVEN && child?._zod) {
-      const answer = isRecursive(child, stack, resolve12);
+      const answer = isRecursive(child, stack, resolve11);
       if (answer > result2)
         result2 = answer;
     }
@@ -12066,7 +12064,7 @@ function isRecursive(inst, stack, resolve12) {
       const desc = Object.getOwnPropertyDescriptor(sh, key);
       if (spread && !desc.enumerable)
         continue;
-      const child = desc.get ? ASSUMED : desc.value?._zod ? isRecursive(desc.value, stack, resolve12) : NONE;
+      const child = desc.get ? ASSUMED : desc.value?._zod ? isRecursive(desc.value, stack, resolve11) : NONE;
       if (child > answer)
         answer = child;
     }
@@ -12130,7 +12128,7 @@ function isRecursive(inst, stack, resolve12) {
       break;
     // `$ZodLazy` caches its inner on the def, so a resolved edge is followed exactly
     case "lazy": {
-      const inner = def._cachedInner ?? (resolve12 ? inst._zod.innerType : void 0);
+      const inner = def._cachedInner ?? (resolve11 ? inst._zod.innerType : void 0);
       merge2(inner ? isRecursive(inner, stack, false) : ASSUMED);
       break;
     }
@@ -13201,7 +13199,7 @@ function compactTypeUnion(schema) {
   const options2 = schema.anyOf;
   if (!Array.isArray(options2) || options2.length === 0 || schema.type !== void 0)
     return;
-  const types2 = [];
+  const types = [];
   for (const option of options2) {
     if (!option || typeof option !== "object")
       return;
@@ -13213,12 +13211,12 @@ function compactTypeUnion(schema) {
     for (const member of Array.isArray(type) ? type : [type]) {
       if (typeof member !== "string")
         return;
-      if (!types2.includes(member))
-        types2.push(member);
+      if (!types.includes(member))
+        types.push(member);
     }
   }
   delete schema.anyOf;
-  schema.type = types2.length === 1 ? types2[0] : types2;
+  schema.type = types.length === 1 ? types[0] : types;
 }
 var FOLDABLE_KEYS = /* @__PURE__ */ new Set(["type", "properties", "required", "additionalProperties"]);
 var UNION_KEYS = ["oneOf", "anyOf"];
@@ -13594,8 +13592,8 @@ var contributors = {
 function aggregateChecks(schema) {
   const agg = {};
   const def = schema._zod.def;
-  const list2 = schema._zod.traits.has("$ZodCheck") ? [schema, ...def.checks ?? []] : def.checks ?? [];
-  for (const ch of list2)
+  const list = schema._zod.traits.has("$ZodCheck") ? [schema, ...def.checks ?? []] : def.checks ?? [];
+  for (const ch of list)
     contributors[ch._zod.def.check]?.(agg, ch._zod.def);
   const bag = schema._zod.bag;
   if (bag.minimum !== void 0)
@@ -13894,8 +13892,8 @@ function stringifyKeyNames(bySchema, json2, visited) {
     if (mapped.some((branch, i) => branch !== branches[i]))
       json2 = { ...json2, [keyword]: mapped };
   }
-  const types2 = Array.isArray(json2.type) ? json2.type : [json2.type];
-  const numericType = !types2.includes("string") && types2.some((t) => t === "number" || t === "integer");
+  const types = Array.isArray(json2.type) ? json2.type : [json2.type];
+  const numericType = !types.includes("string") && types.some((t) => t === "number" || t === "integer");
   const values = json2.enum ?? (json2.const !== void 0 ? [json2.const] : void 0);
   if (!numericType && !values?.some((v) => typeof v === "number"))
     return json2;
@@ -13908,7 +13906,7 @@ function stringifyKeyNames(bySchema, json2, visited) {
     return rest;
   rest.type = "string";
   if (!values)
-    rest.pattern = (types2.includes("number") ? number : integer).source;
+    rest.pattern = (types.includes("number") ? number : integer).source;
   return rest;
 }
 var pendingRecords = /* @__PURE__ */ new WeakMap();
@@ -17210,7 +17208,7 @@ var Protocol = class {
           return;
         }
         const pollInterval = task2.pollInterval ?? this._options?.defaultTaskPollInterval ?? 1e3;
-        await new Promise((resolve12) => setTimeout(resolve12, pollInterval));
+        await new Promise((resolve11) => setTimeout(resolve11, pollInterval));
         options2?.signal?.throwIfAborted();
       }
     } catch (error2) {
@@ -17227,7 +17225,7 @@ var Protocol = class {
    */
   request(request, resultSchema, options2) {
     const { relatedRequestId, resumptionToken, onresumptiontoken, task, relatedTask } = options2 ?? {};
-    return new Promise((resolve12, reject) => {
+    return new Promise((resolve11, reject) => {
       const earlyReject = (error2) => {
         reject(error2);
       };
@@ -17305,7 +17303,7 @@ var Protocol = class {
           if (!parseResult.success) {
             reject(parseResult.error);
           } else {
-            resolve12(parseResult.data);
+            resolve11(parseResult.data);
           }
         } catch (error2) {
           reject(error2);
@@ -17566,12 +17564,12 @@ var Protocol = class {
       }
     } catch {
     }
-    return new Promise((resolve12, reject) => {
+    return new Promise((resolve11, reject) => {
       if (signal.aborted) {
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
         return;
       }
-      const timeoutId = setTimeout(resolve12, interval2);
+      const timeoutId = setTimeout(resolve11, interval2);
       signal.addEventListener("abort", () => {
         clearTimeout(timeoutId);
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
@@ -18447,12 +18445,12 @@ var StdioServerTransport = class {
     this.onclose?.();
   }
   send(message2) {
-    return new Promise((resolve12) => {
+    return new Promise((resolve11) => {
       const json2 = serializeMessage(message2);
       if (this._stdout.write(json2)) {
-        resolve12();
+        resolve11();
       } else {
-        this._stdout.once("drain", resolve12);
+        this._stdout.once("drain", resolve11);
       }
     });
   }
@@ -18853,8 +18851,8 @@ var Session = class {
    */
   async runScript(localPath, remotePath, language2, options2 = {}) {
     const { createHash: createHash7 } = await import("node:crypto");
-    const { readFile: readFile12 } = await import("node:fs/promises");
-    const bytes = await readFile12(localPath);
+    const { readFile: readFile11 } = await import("node:fs/promises");
+    const bytes = await readFile11(localPath);
     const scriptSha256 = createHash7("sha256").update(bytes).digest("hex");
     const upload = await this.transport.upload(localPath, { remotePath });
     const executionId = formatId(allocateId("execution"));
@@ -19560,7 +19558,7 @@ async function inventory(root) {
 }
 async function command(argv2, options2 = {}) {
   options2.signal?.throwIfAborted();
-  return new Promise((resolve12, reject) => {
+  return new Promise((resolve11, reject) => {
     const child = spawn3(argv2[0], argv2.slice(1), { cwd: options2.cwd, env: options2.env, stdio: ["ignore", "pipe", "pipe"], signal: options2.signal });
     let stdout = "", stderr = "", size = 0;
     let failure2;
@@ -19587,7 +19585,7 @@ async function command(argv2, options2 = {}) {
     child.on("close", (code) => {
       clearTimeout(timer);
       if (failure2) reject(failure2);
-      else resolve12({ stdout, stderr, code: code ?? -1 });
+      else resolve11({ stdout, stderr, code: code ?? -1 });
     });
   });
 }
@@ -19700,7 +19698,7 @@ var Transfer = class {
         } catch (retentionError) {
           throw new AggregateError([error2, retentionError], `${diagnostic}; transfer retry evidence failed: ${String(retentionError)}`);
         }
-        await new Promise((resolve12) => setTimeout(resolve12, attempt * 250));
+        await new Promise((resolve11) => setTimeout(resolve11, attempt * 250));
       }
     }
   }
@@ -19712,7 +19710,7 @@ var Transfer = class {
       const diagnostic = `Guest setup/transfer command failed (${result2.code}): ${result2.stderr.slice(0, 1e3)}`;
       if (attempt >= 3 || result2.code !== 255 || !/Permission denied \((?:publickey,)?password(?:,keyboard-interactive)?\)/.test(result2.stderr)) throw new Error(diagnostic);
       await this.options.onRetry?.({ operation: "metadata", attempt, diagnostic });
-      await new Promise((resolve12) => setTimeout(resolve12, attempt * 250));
+      await new Promise((resolve11) => setTimeout(resolve11, attempt * 250));
     }
   }
   async pushFile(local, remote, approvedLocalRoot = dirname5(local)) {
@@ -20529,31 +20527,6 @@ function explainFinding(finding, steps, byExecution) {
 function result(root, a) {
   return { manifestPath: join9(root, "manifest.json"), deliveryVerified: true, snapshots: a.completeness, execution: a.execution, findings: a.findings };
 }
-async function deliveredPackageRun(rootDir) {
-  const root = await rootPath(rootDir), m = await readJson(root, "manifest.json");
-  const options2 = { packageId: text(m.packageId, "package id"), sessionId: text(m.sessionId, "session id"), taskId: text(m.taskId, "task id") };
-  const times = [...(await analyze(root, options2, await filesUnder(root))).details.values()].map((d) => Date.parse(d.at ?? "")).filter(Number.isFinite);
-  return { taskId: options2.taskId, startedAt: times.length ? new Date(Math.min(...times)).toISOString() : text(m.createdAt, "creation time") };
-}
-var listedFiles = ["manifest.json", "OPENING.txt", "summary.json", "trajectory.json", "walkthrough.json"];
-async function reviewData(rootDir) {
-  const root = await rootPath(rootDir), m = await readJson(root, "manifest.json"), files = await filesUnder(root);
-  const options2 = { packageId: text(m.packageId, "package id"), sessionId: text(m.sessionId, "session id"), taskId: text(m.taskId, "task id") };
-  const a = await analyze(root, options2, files);
-  const listed = [];
-  for (const path of listedFiles.filter((p) => files.includes(p))) listed.push({ path, bytes: (await lstat4(join9(root, path))).size });
-  return {
-    ...options2,
-    completeness: a.completeness,
-    execution: a.execution,
-    findings: a.findings,
-    reasons: a.reasons,
-    steps: a.steps,
-    details: Object.fromEntries(a.details),
-    outputs: a.outputs,
-    files: listed
-  };
-}
 async function deliverPackage(rootDir, options2) {
   const root = await rootPath(rootDir), files = await filesUnder(root);
   if (files.includes("manifest.json")) {
@@ -20570,7 +20543,7 @@ async function deliverPackage(rootDir, options2) {
     created.push(path);
   };
   try {
-    await save("OPENING.txt", "Review this package with the relay's trajectory review command: /mcp-vm-relay:trajectory <this directory> in Claude Code, /mcp-vm-relay-trajectory <this directory> in pi, or the relay_trajectory tool. It verifies the package and opens the review app on it in the browser; the steps and verdicts are derived from the evidence when you review it. Snapshot completeness and execution are separate verdicts, and the page says why each one is not complete or passed and what you can do. Originals are under state/, host metadata under host/, and declared extractions under extractions/. manifest.json checksums every artifact except itself.\n");
+    await save("OPENING.txt", "Read this package's steps and verdicts with the review data export of the relay's npm package, @wezzard/mcp-vm-relay/review-data; pi-secretary's computer-use extension shows them beside the agent's session. The steps and verdicts are derived from the evidence when you review it. Snapshot completeness and execution are separate verdicts, and the review data says why each one is not complete or passed and what you can do. Originals are under state/, host metadata under host/, and declared extractions under extractions/. manifest.json checksums every artifact except itself.\n");
     const snapshotPaths = new Set(a.snapshots.map((s) => s.path)), all = await filesUnder(root);
     await save("manifest.json", json(await buildManifest({
       ...options2,
@@ -20707,8 +20680,8 @@ async function acquireOwnerLock(path, options2 = {}) {
   }
   let ended = false;
   let resolveEnd;
-  const end = new Promise((resolve12) => {
-    resolveEnd = resolve12;
+  const end = new Promise((resolve11) => {
+    resolveEnd = resolve11;
   });
   const markEnded = () => {
     ended = true;
@@ -21572,8 +21545,8 @@ function IsEnum(value) {
 }
 
 // node_modules/typebox/build/type/types/intersect.mjs
-function Intersect(types2, options2 = {}) {
-  return memory_exports.Create({ "~kind": "Intersect" }, { allOf: types2 }, options2);
+function Intersect(types, options2 = {}) {
+  return memory_exports.Create({ "~kind": "Intersect" }, { allOf: types }, options2);
 }
 function IsIntersect(value) {
   return IsKind(value, "Intersect");
@@ -22029,18 +22002,18 @@ function ParsePatternIntoTypes(pattern) {
 function FromLiteral(_value) {
   return true;
 }
-function FromTypesReduce(types2) {
-  return guard_exports.ShiftLeft(types2, (left, right) => FromType(left) ? FromTypesReduce(right) : false, () => true);
+function FromTypesReduce(types) {
+  return guard_exports.ShiftLeft(types, (left, right) => FromType(left) ? FromTypesReduce(right) : false, () => true);
 }
-function FromTypes(types2) {
-  const result2 = guard_exports.IsEqual(types2.length, 0) ? false : FromTypesReduce(types2);
+function FromTypes(types) {
+  const result2 = guard_exports.IsEqual(types.length, 0) ? false : FromTypesReduce(types);
   return result2;
 }
 function FromType(type) {
   return IsUnion(type) ? FromTypes(type.anyOf) : IsLiteral(type) ? FromLiteral(type.const) : false;
 }
-function IsTemplateLiteralFinite(types2) {
-  const result2 = FromTypes(types2);
+function IsTemplateLiteralFinite(types) {
+  const result2 = FromTypes(types);
   return result2;
 }
 
@@ -22056,34 +22029,34 @@ function FromLiteralPush(variants, value, result2 = []) {
 function FromLiteral2(variants, value) {
   return guard_exports.IsEqual(variants.length, 0) ? [`${value}`] : FromLiteralPush(variants, value);
 }
-function FromUnion(variants, types2, result2 = []) {
-  return guard_exports.ShiftLeft(types2, (left, right) => FromUnion(variants, right, [...result2, ...FromType2(variants, left)]), () => result2);
+function FromUnion(variants, types, result2 = []) {
+  return guard_exports.ShiftLeft(types, (left, right) => FromUnion(variants, right, [...result2, ...FromType2(variants, left)]), () => result2);
 }
 function FromType2(variants, type) {
   const result2 = IsUnion(type) ? FromUnion(variants, type.anyOf) : IsLiteral(type) ? FromLiteral2(variants, type.const) : Unreachable();
   return result2;
 }
-function DecodeFromSpan(variants, types2) {
-  return guard_exports.ShiftLeft(types2, (left, right) => DecodeFromSpan(FromType2(variants, left), right), () => variants);
+function DecodeFromSpan(variants, types) {
+  return guard_exports.ShiftLeft(types, (left, right) => DecodeFromSpan(FromType2(variants, left), right), () => variants);
 }
 function VariantsToLiterals(variants) {
   return variants.map((variant) => Literal(variant));
 }
-function DecodeTypesAsUnion(types2) {
-  const variants = DecodeFromSpan([], types2);
+function DecodeTypesAsUnion(types) {
+  const variants = DecodeFromSpan([], types);
   const literals = VariantsToLiterals(variants);
   const result2 = Union(literals);
   return result2;
 }
-function DecodeTypes(types2) {
-  return guard_exports.IsEqual(types2.length, 0) ? Unreachable() : (
+function DecodeTypes(types) {
+  return guard_exports.IsEqual(types.length, 0) ? Unreachable() : (
     // Literal('') :
-    guard_exports.IsEqual(types2.length, 1) && IsLiteral(types2[0]) ? types2[0] : DecodeTypesAsUnion(types2)
+    guard_exports.IsEqual(types.length, 1) && IsLiteral(types[0]) ? types[0] : DecodeTypesAsUnion(types)
   );
 }
 function TemplateLiteralDecodeUnsafe(pattern) {
-  const types2 = ParsePatternIntoTypes(pattern);
-  const result2 = guard_exports.IsEqual(types2.length, 0) ? String2() : IsTemplateLiteralFinite(types2) ? DecodeTypes(types2) : TemplateLiteralCreate(pattern);
+  const types = ParsePatternIntoTypes(pattern);
+  const result2 = guard_exports.IsEqual(types.length, 0) ? String2() : IsTemplateLiteralFinite(types) ? DecodeTypes(types) : TemplateLiteralCreate(pattern);
   return result2;
 }
 function TemplateLiteralDecode(pattern) {
@@ -22110,8 +22083,8 @@ function FromBooleanKey(value) {
 }
 
 // node_modules/typebox/build/type/types/tuple.mjs
-function Tuple(types2, options2 = {}) {
-  const [items, minItems, additionalItems] = [types2, types2.length, false];
+function Tuple(types, options2 = {}) {
+  const [items, minItems, additionalItems] = [types, types.length, false];
   return memory_exports.Create({ ["~kind"]: "Tuple" }, { type: "array", additionalItems, items, minItems }, options2);
 }
 function IsTuple(value) {
@@ -22164,8 +22137,8 @@ function RemoveOptional(type, options2 = {}) {
 }
 
 // node_modules/typebox/build/type/engine/tuple/to_object.mjs
-function TupleElementsToProperties(types2) {
-  const result2 = types2.reduceRight((result3, right, index) => {
+function TupleElementsToProperties(types) {
+  const result2 = types.reduceRight((result3, right, index) => {
     return { [index]: right, ...result3 };
   }, {});
   return result2;
@@ -22241,14 +22214,14 @@ function DistributeOperation(left, right) {
   const result2 = shouldEvaluate ? EvaluateIntersect([evaluatedLeft, evaluatedRight]) : Narrow(evaluatedLeft, evaluatedRight);
   return result2;
 }
-function DistributeType(type, types2, result2 = []) {
-  return guard_exports.ShiftLeft(types2, (left, right) => DistributeType(type, right, [...result2, DistributeOperation(left, type)]), () => guard_exports.IsEqual(result2.length, 0) ? [type] : result2);
+function DistributeType(type, types, result2 = []) {
+  return guard_exports.ShiftLeft(types, (left, right) => DistributeType(type, right, [...result2, DistributeOperation(left, type)]), () => guard_exports.IsEqual(result2.length, 0) ? [type] : result2);
 }
-function DistributeUnion(types2, distribution, result2 = []) {
-  return guard_exports.ShiftLeft(types2, (left, right) => DistributeUnion(right, distribution, [...result2, ...Distribute([left], distribution)]), () => result2);
+function DistributeUnion(types, distribution, result2 = []) {
+  return guard_exports.ShiftLeft(types, (left, right) => DistributeUnion(right, distribution, [...result2, ...Distribute([left], distribution)]), () => result2);
 }
-function Distribute(types2, result2 = []) {
-  return guard_exports.ShiftLeft(types2, (left, right) => IsUnion(left) ? Distribute(right, DistributeUnion(left.anyOf, result2)) : Distribute(right, DistributeType(left, result2)), () => result2);
+function Distribute(types, result2 = []) {
+  return guard_exports.ShiftLeft(types, (left, right) => IsUnion(left) ? Distribute(right, DistributeUnion(left.anyOf, result2)) : Distribute(right, DistributeType(left, result2)), () => result2);
 }
 
 // node_modules/typebox/build/type/engine/exclude/operation.mjs
@@ -22278,8 +22251,8 @@ function EvaluateDependent(if_, then_, else_) {
 function EvaluateEnum(values, result2 = []) {
   return guard_exports.ShiftLeft(values, (left, right) => EvaluateEnum(right, [...result2, Literal(left)]), () => EvaluateUnion(result2));
 }
-function EvaluateIntersect(types2) {
-  const distribution = Distribute(types2);
+function EvaluateIntersect(types) {
+  const distribution = Distribute(types);
   const broadend = Broaden(distribution);
   const result2 = EvaluateUnion(broadend);
   return result2;
@@ -22289,8 +22262,8 @@ function EvaluateTemplateLiteral(pattern) {
   const result2 = EvaluateType(evaluated);
   return result2;
 }
-function EvaluateUnion(types2) {
-  const broadend = Broaden(types2);
+function EvaluateUnion(types) {
+  const broadend = Broaden(types);
   const result2 = EvaluateUnionFast(broadend);
   return result2;
 }
@@ -22298,8 +22271,8 @@ function EvaluateType(type) {
   const result2 = IsDependent(type) ? EvaluateDependent(type.if, type.then, type.else) : IsEnum(type) ? EvaluateEnum(type.enum) : IsIntersect(type) ? EvaluateIntersect(type.allOf) : IsTemplateLiteral(type) ? EvaluateTemplateLiteral(type.pattern) : IsUnion(type) ? EvaluateUnion(type.anyOf) : type;
   return result2;
 }
-function EvaluateUnionFast(types2) {
-  const result2 = guard_exports.IsEqual(types2.length, 1) ? types2[0] : guard_exports.IsEqual(types2.length, 0) ? Never() : Union(types2);
+function EvaluateUnionFast(types) {
+  const result2 = guard_exports.IsEqual(types.length, 1) ? types[0] : guard_exports.IsEqual(types.length, 0) ? Never() : Union(types);
   return result2;
 }
 
@@ -22317,8 +22290,8 @@ function FromIntegerKey(_key, value) {
 }
 
 // node_modules/typebox/build/type/engine/record/from_key_intersect.mjs
-function FromIntersectKey(types2, value) {
-  const evaluatedKey = EvaluateIntersect(types2);
+function FromIntersectKey(types, value) {
+  const evaluatedKey = EvaluateIntersect(types);
   const result2 = FromKey(evaluatedKey, value);
   return result2;
 }
@@ -22341,8 +22314,8 @@ function FromStringKey(key, value) {
 
 // node_modules/typebox/build/type/engine/record/from_key_template_literal.mjs
 function FromTemplateKey(pattern, value) {
-  const types2 = ParsePatternIntoTypes(pattern);
-  const finite = IsTemplateLiteralFinite(types2);
+  const types = ParsePatternIntoTypes(pattern);
+  const finite = IsTemplateLiteralFinite(types);
   const result2 = finite ? FromKey(EvaluateTemplateLiteral(pattern), value) : CreateRecord(pattern, value);
   return result2;
 }
@@ -22352,29 +22325,29 @@ function FlattenType(type) {
   const result2 = IsUnion(type) ? Flatten(type.anyOf) : [type];
   return result2;
 }
-function Flatten(types2, result2 = []) {
-  return guard_exports.ShiftLeft(types2, (left, right) => Flatten(right, [...result2, ...FlattenType(left)]), () => result2);
+function Flatten(types, result2 = []) {
+  return guard_exports.ShiftLeft(types, (left, right) => Flatten(right, [...result2, ...FlattenType(left)]), () => result2);
 }
 
 // node_modules/typebox/build/type/engine/record/from_key_union.mjs
-function StringOrNumberCheck(types2) {
-  return types2.some((type) => IsString3(type) || IsNumber3(type) || IsInteger2(type));
+function StringOrNumberCheck(types) {
+  return types.some((type) => IsString3(type) || IsNumber3(type) || IsInteger2(type));
 }
-function TryBuildRecord(types2, value) {
-  return guard_exports.IsEqual(StringOrNumberCheck(types2), true) ? CreateRecord(StringKey, value) : void 0;
+function TryBuildRecord(types, value) {
+  return guard_exports.IsEqual(StringOrNumberCheck(types), true) ? CreateRecord(StringKey, value) : void 0;
 }
-function CreateProperties(types2, value) {
-  return types2.reduce((result2, left) => {
+function CreateProperties(types, value) {
+  return types.reduce((result2, left) => {
     return IsLiteral(left) && (guard_exports.IsString(left.const) || guard_exports.IsNumber(left.const)) ? { ...result2, [left.const]: value } : result2;
   }, {});
 }
-function CreateObject(types2, value) {
-  const properties = CreateProperties(types2, value);
+function CreateObject(types, value) {
+  const properties = CreateProperties(types, value);
   const result2 = _Object_(properties);
   return result2;
 }
-function FromUnionKey(types2, value) {
-  const flattened = Flatten(types2);
+function FromUnionKey(types, value) {
+  const flattened = Flatten(types);
   const record3 = TryBuildRecord(flattened, value);
   return IsSchema(record3) ? record3 : CreateObject(flattened, value);
 }
@@ -23329,8 +23302,8 @@ function EncodeString(right, pattern) {
 function EncodeTemplateLiteral(templatePattern, right, pattern) {
   return EncodeTypes(right, `${pattern}${UnwrapTemplateLiteralPattern(templatePattern)}`);
 }
-function EncodeTemplateLiteralDeferred(types2, right, pattern) {
-  const templateLiteral = TemplateLiteralAction(types2, {});
+function EncodeTemplateLiteralDeferred(types, right, pattern) {
+  const templateLiteral = TemplateLiteralAction(types, {});
   const result2 = EncodeType(templateLiteral, right, pattern);
   return result2;
 }
@@ -23338,49 +23311,49 @@ function EncodeEnum(values, right, pattern) {
   const evaluated = EvaluateEnum(values);
   return EncodeType(evaluated, right, pattern);
 }
-function EncodeUnion(types2, right, pattern, result2 = []) {
-  return guard_exports.ShiftLeft(types2, (head, tail) => EncodeUnion(tail, right, pattern, [...result2, EncodeType(head, [], "")]), () => EncodeTypes(right, `${pattern}(${JoinString(result2)})`));
+function EncodeUnion(types, right, pattern, result2 = []) {
+  return guard_exports.ShiftLeft(types, (head, tail) => EncodeUnion(tail, right, pattern, [...result2, EncodeType(head, [], "")]), () => EncodeTypes(right, `${pattern}(${JoinString(result2)})`));
 }
 function EncodeType(type, right, pattern) {
   return IsEnum(type) ? EncodeEnum(type.enum, right, pattern) : IsInteger2(type) ? EncodeInteger(right, pattern) : IsLiteral(type) ? EncodeLiteral(type.const, right, pattern) : IsBigInt2(type) ? EncodeBigInt(right, pattern) : IsBoolean3(type) ? EncodeBoolean(right, pattern) : IsNumber3(type) ? EncodeNumber(right, pattern) : IsString3(type) ? EncodeString(right, pattern) : IsTemplateLiteral(type) ? EncodeTemplateLiteral(type.pattern, right, pattern) : IsTemplateLiteralDeferred(type) ? EncodeTemplateLiteralDeferred(type.parameters[0], right, pattern) : IsUnion(type) ? EncodeUnion(type.anyOf, right, pattern) : NeverPattern;
 }
-function EncodeTypes(types2, pattern) {
-  return guard_exports.ShiftLeft(types2, (left, right) => EncodeType(left, right, pattern), () => pattern);
+function EncodeTypes(types, pattern) {
+  return guard_exports.ShiftLeft(types, (left, right) => EncodeType(left, right, pattern), () => pattern);
 }
-function EncodePattern(types2) {
-  const encoded = EncodeTypes(types2, "");
+function EncodePattern(types) {
+  const encoded = EncodeTypes(types, "");
   const result2 = `^${encoded}$`;
   return result2;
 }
-function TemplateLiteralEncode(types2) {
-  const pattern = EncodePattern(types2);
+function TemplateLiteralEncode(types) {
+  const pattern = EncodePattern(types);
   const result2 = TemplateLiteralCreate(pattern);
   return result2;
 }
 
 // node_modules/typebox/build/type/engine/template_literal/instantiate.mjs
-function TemplateLiteralAction(types2, options2) {
-  const result2 = CanInstantiate(types2) ? memory_exports.Update(TemplateLiteralEncode(types2), {}, options2) : TemplateLiteralDeferred(types2, options2);
+function TemplateLiteralAction(types, options2) {
+  const result2 = CanInstantiate(types) ? memory_exports.Update(TemplateLiteralEncode(types), {}, options2) : TemplateLiteralDeferred(types, options2);
   return result2;
 }
-function TemplateLiteralInstantiate(context, state, types2, options2) {
-  const instantiatedTypes = InstantiateTypes(context, state, types2);
+function TemplateLiteralInstantiate(context, state, types, options2) {
+  const instantiatedTypes = InstantiateTypes(context, state, types);
   return TemplateLiteralAction(instantiatedTypes, options2);
 }
 
 // node_modules/typebox/build/type/types/template_literal.mjs
-function TemplateLiteralDeferred(types2, options2 = {}) {
-  return Deferred("TemplateLiteral", [types2], options2);
+function TemplateLiteralDeferred(types, options2 = {}) {
+  return Deferred("TemplateLiteral", [types], options2);
 }
 function IsTemplateLiteralDeferred(value) {
   return IsSchema(value) && guard_exports.HasPropertyKey(value, "action") && guard_exports.IsEqual(value.action, "TemplateLiteral");
 }
-function TemplateLiteralFromTypes(types2) {
-  return TemplateLiteralAction(types2, {});
+function TemplateLiteralFromTypes(types) {
+  return TemplateLiteralAction(types, {});
 }
 function TemplateLiteralFromString(template) {
-  const types2 = ParseTemplateIntoTypes(template);
-  return TemplateLiteralFromTypes(types2);
+  const types = ParseTemplateIntoTypes(template);
+  return TemplateLiteralFromTypes(types);
 }
 function TemplateLiteral2(input, options2 = {}) {
   const type = guard_exports.IsString(input) ? TemplateLiteralFromString(input) : TemplateLiteralFromTypes(input);
@@ -23674,14 +23647,14 @@ function InferUnionResult(inferred, name, left, right) {
 }
 
 // node_modules/typebox/build/type/extends/tuple.mjs
-function Reverse(types2) {
-  return [...types2].reverse();
+function Reverse(types) {
+  return [...types].reverse();
 }
-function ApplyReverse(types2, reversed) {
-  return reversed ? Reverse(types2) : types2;
+function ApplyReverse(types, reversed) {
+  return reversed ? Reverse(types) : types;
 }
-function Reversed(types2) {
-  const first = types2.length > 0 ? types2[0] : void 0;
+function Reversed(types) {
+  const first = types.length > 0 ? types[0] : void 0;
   const inferrable = IsSchema(first) ? TryRestInferable(first) : void 0;
   return IsSchema(inferrable);
 }
@@ -23778,11 +23751,11 @@ function FromRef(stack, context, ref) {
   return stack.includes(ref) ? true : FromType3([...stack, ref], context, context[ref]);
 }
 function FromProperties(stack, context, properties) {
-  const types2 = PropertyValues(properties);
-  return FromTypes2(stack, context, types2);
+  const types = PropertyValues(properties);
+  return FromTypes2(stack, context, types);
 }
-function FromTypes2(stack, context, types2) {
-  return guard_exports.ShiftLeft(types2, (left, right) => FromType3(stack, context, left) ? true : FromTypes2(stack, context, right), () => false);
+function FromTypes2(stack, context, types) {
+  return guard_exports.ShiftLeft(types, (left, right) => FromType3(stack, context, left) ? true : FromTypes2(stack, context, right), () => false);
 }
 function FromType3(stack, context, type) {
   return IsRef(type) ? FromRef(stack, context, type.$ref) : IsArray2(type) ? FromType3(stack, context, type.items) : IsConstructor2(type) ? FromTypes2(stack, context, [...type.parameters, type.instanceType]) : IsFunction2(type) ? FromTypes2(stack, context, [...type.parameters, type.returnType]) : IsInterfaceDeferred(type) ? FromProperties(stack, context, type.parameters[1]) : IsIntersect(type) ? FromTypes2(stack, context, type.allOf) : IsObject2(type) ? FromProperties(stack, context, type.properties) : IsUnion(type) ? FromTypes2(stack, context, type.anyOf) : IsTuple(type) ? FromTypes2(stack, context, type.items) : IsRecord(type) ? FromType3(stack, context, RecordValue(type)) : false;
@@ -23809,11 +23782,11 @@ function FromRef2(context, ref, result2) {
   return result2.includes(ref) ? result2 : ref in context ? FromType4(context, context[ref], [...result2, ref]) : Unreachable();
 }
 function FromProperties2(context, properties, result2) {
-  const types2 = PropertyValues(properties);
-  return FromTypes3(context, types2, result2);
+  const types = PropertyValues(properties);
+  return FromTypes3(context, types, result2);
 }
-function FromTypes3(context, types2, result2) {
-  return types2.reduce((result3, left) => {
+function FromTypes3(context, types, result2) {
+  return types.reduce((result3, left) => {
     return FromType4(context, left, result3);
   }, result2);
 }
@@ -23834,8 +23807,8 @@ function FromProperties3(properties) {
     return { ...result2, [key]: FromType5(properties[key]) };
   }, {});
 }
-function FromTypes4(types2) {
-  return types2.reduce((result2, left) => {
+function FromTypes4(types) {
+  return types.reduce((result2, left) => {
     return [...result2, FromType5(left)];
   }, []);
 }
@@ -23901,33 +23874,33 @@ function Compare(left, right) {
 }
 
 // node_modules/typebox/build/type/engine/evaluate/broaden.mjs
-function BroadenFilter(type, types2, result2 = [], all = types2) {
-  return guard_exports.ShiftLeft(types2, (left, right) => {
+function BroadenFilter(type, types, result2 = [], all = types) {
+  return guard_exports.ShiftLeft(types, (left, right) => {
     const compare2 = Compare(type, left);
     return guard_exports.IsEqual(compare2, CompareResultLeftInside) || guard_exports.IsEqual(compare2, CompareResultEqual) ? all : guard_exports.IsEqual(compare2, CompareResultDisjoint) ? BroadenFilter(type, right, [...result2, left], all) : BroadenFilter(type, right, result2, all);
   }, () => [...result2, type]);
 }
-function BroadenType(type, types2, result2) {
+function BroadenType(type, types, result2) {
   const evaluated = EvaluateType(type);
   return IsAny(evaluated) ? [evaluated] : (
     // terminate (always the most broad)
     IsUnknown(evaluated) ? [evaluated] : (
       // terminate (always the most broad)
-      IsNever(evaluated) ? BroadenTypes(types2, result2) : (
+      IsNever(evaluated) ? BroadenTypes(types, result2) : (
         // ignored: never is dropped
-        IsObject2(evaluated) ? BroadenTypes(types2, [...result2, evaluated]) : (
+        IsObject2(evaluated) ? BroadenTypes(types, [...result2, evaluated]) : (
           // objects are always considered (too expensive to compare)
-          BroadenTypes(types2, BroadenFilter(evaluated, result2))
+          BroadenTypes(types, BroadenFilter(evaluated, result2))
         )
       )
     )
   );
 }
-function BroadenTypes(types2, result2 = []) {
-  return guard_exports.ShiftLeft(types2, (left, right) => BroadenType(left, right, result2), () => result2);
+function BroadenTypes(types, result2 = []) {
+  return guard_exports.ShiftLeft(types, (left, right) => BroadenType(left, right, result2), () => result2);
 }
-function Broaden(types2) {
-  const broadened = BroadenTypes(types2);
+function Broaden(types) {
+  const broadened = BroadenTypes(types);
   const flattened = Flatten(broadened);
   return flattened;
 }
@@ -24125,8 +24098,8 @@ function FromTemplateLiteral(mapping, pattern) {
 }
 
 // node_modules/typebox/build/type/engine/intrinsics/from_union.mjs
-function FromUnion2(mapping, types2) {
-  const result2 = types2.map((type) => FromType7(mapping, type));
+function FromUnion2(mapping, types) {
+  const result2 = types.map((type) => FromType7(mapping, type));
   return Union(result2);
 }
 
@@ -24354,8 +24327,8 @@ function CollapseIntersectProperties(left, right) {
   const shared = memory_exports.Assign(unique, sharedProperties);
   return shared;
 }
-function FromIntersect(types2) {
-  return types2.reduce((result2, left) => {
+function FromIntersect(types) {
+  return types.reduce((result2, left) => {
     return CollapseIntersectProperties(result2, FromType8(left));
   }, {});
 }
@@ -24366,8 +24339,8 @@ function FromObject4(properties) {
 }
 
 // node_modules/typebox/build/type/engine/object/from_tuple.mjs
-function FromTuple(types2) {
-  const object5 = TupleToObject(Tuple(types2));
+function FromTuple(types) {
+  const object5 = TupleToObject(Tuple(types));
   const result2 = FromType8(object5);
   return result2;
 }
@@ -24380,11 +24353,11 @@ function CollapseUnionProperties(left, right) {
   }, {});
   return result2;
 }
-function ReduceVariants(types2, result2) {
-  return guard_exports.ShiftLeft(types2, (left, right) => ReduceVariants(right, CollapseUnionProperties(result2, FromType8(left))), () => result2);
+function ReduceVariants(types, result2) {
+  return guard_exports.ShiftLeft(types, (left, right) => ReduceVariants(right, CollapseUnionProperties(result2, FromType8(left))), () => result2);
 }
-function FromUnion3(types2) {
-  return guard_exports.ShiftLeft(types2, (left, right) => ReduceVariants(right, FromType8(left)), () => Unreachable());
+function FromUnion3(types) {
+  return guard_exports.ShiftLeft(types, (left, right) => ReduceVariants(right, FromType8(left)), () => Unreachable());
 }
 
 // node_modules/typebox/build/type/engine/object/from_type.mjs
@@ -24410,8 +24383,8 @@ function ConvertToIntegerKey(value) {
 function NormalizeLiteral(value) {
   return Literal(ConvertToIntegerKey(value));
 }
-function NormalizeIndexerTypes(types2) {
-  return types2.map((type) => NormalizeIndexer(type));
+function NormalizeIndexerTypes(types) {
+  return types.map((type) => NormalizeIndexer(type));
 }
 function NormalizeIndexer(type) {
   return IsIntersect(type) ? Intersect(NormalizeIndexerTypes(type.allOf)) : IsUnion(type) ? Union(NormalizeIndexerTypes(type.anyOf)) : IsLiteral(type) ? NormalizeLiteral(type.const) : type;
@@ -24448,8 +24421,8 @@ function FromEnum(values) {
 }
 
 // node_modules/typebox/build/type/engine/indexable/from_intersect.mjs
-function FromIntersect2(types2) {
-  const evaluated = EvaluateIntersect(types2);
+function FromIntersect2(types) {
+  const evaluated = EvaluateIntersect(types);
   const result2 = FromType9(evaluated);
   return result2;
 }
@@ -24468,8 +24441,8 @@ function FromTemplateLiteral2(pattern) {
 }
 
 // node_modules/typebox/build/type/engine/indexable/from_union.mjs
-function FromUnion4(types2) {
-  return types2.reduce((result2, left) => {
+function FromUnion4(types) {
+  return types.reduce((result2, left) => {
     return [...result2, ...FromType9(left)];
   }, []);
 }
@@ -24486,8 +24459,8 @@ function ToIndexableKeys(type) {
 }
 
 // node_modules/typebox/build/type/engine/this/expand_this.mjs
-function FromTypes5(properties, types2) {
-  return types2.map((type) => FromType10(properties, type));
+function FromTypes5(properties, types) {
+  return types.map((type) => FromType10(properties, type));
 }
 function FromType10(properties, type) {
   return IsArray2(type) ? _Array_(FromType10(properties, type.items)) : IsConstructor2(type) ? Constructor(FromTypes5(properties, type.parameters), FromType10(properties, type.instanceType)) : IsFunction2(type) ? _Function_(FromTypes5(properties, type.parameters), FromType10(properties, type.returnType)) : IsTuple(type) ? Tuple(FromTypes5(properties, type.items)) : IsUnion(type) ? Union(FromTypes5(properties, type.anyOf)) : IsIntersect(type) ? Intersect(FromTypes5(properties, type.allOf)) : IsThis(type) ? _Object_(properties) : type;
@@ -24535,32 +24508,32 @@ function FromObject5(properties, indexer) {
 function ConvertLiteral(value) {
   return Literal(ConvertToIntegerKey(value));
 }
-function ArrayIndexerTypes(types2) {
-  return types2.map((type) => FormatArrayIndexer(type));
+function ArrayIndexerTypes(types) {
+  return types.map((type) => FormatArrayIndexer(type));
 }
 function FormatArrayIndexer(type) {
   return IsIntersect(type) ? Intersect(ArrayIndexerTypes(type.allOf)) : IsUnion(type) ? Union(ArrayIndexerTypes(type.anyOf)) : IsLiteral(type) ? ConvertLiteral(type.const) : type;
 }
 
 // node_modules/typebox/build/type/engine/indexed/from_tuple.mjs
-function IndexElementsWithIndexer(types2, indexer) {
-  return types2.reduceRight((result2, right, index) => {
+function IndexElementsWithIndexer(types, indexer) {
+  return types.reduceRight((result2, right, index) => {
     const check = Extends({}, Literal(index), indexer);
     return result_exports.IsExtendsTrueLike(check) ? [right, ...result2] : result2;
   }, []);
 }
-function FromTupleWithIndexer(types2, indexer) {
+function FromTupleWithIndexer(types, indexer) {
   const formattedArrayIndexer = FormatArrayIndexer(indexer);
-  const elements = IndexElementsWithIndexer(types2, formattedArrayIndexer);
+  const elements = IndexElementsWithIndexer(types, formattedArrayIndexer);
   return EvaluateUnionFast(elements);
 }
-function FromTupleWithoutIndexer(types2) {
-  return EvaluateUnionFast(types2);
+function FromTupleWithoutIndexer(types) {
+  return EvaluateUnionFast(types);
 }
-function FromTuple2(types2, indexer) {
+function FromTuple2(types, indexer) {
   return (
     // length (intrinsic)
-    IsLiteral(indexer) && guard_exports.IsEqual(indexer.const, "length") ? Literal(types2.length) : IsNumber3(indexer) || IsInteger2(indexer) ? FromTupleWithoutIndexer(types2) : FromTupleWithIndexer(types2, indexer)
+    IsLiteral(indexer) && guard_exports.IsEqual(indexer.const, "length") ? Literal(types.length) : IsNumber3(indexer) || IsInteger2(indexer) ? FromTupleWithoutIndexer(types) : FromTupleWithIndexer(types, indexer)
   );
 }
 
@@ -24643,8 +24616,8 @@ function FromRecord2(type) {
 }
 
 // node_modules/typebox/build/type/engine/keyof/from_tuple.mjs
-function FromTuple3(types2) {
-  const result2 = types2.map((_, index) => Literal(index));
+function FromTuple3(types) {
+  const result2 = types.map((_, index) => Literal(index));
   return EvaluateUnionFast(result2);
 }
 
@@ -24680,8 +24653,8 @@ function FromTemplateLiteral3(pattern) {
   const result2 = FromType13(evaluated);
   return result2;
 }
-function FromUnion5(types2) {
-  return types2.reduce((result2, left) => {
+function FromUnion5(types) {
+  return types.reduce((result2, left) => {
     return [...result2, ...FromType13(left)];
   }, []);
 }
@@ -24882,15 +24855,15 @@ function FromDependent3(if_, then_, else_) {
 }
 
 // node_modules/typebox/build/type/engine/partial/from_intersect.mjs
-function FromIntersect3(types2) {
-  const evaluated = EvaluateIntersect(types2);
+function FromIntersect3(types) {
+  const evaluated = EvaluateIntersect(types);
   const result2 = FromType15(evaluated);
   return result2;
 }
 
 // node_modules/typebox/build/type/engine/partial/from_union.mjs
-function FromUnion6(types2) {
-  const result2 = types2.map((type) => FromType15(type));
+function FromUnion6(types) {
+  const result2 = types.map((type) => FromType15(type));
   return Union(result2);
 }
 
@@ -24984,8 +24957,8 @@ function FromDependent4(if_, then_, else_) {
 }
 
 // node_modules/typebox/build/type/engine/readonly_object/from_intersect.mjs
-function FromIntersect4(types2) {
-  const evaluated = EvaluateIntersect(types2);
+function FromIntersect4(types) {
+  const evaluated = EvaluateIntersect(types);
   const result2 = FromType17(evaluated);
   return result2;
 }
@@ -25000,14 +24973,14 @@ function FromObject8(properties) {
 }
 
 // node_modules/typebox/build/type/engine/readonly_object/from_tuple.mjs
-function FromTuple4(types2) {
-  const result2 = AddImmutable(Tuple(types2));
+function FromTuple4(types) {
+  const result2 = AddImmutable(Tuple(types));
   return result2;
 }
 
 // node_modules/typebox/build/type/engine/readonly_object/from_union.mjs
-function FromUnion7(types2) {
-  const result2 = types2.map((type) => FromType17(type));
+function FromUnion7(types) {
+  const result2 = types.map((type) => FromType17(type));
   return Union(result2);
 }
 
@@ -25047,15 +25020,15 @@ function FromDependent5(if_, then_, else_) {
 }
 
 // node_modules/typebox/build/type/engine/required/from_intersect.mjs
-function FromIntersect5(types2) {
-  const evaluated = EvaluateIntersect(types2);
+function FromIntersect5(types) {
+  const evaluated = EvaluateIntersect(types);
   const result2 = FromType18(evaluated);
   return result2;
 }
 
 // node_modules/typebox/build/type/engine/required/from_union.mjs
-function FromUnion8(types2) {
-  const result2 = types2.map((type) => FromType18(type));
+function FromUnion8(types) {
+  const result2 = types.map((type) => FromType18(type));
   return Union(result2);
 }
 
@@ -25135,8 +25108,8 @@ function SpreadElement(type) {
   const result2 = IsRest(type) ? IsTuple(type.items) ? RestSpread(type.items.items) : IsInfer(type.items) ? [type] : IsRef(type.items) ? [type] : [Never()] : [type];
   return result2;
 }
-function RestSpread(types2) {
-  const result2 = types2.reduce((result3, left) => {
+function RestSpread(types) {
+  const result2 = types.reduce((result3, left) => {
     return [...result3, ...SpreadElement(left)];
   }, []);
   return result2;
@@ -25146,21 +25119,21 @@ function RestSpread(types2) {
 function State(callstack, visited) {
   return { callstack, visited };
 }
-function CanInstantiate(types2) {
-  return guard_exports.ShiftLeft(types2, (left, right) => IsRef(left) ? false : CanInstantiate(right), () => true);
+function CanInstantiate(types) {
+  return guard_exports.ShiftLeft(types, (left, right) => IsRef(left) ? false : CanInstantiate(right), () => true);
 }
 function InstantiateProperties(context, state, properties) {
   return guard_exports.Keys(properties).reduce((result2, key) => {
     return { ...result2, [key]: InstantiateType(context, state, properties[key]) };
   }, {});
 }
-function InstantiateElements(context, state, types2) {
-  const elements = InstantiateTypes(context, state, types2);
+function InstantiateElements(context, state, types) {
+  const elements = InstantiateTypes(context, state, types);
   const result2 = RestSpread(elements);
   return result2;
 }
-function InstantiateTypes(context, state, types2) {
-  return types2.map((type) => InstantiateType(context, state, type));
+function InstantiateTypes(context, state, types) {
+  return types.map((type) => InstantiateType(context, state, type));
 }
 function WithModifiers(type, instantiatedType) {
   const withOptional = IsOptional(type) ? AddOptionalAction(instantiatedType, {}) : instantiatedType;
@@ -25232,14 +25205,14 @@ function Comparer(left, right) {
   const compareResult = Compare(left, right);
   return guard_exports.IsEqual(compareResult, CompareResultRightInside) ? 1 : guard_exports.IsEqual(compareResult, CompareResultDisjoint) ? 1 : 0;
 }
-function Insert(type, types2, result2 = []) {
-  return guard_exports.ShiftLeft(types2, (left, right) => guard_exports.IsEqual(Comparer(type, left), 1) ? Insert(type, right, [...result2, left]) : [...result2, type, ...types2], () => [...result2, type]);
+function Insert(type, types, result2 = []) {
+  return guard_exports.ShiftLeft(types, (left, right) => guard_exports.IsEqual(Comparer(type, left), 1) ? Insert(type, right, [...result2, left]) : [...result2, type, ...types], () => [...result2, type]);
 }
-function Sort(types2, result2 = []) {
-  return guard_exports.ShiftLeft(types2, (left, right) => Sort(right, Insert(left, result2)), () => result2);
+function Sort(types, result2 = []) {
+  return guard_exports.ShiftLeft(types, (left, right) => Sort(right, Insert(left, result2)), () => result2);
 }
-function Priority(types2) {
-  const result2 = Sort(types2);
+function Priority(types) {
+  const result2 = Sort(types);
   return result2;
 }
 
@@ -27326,8 +27299,8 @@ function CheckTypeName(_stack, _context, type, _schema, value) {
     )
   );
 }
-function CheckTypeNames(stack, context, types2, schema, value) {
-  return guard_exports.Some(types2, (type) => CheckTypeName(stack, context, type, schema, value));
+function CheckTypeNames(stack, context, types, schema, value) {
+  return guard_exports.Some(types, (type) => CheckTypeName(stack, context, type, schema, value));
 }
 function CheckType(stack, context, schema, value) {
   return guard_exports.IsArray(schema.type) ? CheckTypeNames(stack, context, schema.type, schema, value) : CheckTypeName(stack, context, schema.type, schema, value);
@@ -27609,11 +27582,11 @@ function FromProperties4(properties) {
     result2[key] = FromType20(properties[key]);
   return result2;
 }
-function FromPriorityTypes(types2) {
-  return FromTypes6(Priority(types2));
+function FromPriorityTypes(types) {
+  return FromTypes6(Priority(types));
 }
-function FromTypes6(types2) {
-  return types2.map((type) => FromType20(type));
+function FromTypes6(types) {
+  return types.map((type) => FromType20(type));
 }
 function FromType20(type) {
   const next = IsArray2(type) ? _Array_(FromType20(type.items), ArrayOptions(type)) : IsIntersect(type) ? Intersect(FromTypes6(type.allOf)) : IsUnion(type) ? Union(FromPriorityTypes(type.anyOf)) : IsObject2(type) ? _Object_(FromProperties4(type.properties)) : IsRecord(type) ? Record(RecordKey(type), FromType20(RecordValue(type))) : IsTuple(type) ? Tuple(FromTypes6(type.items)) : type;
@@ -28973,30 +28946,30 @@ function encodePng(raster) {
 var base64Length = (bytes) => Math.ceil(bytes / 3) * 4;
 async function prepareImage(bytes, mimeType) {
   try {
-    const policy2 = IMAGE_PRESENTATION_POLICY;
+    const policy = IMAGE_PRESENTATION_POLICY;
     requireImage(
-      Buffer.isBuffer(bytes) && bytes.length > 0 && bytes.length <= policy2.maxOriginalBytes,
+      Buffer.isBuffer(bytes) && bytes.length > 0 && bytes.length <= policy.maxOriginalBytes,
       "Image must contain between 1 byte and 64 MiB"
     );
     const original = Buffer.from(bytes);
     const header = inspect(original, mimeType);
     let presented = original, size = header, presentedType = mimeType;
     const raster = mimeType === "image/png" ? decodePng(original, header) : void 0;
-    if (header.width > policy2.maxWidth || header.height > policy2.maxHeight || base64Length(original.length) > policy2.maxBytes) {
+    if (header.width > policy.maxWidth || header.height > policy.maxHeight || base64Length(original.length) > policy.maxBytes) {
       requireImage(raster, `${mimeType} original exceeds the preview bounds and only PNG originals are resampled here; retrieve the original with the host read tool`);
       let width = header.width, height = header.height;
-      if (width > policy2.maxWidth) {
-        height = Math.round(height * policy2.maxWidth / width);
-        width = policy2.maxWidth;
+      if (width > policy.maxWidth) {
+        height = Math.round(height * policy.maxWidth / width);
+        width = policy.maxWidth;
       }
-      if (height > policy2.maxHeight) {
-        width = Math.round(width * policy2.maxHeight / height);
-        height = policy2.maxHeight;
+      if (height > policy.maxHeight) {
+        width = Math.round(width * policy.maxHeight / height);
+        height = policy.maxHeight;
       }
       for (; ; ) {
         presented = encodePng(resample(raster, Math.max(1, width), Math.max(1, height)));
         size = { width: Math.max(1, width), height: Math.max(1, height) };
-        if (base64Length(presented.length) <= policy2.maxBytes) break;
+        if (base64Length(presented.length) <= policy.maxBytes) break;
         const nextWidth = Math.max(1, Math.floor(width * 0.75)), nextHeight = Math.max(1, Math.floor(height * 0.75));
         requireImage(nextWidth !== width || nextHeight !== height, "Image cannot be presented within the preview byte bound");
         width = nextWidth;
@@ -29005,9 +28978,9 @@ async function prepareImage(bytes, mimeType) {
       presentedType = "image/png";
     }
     const output = inspect(presented, presentedType);
-    requireImage(output.width === size.width && output.height === size.height && output.width <= policy2.maxWidth && output.height <= policy2.maxHeight, "Presented image dimensions are inconsistent");
+    requireImage(output.width === size.width && output.height === size.height && output.width <= policy.maxWidth && output.height <= policy.maxHeight, "Presented image dimensions are inconsistent");
     const data = presented.toString("base64");
-    requireImage(data.length > 0 && Buffer.byteLength(data, "utf8") <= policy2.maxBytes, "Presented image exceeds the preview byte bound");
+    requireImage(data.length > 0 && Buffer.byteLength(data, "utf8") <= policy.maxBytes, "Presented image exceeds the preview byte bound");
     return {
       content: { type: "image", data, mimeType: presentedType },
       presentation: {
@@ -29019,7 +28992,7 @@ async function prepareImage(bytes, mimeType) {
         sha256: createHash5("sha256").update(presented).digest("hex"),
         bytes: presented.length,
         transformed: presentedType !== mimeType || !original.equals(presented),
-        policy: policy2
+        policy
       }
     };
   } catch (error2) {
@@ -29684,8 +29657,8 @@ function checkArguments(schema, args) {
   let validate2 = compiled.get(key);
   if (!validate2) {
     try {
-      const { $id: _id, ...plain2 } = schema;
-      validate2 = engine(plain2).compile(plain2);
+      const { $id: _id, ...plain } = schema;
+      validate2 = engine(plain).compile(plain);
     } catch (error2) {
       return { valid: false, errors: [`The target tool's input schema could not be compiled: ${error2 instanceof Error ? error2.message : String(error2)}`] };
     }
@@ -29703,7 +29676,7 @@ var MIN_RENEWAL_MS = 0.1 * 36e5;
 var RELAY_RUN_OUTPUTS = "relay-run";
 var MCP_START_ALLOWANCE_MS = 6e4;
 var MAX_TOOL_IMAGES = 4;
-var instructions = "This server offers nineteen tools for one interruptive VM enclosure: relay_search, relay_probe, relay_acquisition_capabilities, relay_acquire, relay_stage, relay_run, relay_tools, the command tools relay_exec/relay_script/relay_code, relay_image, relay_extract, relay_finish, relay_release, relay_console_resolve, relay_console_open, relay_console_cancel, relay_status and relay_trajectory. relay_run sends the cua-driver, Playwright MCP or Chrome DevTools MCP tool calls you already know to that server inside the VM; evidence is automatic. Relay only interruptive computer-use or browser-use that would otherwise take over a real desktop or browser, judged for yourself from relay_probe facts; unknown is not idle, and non-disruptive or headless work stays with local tools. One task gets one enclosure: call relay_acquire once per task, never reused for a second task. Work an enclosure in order: relay_probe, then relay_acquire, then relay_stage, then relay_run or the command tools, then relay_image or relay_extract as needed, then relay_finish or relay_release. Always call relay_finish or relay_release explicitly before you return an answer; ending the session only pauses lease renewal, it does not destroy the VM, and the backend's own expiry is the last-resort safeguard. A refused, uncertain or nonzero operation keeps the VM so you can diagnose and submit a corrected operation; never replay input whose effect is uncertain. A tool result, an attached image or a verified evidence package, is evidence for a human reviewer, never the review itself. The relay never targets a physical or local display and offers no video or spawn API. Every tool's text result is capped at 50 KiB / 2000 lines; a larger result is retained whole in a local file the result names.";
+var instructions = "This server offers eighteen tools for one interruptive VM enclosure: relay_search, relay_probe, relay_acquisition_capabilities, relay_acquire, relay_stage, relay_run, relay_tools, the command tools relay_exec/relay_script/relay_code, relay_image, relay_extract, relay_finish, relay_release, relay_console_resolve, relay_console_open, relay_console_cancel and relay_status. relay_run sends the cua-driver, Playwright MCP or Chrome DevTools MCP tool calls you already know to that server inside the VM; evidence is automatic. Relay only interruptive computer-use or browser-use that would otherwise take over a real desktop or browser, judged for yourself from relay_probe facts; unknown is not idle, and non-disruptive or headless work stays with local tools. One task gets one enclosure: call relay_acquire once per task, never reused for a second task. Work an enclosure in order: relay_probe, then relay_acquire, then relay_stage, then relay_run or the command tools, then relay_image or relay_extract as needed, then relay_finish or relay_release. Always call relay_finish or relay_release explicitly before you return an answer; ending the session only pauses lease renewal, it does not destroy the VM, and the backend's own expiry is the last-resort safeguard. A refused, uncertain or nonzero operation keeps the VM so you can diagnose and submit a corrected operation; never replay input whose effect is uncertain. A tool result, an attached image or a verified evidence package, is evidence for a human reviewer, never the review itself. The relay never targets a physical or local display and offers no video or spawn API. Every tool's text result is capped at 50 KiB / 2000 lines; a larger result is retained whole in a local file the result names.";
 var NO_OWNED_LEASE = "This session owns no lease, so nothing was released. Each server process has its own session identity (a new random one unless MCP_VM_RELAY_SESSION sets it); a lease acquired under another identity is not visible here. Restart the server with that MCP_VM_RELAY_SESSION to reconcile and release it, or let the backend TTL expire it.";
 var RelayManager = class {
   constructor(options2) {
@@ -30719,8 +30692,8 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
     }
     if (!e.released) {
       if (!e.lease) {
-        const list2 = await this.vm.list({ timeoutMs: 1e4 });
-        const matches = Object.values(list2.vms).filter((lease) => lease.purpose === e.purpose);
+        const list = await this.vm.list({ timeoutMs: 1e4 });
+        const matches = Object.values(list.vms).filter((lease) => lease.purpose === e.purpose);
         if (matches.length > 1) throw new Error("Ambiguous acquisition; refusing to remove ownership record");
         if (!matches.length && e.acquisitionInFlight) throw new Error(`Acquire outcome still indeterminate for ${e.purpose}; ownership record retained at ${this.root}. Reconcile before retrying; never blindly acquire again.`);
         e.lease = matches[0];
@@ -31174,370 +31147,10 @@ async function relayCall(host, raw, options2 = {}) {
   return { ...await renderRelayResult(value), isError: false };
 }
 
-// src/relay-trajectory-viewer/server.ts
-import { execFile } from "node:child_process";
-import { createServer } from "node:http";
-import { readFile as readFile11, realpath as realpath2 } from "node:fs/promises";
-import { basename, dirname as dirname10, extname as extname2, resolve as resolve10, sep } from "node:path";
-import { promisify } from "node:util";
-
-// src/relay-trajectory-viewer/page.ts
-var markBody = `<clipPath id="relay-face"><path d="M3 21C3 7.5 7.5 3 21 3H43C56.5 3 61 7.5 61 21V43C61 56.5 56.5 61 43 61H21C7.5 61 3 56.5 3 43Z"/></clipPath><path d="M0 20C0 5 5 0 20 0H44C59 0 64 5 64 20V44C64 59 59 64 44 64H20C5 64 0 59 0 44Z" fill="#f2c9a0"/><path d="M3 21C3 7.5 7.5 3 21 3H43C56.5 3 61 7.5 61 21V43C61 56.5 56.5 61 43 61H21C7.5 61 3 56.5 3 43Z" fill="#11161d"/><g clip-path="url(#relay-face)" fill="none" stroke-width="2.92"><path d="M-4 33.9H24A9.9 9.9 0 0 0 33.9 24V-4" stroke="#1b3a5e"/><path d="M-4 36.7H24A12.7 12.7 0 0 0 36.7 24V-4" stroke="#25597f"/><path d="M-4 39.5H24A15.5 15.5 0 0 0 39.5 24V-4" stroke="#4a8497"/><path d="M-4 42.3H24A18.3 18.3 0 0 0 42.3 24V-4" stroke="#6fb6b5"/><path d="M-4 45.1H24A21.1 21.1 0 0 0 45.1 24V-4" stroke="#f2c9a0"/><path d="M-4 47.9H24A23.9 23.9 0 0 0 47.9 24V-4" stroke="#ea9a3a"/><path d="M-4 50.7H24A26.7 26.7 0 0 0 50.7 24V-4" stroke="#b3301f"/><path d="M-4 53.5H24A29.5 29.5 0 0 0 53.5 24V-4" stroke="#8c1e1a"/></g><circle cx="24" cy="24" r="6.5" fill="#f2c9a0"/>`;
-var relayMark = `<svg viewBox="0 0 64 64" width="40" height="40" aria-hidden="true">${markBody}</svg>`;
-var relayIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">${markBody}</svg>`;
-var reviewCss = `:root{color-scheme:light;
---navy:#1b3a5e;--blue:#25597f;--steel:#4a8497;--teal:#6fb6b5;--cream:#f2c9a0;--orange:#ea9a3a;--red:#b3301f;--oxblood:#8c1e1a;--black:#11161d;
---canvas:#ebe9e5;--paper:#f8f1e7;--s1:#fffaf3;--s2:#f3e9db;--s3:#e6d8c5;--hair:#dccbb4;
---ink:#13253a;--text:var(--ink);--dim:#34465a;--faint:#56616c;
---chrome:oklch(from var(--paper) l c h / .94);--aura:color-mix(in oklch,var(--steel) 16%,var(--s1));
---dotgrid:radial-gradient(circle,oklch(from var(--ink) l c h / .17) .7px,transparent 1.1px) center/8px 8px;
---case:#e6dccb;--case-hi:#f4ede1;--case-edge:#d2c4ad;--bezel:#2a2f36;
---key:#ece3d3;--key-hi:#fbf7f0;--key-edge:#c4b398;--key-blue:oklch(from var(--blue) calc(l + .07) c h);--tape:var(--navy);--tape-text:#f4e9d8;--steel-ink:#3d7282;
---pop:var(--blue);--accent:var(--blue);--on:#fff;
---mint:var(--teal);--amber:var(--orange);--cherry:var(--red);
---ok:#2b6f6d;--warn:#8f5410;--bad:#a12a1b;
---term:var(--black);--term-bar:#1a222c;--term-line:#2b3542;--term-text:#f4e9d8;--term-dim:#a9b3bd;
---shade:var(--ink);--veil:#0b1522;
---rule:1px solid var(--hair);--edge:1px solid var(--hair);--lift:0 1px 2px oklch(from var(--shade) l c h / .08),0 8px 24px oklch(from var(--shade) l c h / .1);
---sans:"Helvetica Neue",Helvetica,Arial,sans-serif;--mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
-*{box-sizing:border-box;corner-shape:squircle}html,body{height:100%}
-.verdict i,.dot,.q,.flag,.focus input{corner-shape:round}
-body{margin:0;background:var(--paper);color:var(--text);font:14px/1.57 var(--sans);-webkit-font-smoothing:antialiased}
-body.runs{background:var(--dotgrid),var(--canvas);display:grid;place-content:center;padding:3rem}.runs h1{margin:0 0 1rem;justify-content:center;font:700 32px/1.2 var(--sans);letter-spacing:-.01em;color:var(--text)}.runs ul{list-style:none;margin:0;padding:.25rem 1.25rem;min-width:36rem;background:var(--s1);border-radius:18px;box-shadow:var(--lift)}.runs li{padding:.65rem 0;border-bottom:var(--rule);font:14px var(--mono)}.runs li:last-child{border-bottom:0}
-.loading{min-height:100vh;margin:0;display:grid;place-items:center;background:var(--dotgrid),var(--canvas);font:400 20px/1.2 var(--sans);color:var(--text)}
-a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline;text-underline-offset:3px}
-:focus-visible{outline:2px solid var(--pop);outline-offset:2px}
-pre{font:12px/1.6 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere;margin:0}
-b,time,.n,.exit,dd,.took{font-variant-numeric:tabular-nums}.d{font-family:var(--mono);font-weight:700;letter-spacing:0}
-.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
-.label,h3,dt{font:700 12px/1.45 var(--sans);letter-spacing:.04em;color:var(--faint);text-transform:uppercase}
-.quiet{color:var(--faint);margin:0}
-.ok{--tone:var(--ok);--dotc:var(--mint)}.defect{--tone:var(--oxblood);--dotc:var(--oxblood)}.bad{--tone:var(--bad);--dotc:var(--cherry)}.warn{--tone:var(--warn);--dotc:var(--amber)}
-.verdict{display:inline-flex;align-items:center;gap:.4rem;font:700 12px/1 var(--sans);color:var(--tone,var(--dim));text-transform:capitalize}
-.verdict i{flex:none;width:8px;height:8px;border-radius:50%;background:var(--dotc,currentColor)}
-.app{height:100vh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;grid-template-columns:minmax(0,1fr);overflow:clip}.track{min-width:0;position:relative;z-index:0;display:grid}
-.top{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:1rem;padding:1rem 1.5rem calc(1rem + 3px);position:relative;z-index:2;background:var(--chrome);-webkit-backdrop-filter:saturate(160%) blur(20px);backdrop-filter:saturate(160%) blur(20px)}
-.top::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--navy)}
-.brand{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:0 .75rem;min-width:0}.mark{grid-row:1/3}.brand h1,.brand .stats{grid-column:2;margin:0}
-.mark{flex:none;display:grid;place-items:center;width:2.5rem;height:2.5rem;filter:drop-shadow(0 1px 1px oklch(from var(--shade) l c h / .18))}
-h1{display:flex;align-items:baseline;gap:.6rem;font:700 20px/1.05 var(--sans);letter-spacing:-.02em;margin:0}
-.stats .at time{font:400 12px var(--sans);color:var(--text)}.stats .at .sep{margin:0 .35rem}
-.stats{display:flex;gap:.1rem .65rem;list-style:none;margin:.3rem 0 0;padding:0;font-size:12px;color:var(--faint)}.stats b{font:700 12px var(--sans);color:var(--text)}
-.pills{min-width:0;display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:.4rem;list-style:none;margin:0;padding:0}.pills>li,.stats>li{white-space:nowrap}
-.pill{--fill:color-mix(in srgb,var(--dotc,var(--faint)) 18%,var(--s1));--pill-ink:var(--tone,var(--dim));display:flex;align-items:center;gap:.45rem;padding:.35rem .8rem;background:var(--fill);border-radius:12px;font:400 12px var(--sans);color:var(--pill-ink)}.pill .verdict{color:inherit}
-.mid{justify-self:center}
-.tabs{display:flex;gap:4px;padding:4px 4px 6px;border-radius:14px;background:var(--s3);box-shadow:inset 0 1px 3px oklch(from var(--shade) l c h / .2)}
-.tabs a{display:inline-flex;align-items:center;gap:.5rem;padding:.25rem 1rem;border-radius:10px;color:var(--text);font:400 14px var(--sans)}.tabs a:hover{text-decoration:none}
-.tabs a span{display:grid;place-items:center;min-width:1.2rem;height:1.2rem;padding:0 .3rem;border-radius:7px;font:700 12px/1 var(--sans);background:var(--s3);color:var(--dim)}.tabs a span.has{background:var(--pop);color:var(--on)}
-.app:not(:has(#overview:target)) .t-traj,.app:has(#overview:target) .t-over{background:linear-gradient(var(--key-blue),var(--blue));color:var(--on);translate:0 2px;box-shadow:inset 0 1px 0 #fff3,0 0 0 1px var(--navy)}
-.pill button{all:unset;display:flex;align-items:center;gap:.45rem;cursor:pointer}.pill:has(button){padding-right:.4rem}.pill:has(button):hover{box-shadow:inset 0 1px 2px oklch(from var(--shade) l c h / .16),inset 0 0 0 1px currentColor}
-.pill button:focus-visible{outline:2px solid var(--pop);outline-offset:6px}
-.q{display:grid;place-items:center;width:1.1rem;height:1.1rem;border-radius:50%;background:var(--pill-ink,var(--ink));color:#fff;font:700 12px/1 var(--sans)}
-.why{white-space:normal;text-align:left;font:400 14px/1.57 var(--sans);position:fixed;inset:auto;top:5rem;right:1.5rem;margin:0;width:min(26rem,calc(100vw - 2rem));max-height:calc(100vh - 6rem);overflow:auto;padding:0 1.25rem 1.25rem;border:0;border-radius:22px;background:oklch(from var(--s1) l c h / .96);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);color:var(--text);box-shadow:0 0 0 1px oklch(from var(--shade) l c h / .08),0 14px 44px oklch(from var(--shade) l c h / .2)}
-.why h3{margin:0 -1.25rem 1rem;padding:.75rem 1.25rem .65rem;background:var(--s2);border-bottom:3px solid var(--dotc,var(--pop));font:700 14px/1.3 var(--sans);letter-spacing:0;text-transform:none;color:var(--text)}
-.reasons{list-style:none;margin:0;padding:0;display:grid;gap:.75rem}.reasons li{display:grid;gap:.35rem}.reasons p{margin:0;color:var(--dim);font-size:14px;line-height:1.55}
-.reasons p.do,.concern p.do{color:var(--text)}
-.do b{font-weight:700}
-.reasons .steps{display:flex;flex-wrap:wrap;gap:.75rem}.reasons .steps a{font:700 12px var(--sans)}
-.concern{margin-top:1.5rem;padding:1rem 1rem 1.1rem;background:color-mix(in srgb,var(--aura) 22%,var(--s1));border-radius:16px;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--aura) 70%,transparent)}.concern h3{margin:0 0 .75rem}
-.concern ul{list-style:none;margin:0;padding:0;display:grid;gap:.75rem}.concern li{display:grid;gap:.15rem}.concern p{margin:0;color:var(--text);font-size:14px;line-height:1.55}
-.vblock{padding:.75rem 0 1rem;border-top:var(--rule)}
-.vblock h4{display:flex;align-items:center;gap:.75rem;margin:0 0 .5rem;font:700 14px var(--sans)}.vwhy{margin:0 0 .5rem;font-size:12px;color:var(--faint)}.vblock>.quiet{font-size:14px}
-.face{position:relative}.flag{position:absolute;top:.3rem;right:.3rem;display:grid;place-items:center;width:1.1rem;height:1.1rem;border-radius:50%;background:var(--amber);color:var(--ink);font:700 12px/1 var(--sans);box-shadow:0 0 0 2px #fff}
-.focus{position:absolute;left:1.5rem;bottom:1rem;z-index:4;display:flex;align-items:center;gap:.5rem;padding:.45rem .85rem .45rem .6rem;background:oklch(from var(--s1) l c h / .92);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);border-radius:14px;box-shadow:var(--lift);font:400 12px var(--sans);color:var(--text);cursor:pointer;user-select:none}
-.focus input{appearance:none;margin:0;width:1rem;height:1rem;border-radius:5px;background:var(--s1);box-shadow:inset 0 0 0 1.5px var(--hair);display:grid;place-items:center;cursor:pointer}
-.focus input:checked{background:var(--cherry);box-shadow:none}.focus input:checked::after{content:"";width:.26rem;height:.5rem;border:solid #fff;border-width:0 2px 2px 0;rotate:45deg;translate:0 -1px}
-.app:has(#focus-errors:checked) .track li:not(.err){opacity:.3;filter:grayscale(1)}
-.app:has(#focus-errors:checked) .track li.err .face{box-shadow:0 0 0 3px var(--cherry)}
-.app:has(#focus-errors:checked) .track li.err .t{color:var(--bad)}
-.app:has(#overview:target) .track{display:none}.app:has(#overview:target) .focus{display:none}.app:has(#overview:target) .keys{display:none}
-.keys{display:flex;align-items:center;gap:.2rem;margin-right:.5rem;font-size:12px;color:var(--faint)}.keys span{margin:0 .4rem 0 .1rem}.keys span:last-child{margin-right:0}
-kbd{display:inline-grid;place-items:center;min-width:1.4rem;height:1.4rem;padding:0 .3rem;border-radius:7px;background:var(--s1);box-shadow:0 0 0 1px var(--hair),0 1px 0 var(--s3);font:400 12px/1 var(--sans);color:var(--text)}.overview>.doc{grid-area:auto;grid-column:1/-1;grid-row:1}
-.center{display:grid;grid-template-columns:minmax(0,1fr) minmax(20rem,25rem);grid-template-areas:"stage panel";gap:0;padding:0;min-height:0;position:relative;z-index:1}
-.step{display:none}.step:is(:target,:has(:target)){display:contents}.center:not(:has(:target))>.step:first-of-type{display:contents}
-.step>.view{display:none}.step>.view:target,.step:target>.view.first,.center:not(:has(:target))>.step:first-of-type>.view.first{display:flex}
-.stage{grid-area:stage;position:relative;container-type:size;min-width:0;min-height:0;background:var(--dotgrid),var(--canvas);display:grid;grid-template-rows:minmax(0,1fr);overflow:clip}
-.view{--shot-chrome:11rem;flex-direction:column;align-items:center;justify-content:center;gap:.75rem;padding:1rem 1rem 1.5rem}
-.zoom{all:unset;display:flex;min-height:0;max-height:100%;max-width:100%;cursor:zoom-in}.zoom:focus-visible{outline:none}
-.screen{flex:0 1 auto;min-height:0;display:flex;justify-content:center;border-radius:6px;background:var(--black);box-shadow:0 0 0 6px var(--bezel),0 0 0 7px var(--case-edge)}
-.screen img{display:block;max-width:100%;max-height:calc(100cqh - var(--shot-chrome));object-fit:contain;background:#fff;border-radius:6px;transition:box-shadow .15s}
-.zoom:hover img,.zoom:focus-visible img{box-shadow:0 0 0 3px var(--pop)}.screen .void{width:min(40rem,80cqw);border-radius:6px}
-.unit{display:flex;flex-direction:column;gap:.75rem;min-height:0;max-width:100%}.unit>.monitor{align-self:center}
-.sname{flex:none;display:flex;align-items:center;gap:.75rem;width:0;min-width:100%;margin:0;font:700 16px/1.3 var(--mono);letter-spacing:0;color:var(--text)}
-.sname .d{flex:none;padding:.25rem .5rem;border-radius:6px;background:radial-gradient(120% 120% at 50% 30%,oklch(from var(--navy) l c h / .4),transparent 70%),var(--term);box-shadow:inset 0 1px 2px #000c,0 0 0 1px var(--case-edge),0 1px 0 #fff8;font:700 16px/1 var(--mono);color:var(--orange);text-shadow:0 0 6px oklch(from var(--orange) l c h / .55)}.sname .h{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.sname .took{flex:none;align-self:center;padding:.24rem .55rem;border-radius:9px;background:var(--cream);font:700 12px/1 var(--sans);color:var(--ink)}
-.lightbox{position:fixed;inset:0;width:auto;height:auto;max-width:none;max-height:none;margin:0;padding:1.5rem 1.5rem 1.25rem;border:0;background:none;color:var(--text);overflow:hidden;transition:overlay .36s allow-discrete,display .36s allow-discrete}
-.lb-body>*{transform-origin:0 0;transition:transform .36s cubic-bezier(.3,.9,.3,1),clip-path .36s cubic-bezier(.3,.9,.3,1),opacity .24s ease}
-.lightbox:not([data-flip]):not(:popover-open) .lb-body>*{opacity:0}@starting-style{.lightbox:popover-open:not([data-flip]) .lb-body>*{opacity:0}}
-.lightbox>:not(.lb-body){translate:0 calc(100% + 2.5rem);transition:translate .36s cubic-bezier(.3,.9,.3,1)}.lightbox:popover-open>:not(.lb-body){translate:0}@starting-style{.lightbox:popover-open>:not(.lb-body){translate:0 calc(100% + 2.5rem)}}
-.lightbox{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto;gap:1rem 1.5rem;align-items:center}.lightbox:popover-open{display:grid}
-.lightbox::backdrop{background:oklch(from var(--veil) l c h / 0);-webkit-backdrop-filter:blur(0);backdrop-filter:blur(0);transition:background .32s ease,backdrop-filter .32s ease,overlay .36s allow-discrete,display .36s allow-discrete}
-.lightbox:popover-open::backdrop{background:oklch(from var(--veil) l c h / .9);-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px)}@starting-style{.lightbox:popover-open::backdrop{background:oklch(from var(--veil) l c h / 0);backdrop-filter:blur(0)}}
-.lightbox[data-instant],.lightbox[data-instant]::backdrop,.lightbox[data-instant]>*,.lightbox[data-instant] .lb-body>*{transition:none}
-.lb-body{grid-column:1/-1;grid-row:1;display:grid;place-items:center;min-height:0;height:100%;pointer-events:none}.lb-body>*{pointer-events:auto}
-.lb-body img{display:block;max-width:100%;max-height:calc(100vh - 7.5rem);object-fit:contain;background:#fff;border-radius:16px;box-shadow:0 0 0 1px oklch(from var(--shade) l c h / .1),0 22px 64px oklch(from var(--shade) l c h / .22)}
-.lb-term{--z:1.43;width:min(100%,72rem);max-height:calc(100vh - 7.5rem);overflow:auto;padding:0;background:radial-gradient(120% 90% at 50% 40%,oklch(from var(--navy) l c h / .35),transparent 70%),var(--term);color:var(--term-text);border-radius:calc(12px * var(--z));box-shadow:0 0 0 1px oklch(from var(--black) l c h / .6),0 22px 64px oklch(from var(--black) l c h / .4);scrollbar-color:var(--term-line) transparent}
-.lb-term>*{zoom:var(--z)}
-.lb-cap{grid-row:2;grid-column:2;display:flex;align-items:center;gap:1rem;margin:0;padding:.3rem .3rem .3rem 1.1rem;background:oklch(from var(--s1) l c h / .94);border-radius:16px;box-shadow:var(--lift);font-size:12px;white-space:nowrap}
-.lb-cap time,.lb-cap .size{font:12px var(--mono);color:var(--faint)}.lb-cap a{font-weight:700}.lb-cap .file{font:12px var(--mono);color:var(--text)}.lb-cap .label{font-size:12px}
-.lb-nav{all:unset;box-sizing:border-box;corner-shape:squircle;grid-row:2;display:flex;align-items:center;gap:.75rem;min-width:0;max-width:22rem;padding:.3rem 1.1rem .3rem .3rem;background:oklch(from var(--s1) l c h / .94);border-radius:16px;box-shadow:var(--lift);cursor:pointer}
-.lb-nav.prev{grid-column:1;justify-self:start}.lb-nav.next{grid-column:3;justify-self:end;flex-direction:row-reverse;padding:.3rem .3rem .3rem 1.1rem;text-align:right}
-.lb-nav .dir{flex:none;display:grid;place-items:center;width:1.9rem;height:1.9rem;border-radius:11px;font:400 20px/1 var(--sans);color:var(--pop)}
-.lb-nav:focus-visible{outline:2px solid var(--pop);outline-offset:3px}
-.lb-nav .role{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:400 12px/1.4 var(--sans);color:var(--text)}
-.enlarge{all:unset;box-sizing:border-box;corner-shape:squircle;display:flex;align-items:center;gap:.5rem;height:2rem;padding:0 1rem;border-radius:9px;font:700 12px var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--text);cursor:zoom-in}.enlarge:focus-visible{outline:2px solid var(--pop);outline-offset:2px}
-.close{all:unset;corner-shape:squircle;display:grid;place-items:center;width:1.9rem;height:1.9rem;border-radius:11px;background:var(--s2);color:var(--dim);font:400 20px/1 var(--sans);cursor:pointer}.close:hover{color:var(--bad)}.close:focus-visible{outline:2px solid var(--pop);outline-offset:2px}
-.void{display:grid;place-items:center;background:oklch(from var(--s1) l c h / .7);border-radius:14px;box-shadow:inset 0 0 0 1px var(--hair);color:var(--faint);padding:2rem;text-align:center;aspect-ratio:16/9}
-.arrow{display:grid;place-items:center;width:2rem;height:2rem;border-radius:9px;color:var(--pop);font:400 20px/1 var(--sans)}
-.arrow.errs,.app:has(#focus-errors:checked) .arrow.all{display:none}.app:has(#focus-errors:checked) .arrow.errs{display:grid}
-.arrow:hover{text-decoration:none}
-.terminal .unit{width:min(100%,60rem)}.terminal .unit>.monitor{align-self:stretch}
-.monitor{flex:0 1 auto;min-height:0;display:flex;flex-direction:column;max-width:100%;padding:1.5rem 1.5rem 0;background:linear-gradient(var(--case-hi),var(--case));border-radius:24px;box-shadow:inset 0 1px 0 #fff9,inset 0 -3px 0 oklch(from var(--case-edge) l c h / .6),0 0 0 1px var(--case-edge),0 16px 40px oklch(from var(--shade) l c h / .14)}
-.monitor .term{flex:0 1 auto;min-height:0;width:100%;border-radius:12px;background:radial-gradient(120% 90% at 50% 40%,oklch(from var(--navy) l c h / .35),transparent 70%),var(--term);box-shadow:0 0 0 6px var(--bezel),0 0 0 7px var(--case-edge),inset 0 0 48px oklch(from var(--black) l c h / .8)}
-.chin{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:1rem;padding:1rem .25rem}.chin .nav{display:flex;align-items:center;gap:.5rem}.chin .nav:last-child{justify-self:end}
-.plate{display:block;width:1.5rem;height:1.5rem}
-.chin .info{display:flex;align-items:center;gap:.75rem;min-width:0;margin:0;white-space:nowrap;font:400 12px var(--sans);color:var(--dim)}.chin .info b{font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text)}.chin .info time{font-family:var(--mono)}.chin .info[data-role="after"] b{color:var(--pop)}
-.term{width:min(100%,56rem);max-height:100%;overflow:auto;background:var(--term);color:var(--term-text);border-radius:16px;box-shadow:0 0 0 1px oklch(from var(--black) l c h / .6),0 16px 40px oklch(from var(--shade) l c h / .22);scrollbar-color:var(--term-line) transparent}
-.term-cmd{padding:1.5rem 1.5rem 1rem;font-size:14px;color:var(--term-text)}.prompt{color:var(--faint);margin-right:.6em;user-select:none}.term .prompt,.lb-term .prompt{color:var(--orange)}
-.term .stream,.lb-term .stream{margin:0 1.5rem 1rem}.term .quiet,.lb-term .quiet,.term-note{margin:0 1.5rem 1.5rem;font-size:12px;color:var(--term-dim)}
-.term .stream .label,.lb-term .stream .label{color:var(--term-dim)}.term .stream pre,.lb-term .stream pre{background:oklch(from var(--term-bar) l c h / .7);border-color:var(--term-line);color:var(--term-text)}
-.stream .label{display:block;margin-bottom:.25rem}.stream pre,.plain,.command{background:var(--paper);border:var(--rule);border-radius:12px;padding:.75rem .9rem;max-height:14rem;overflow:auto;color:var(--text)}
-.panel{grid-area:panel;min-height:0;display:grid;grid-template-rows:minmax(0,1fr);background:var(--s1);border-left:var(--rule)}
-.panel-scroll{overflow:auto;padding:1.5rem 1.5rem 3rem;scrollbar-width:thin;scrollbar-color:var(--s3) transparent}
-.stephead{display:grid;grid-template-columns:1.75rem 1fr 1.75rem;align-items:center}.stepno{grid-column:2;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:.75rem;margin:0}.stepno .lg{justify-self:end;font:700 12px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--steel-ink)}.disp{display:inline-flex;align-items:baseline;gap:.5rem;padding:.375rem .75rem;border-radius:8px;background:radial-gradient(120% 120% at 50% 30%,oklch(from var(--navy) l c h / .4),transparent 70%),var(--term);box-shadow:inset 0 1px 3px #000c,0 0 0 1px var(--case-edge),0 1px 0 #fff8}.disp>.d{font:700 32px/1 var(--mono);letter-spacing:.02em;color:var(--orange);text-shadow:0 0 6px oklch(from var(--orange) l c h / .55)}.disp .of,.disp .of .d{font:700 12px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--term-dim)}
-
-.meta{display:flex;flex-wrap:wrap;align-items:center;gap:.25rem 1rem;margin:1rem 0 0;padding-top:.5rem;border-top:var(--rule);font-size:12px;color:var(--dim)}.meta time{font-family:var(--mono)}
-.permalink{grid-column:3;display:grid;place-items:center;width:1.75rem;height:1.75rem;border-radius:9px;color:var(--pop)}.permalink:hover{background:var(--s2)}
-.panel h2{font:400 20px/1.3 var(--sans);letter-spacing:-.015em;margin:.5rem 0;overflow-wrap:anywhere}
-.meta .state{margin-left:auto}
-.block{margin-top:1.5rem}.block h3{margin:0 0 .5rem}.block p{margin:0;color:var(--dim)}.panel .block{margin-top:1.5rem;padding-top:.5rem;border-top:var(--rule)}.panel .block p{font-size:14px;line-height:1.57}
-.command{font-size:12px;max-height:9rem}
-.receipts{list-style:none;margin:0 0 .5rem;padding:0;display:grid;gap:.5rem}.receipts li{display:flex;flex-wrap:wrap;gap:.4rem .75rem;align-items:center}.diag{font-size:14px;color:var(--dim)}
-.exit{display:inline-block;font:700 12px var(--mono);padding:.22rem .6rem;border-radius:9px;margin-bottom:.5rem}
-.exit.ok{color:var(--ok);background:color-mix(in srgb,var(--mint) 22%,var(--s1))}.exit.bad{color:var(--bad);background:color-mix(in srgb,var(--cherry) 14%,var(--s1))}
-.receipts .exit{margin:0}.stream{margin-bottom:.5rem}
-.raw summary{cursor:pointer;font-size:12px;font-weight:400;color:var(--accent);width:max-content}.raw summary:hover{text-decoration:underline}.raw pre{margin-top:.5rem;color:var(--faint);font-size:12px;max-height:12rem;overflow:auto}
-.facts{display:grid;grid-template-columns:1fr 1fr;gap:1rem 1.5rem;margin:1.5rem 0 0;padding-top:.5rem;border-top:var(--rule)}.facts dd{margin:.15rem 0 0;font:12px var(--mono);color:var(--dim);overflow-wrap:anywhere}
-.facts.stack{grid-template-columns:1fr}
-.files{list-style:none;margin:0;padding:0;display:grid;gap:.5rem}.files li{display:grid;justify-items:start}.files .fopen{font:12px var(--mono)}.files span{font-size:12px;color:var(--faint)}
-.doc{display:block;overflow:auto;font-size:16px;line-height:1.6;background:var(--dotgrid),var(--canvas)}
-.doc-in{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));column-gap:1.5rem;width:min(100% - 4rem,62rem);margin:3rem auto 4rem;padding:3rem 3rem 3rem;background:var(--s1);border-radius:28px;box-shadow:var(--lift)}
-.doc-in>h2{grid-column:1/-1;justify-self:center;margin:0;padding:0 .25rem .5rem;padding-bottom:.6rem;background:linear-gradient(var(--navy),var(--navy)) bottom/100% 4px no-repeat;font:700 32px/1.1 var(--sans);letter-spacing:-.03em}
-.doc-in>.lede{grid-column:1/-1;justify-self:center;max-width:40rem;text-align:center;color:var(--dim);margin:1.5rem 0 0;font:400 16px/1.55 var(--sans)}
-.doc .block{grid-column:1/-1;display:grid;grid-template-columns:subgrid;margin-top:2.5rem;padding-top:.75rem;border-top:2px solid var(--ink)}.doc .block>*{grid-column:5/-1}
-.doc .block>h3{grid-column:1/5;display:block;margin:0;font:700 20px/1.3 var(--sans);letter-spacing:-.015em;text-transform:none;color:var(--text)}
-.doc h3 .count{margin-left:.35rem;font:400 16px var(--sans);color:var(--faint)}
-.doc .vblock{padding:.75rem 0 1.25rem}.doc .vblock:first-of-type{border-top:0;padding-top:0}.doc .vblock h4{font-size:16px;margin-bottom:.5rem}.doc .verdict{font-size:14px}
-.doc .vwhy{font-size:14px;margin-bottom:.5rem}.doc .reasons{gap:1rem}.doc .reasons p{font-size:16px;line-height:1.6}.doc .reasons .steps a{font-size:14px}
-.doc .quiet,.doc .vblock>.quiet{font-size:16px}
-.doc .findings li{padding:.75rem 0;font-size:16px}.doc .findings li:first-child{padding-top:0;border-top:0}.doc .findings code{font-size:14px}
-.doc .group{padding:.75rem 0 1rem}.doc .group:first-child{padding-top:0;border-top:0}.doc .group summary{font-size:16px}.doc .group .count{font-size:14px}.doc .group[open] summary{margin-bottom:.75rem}
-.doc .flist{font-size:14px;gap:.35rem}.doc .gallery{grid-template-columns:repeat(auto-fill,minmax(10rem,1fr));gap:1rem}.doc .gthumb{font-size:14px}
-.package{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:1.5rem 2.5rem}
-.package .ids{display:grid;gap:1rem;margin:0}.package dt{font-size:12px}.package dd{margin:.15rem 0 0;font:14px var(--mono);color:var(--dim);overflow-wrap:anywhere}
-.doc .files{gap:1rem}.doc .files .fopen{font-size:14px}.doc .files span{font-size:14px}
-@media(max-width:960px){.package{grid-template-columns:minmax(0,1fr)}.doc-in{grid-template-columns:minmax(0,1fr);width:calc(100% - 2rem);margin:1rem auto 3rem;padding:1.5rem 1.25rem 2rem}.doc .block>*,.doc .block>h3{grid-column:1/-1}.doc .block>h3{margin-bottom:1rem}}
-.findings{list-style:none;margin:0;padding:0;display:grid}.findings li{padding:.6rem 0;border-top:var(--rule)}
-.findings summary{cursor:pointer}.findings code{display:block;font:12px/1.6 var(--mono);color:var(--faint);margin-top:.35rem;overflow-wrap:anywhere}
-.outputs{display:grid}.group{padding:.6rem 0 .75rem;border-top:var(--rule)}
-.group summary{display:flex;justify-content:space-between;gap:1rem;cursor:pointer;font-size:14px;list-style:none}.group summary::-webkit-details-marker{display:none}
-.group summary{align-items:center}.group .where{display:inline-flex;align-items:center;gap:.6rem;font-weight:400}
-.group .where::before{content:"";flex:none;width:.4rem;height:.4rem;border:solid var(--pop);border-width:0 1.5px 1.5px 0;rotate:-45deg;transition:rotate .15s}.group[open] .where::before{rotate:45deg}.group .count{color:var(--faint);flex:none}
-.group[open] summary{margin-bottom:.75rem}
-.flist{list-style:none;margin:-6px;padding:6px;display:grid;gap:.3rem;font:12px var(--mono);max-height:16rem;overflow:auto}.flist li{display:flex;justify-content:space-between;gap:1rem}.flist a{overflow-wrap:anywhere;min-width:0}.flist span{color:var(--faint);flex:none}
-.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(8.5rem,1fr));gap:1rem}.flist+.gallery{margin-top:1rem}
-.gthumb{all:unset;box-sizing:border-box;cursor:zoom-in;display:grid;gap:.4rem;font:12px var(--mono);min-width:0;color:var(--dim)}.gthumb span{display:flex;justify-content:space-between;gap:.5rem;overflow:hidden;white-space:nowrap}.gthumb small{color:var(--faint);font-size:inherit;flex:none}
-.gthumb img{width:100%;aspect-ratio:16/9;object-fit:contain;display:block;background:var(--s2);border-radius:10px;box-shadow:0 0 0 1px oklch(from var(--shade) l c h / .1);transition:box-shadow .15s}.gthumb:hover img,.gthumb:focus-visible img{box-shadow:0 0 0 3px var(--pop)}
-.track{background:var(--chrome);-webkit-backdrop-filter:saturate(160%) blur(20px);backdrop-filter:saturate(160%) blur(20px);border-top:var(--rule)}
-.track ol{min-width:0;list-style:none;margin:0;padding:1rem 1.5rem;display:flex;justify-content:safe center;gap:1rem;overflow-x:auto;scrollbar-width:thin;scrollbar-color:var(--s3) transparent}
-.track li{flex:none;display:grid;gap:.4rem;padding:.3rem;border-radius:14px;transition:background .15s}
-.track li:hover{background:color-mix(in srgb,var(--aura) 30%,transparent)}
-.faces{display:flex;gap:.25rem}.faces a{display:block;width:8rem}.faces a:hover{text-decoration:none}
-.face{display:block;aspect-ratio:16/9;overflow:hidden;border-radius:9px;background:var(--s1);box-shadow:0 0 0 1px oklch(from var(--shade) l c h / .12)}
-.face img{width:100%;height:100%;object-fit:cover;display:block}
-.face.text{background:var(--term)}.face.text pre{padding:.5rem .55rem;font-size:9.5px;line-height:1.45;color:var(--term-text);height:100%;overflow:hidden;-webkit-mask-image:linear-gradient(#000 60%,transparent);mask-image:linear-gradient(#000 60%,transparent)}
-.cap{display:flex;align-items:center;gap:.4rem;width:0;min-width:100%;padding:0 .15rem;font-size:12px}.cap .took{flex:none;margin-left:auto;font:400 12px var(--sans);color:var(--dim)}
-.face .role{position:absolute;left:.25rem;bottom:.25rem;padding:.16rem .4rem;border-radius:6px;background:oklch(from var(--s1) l c h / .92);font:700 12px/1 var(--sans);color:var(--ink)}
-.face .none{display:grid;place-items:center;height:100%;font-size:12px;color:var(--faint)}
-.cap .n{font:700 12px var(--sans);color:var(--faint)}.dot{flex:none;width:7px;height:7px;border-radius:50%;background:var(--dotc,var(--faint))}
-.cap .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dim)}
-.track li.bad .face{box-shadow:0 0 0 2px var(--cherry)}
-@media(max-width:960px){.top{grid-template-columns:minmax(0,1fr)}.mid,.pills{justify-self:center;justify-content:center}.app{height:auto;min-height:100vh;overflow:visible}.center{grid-template-columns:minmax(0,1fr);grid-template-areas:"stage" "panel"}.panel{border-left:0;border-top:var(--rule)}
-.stage{min-height:60vh}.view{padding:1rem}.track{position:sticky;bottom:0}}
-.fopen{all:unset;corner-shape:squircle;cursor:pointer;color:var(--accent);overflow-wrap:anywhere;min-width:0}.fopen:hover{text-decoration:underline;text-underline-offset:3px}.fopen:focus-visible{outline:2px solid var(--pop);outline-offset:3px}
-.fwin{position:fixed;inset:0;width:auto;height:auto;max-width:none;max-height:none;margin:0;padding:2rem;border:0;background:none;place-items:center;overflow:hidden;transition:overlay .28s allow-discrete,display .28s allow-discrete}
-.fwin:popover-open{display:grid}
-.fwin::backdrop{background:oklch(from var(--veil) l c h / 0);transition:background .28s ease,overlay .28s allow-discrete,display .28s allow-discrete}
-.fwin:popover-open::backdrop{background:oklch(from var(--veil) l c h / .72);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
-@starting-style{.fwin:popover-open::backdrop{background:oklch(from var(--veil) l c h / 0)}}
-.fw-card{width:min(52rem,100%);max-height:min(42rem,100%);display:grid;grid-template-rows:auto minmax(0,1fr);background:var(--s1);border-radius:22px;box-shadow:0 0 0 1px oklch(from var(--shade) l c h / .08),0 26px 70px oklch(from var(--shade) l c h / .22);overflow:hidden;opacity:0;scale:.98;translate:0 .5rem;transition:opacity .22s ease,scale .28s cubic-bezier(.3,.9,.3,1),translate .28s cubic-bezier(.3,.9,.3,1)}
-.fwin:popover-open .fw-card{opacity:1;scale:1;translate:0}
-@starting-style{.fwin:popover-open .fw-card{opacity:0;scale:.98;translate:0 .5rem}}
-.fw-bar{display:flex;align-items:center;gap:1rem;padding:.45rem .45rem .45rem 1.1rem;background:var(--s2);border-bottom:var(--rule)}
-.fw-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:700 14px var(--mono);color:var(--ink)}
-.fw-bar .size,.fw-note{flex:none;font:12px var(--mono);color:var(--faint)}
-.fw-note{font:700 12px var(--sans);padding:.15rem .5rem;border-radius:7px;background:var(--aura);color:var(--ink)}
-.fw-dl{flex:none;display:inline-flex;align-items:center;gap:.4rem;height:1.9rem;padding:0 .9rem 0 .7rem;border-radius:11px;background:var(--pop);color:var(--on);font:400 12px var(--sans)}
-.fw-dl:hover{text-decoration:none}
-.fw-dl:focus-visible{outline:2px solid var(--pop);outline-offset:2px}
-.fw-body{margin:0;padding:1rem 1.25rem 1.25rem;overflow:auto;background:var(--s1);font:12px/1.6 var(--mono);color:var(--text);white-space:pre-wrap;overflow-wrap:anywhere;tab-size:2}
-
-.tabs a,.arrow,kbd,.lb-nav,.close,.enlarge,.fw-dl,.permalink{background:linear-gradient(var(--key-hi),var(--key));box-shadow:inset 0 1px 0 #fff,0 0 0 1px var(--key-edge),0 2px 0 1px var(--key-edge),0 4px 8px oklch(from var(--shade) l c h / .12);transition:translate .08s,box-shadow .08s}
-.tabs a:hover,.arrow:hover,.lb-nav:hover,.close:hover,.enlarge:hover,.permalink:hover{background:linear-gradient(#fff,var(--key-hi))}
-.tabs a:active,.arrow:active,.lb-nav:active,.close:active,.enlarge:active,.fw-dl:active,.permalink:active{translate:0 2px;box-shadow:inset 0 1px 0 #fff,0 0 0 1px var(--key-edge)}
-.fw-dl{background:linear-gradient(var(--key-blue),var(--blue));box-shadow:inset 0 1px 0 #fff3,0 0 0 1px var(--navy),0 2px 0 1px var(--navy),0 4px 8px oklch(from var(--shade) l c h / .14)}.fw-dl:active{box-shadow:inset 0 1px 0 #fff3,0 0 0 1px var(--navy)}
-.pill{box-shadow:inset 0 1px 2px oklch(from var(--shade) l c h / .16),0 1px 0 #fff}
-.lb-cap,.focus{background:linear-gradient(var(--key-hi),var(--key));box-shadow:inset 0 1px 0 #fff,0 0 0 1px var(--key-edge),0 4px 12px oklch(from var(--shade) l c h / .16)}
-.label,h3,dt{letter-spacing:.08em;color:var(--steel-ink)}
-.panel .block{border-top:0;padding-top:0}.panel .block>h3{display:flex;align-items:center;gap:.5rem}.panel .block>h3::after{content:"";flex:1;height:1px;background:var(--hair)}
-.stream pre,.plain,.command,.raw pre{background:radial-gradient(120% 90% at 50% 40%,oklch(from var(--navy) l c h / .3),transparent 70%),var(--term);color:var(--term-text);border:0;border-radius:8px;box-shadow:0 0 0 3px var(--bezel),0 0 0 4px var(--case-edge),inset 0 0 24px oklch(from var(--black) l c h / .7);scrollbar-color:var(--term-line) transparent}
-.stream pre,.plain,.command,.raw pre{margin-inline:4px}.term .stream pre,.lb-term .stream pre{box-shadow:none;margin-inline:0}.stream .label{margin-bottom:.5rem}
-.sname .took,.exit,.face .role,.fw-note,.concern li>.label{border-radius:4px;color:var(--tape-text);background:linear-gradient(oklch(from var(--tape) calc(l + .05) c h),var(--tape));box-shadow:inset 0 1px 0 #fff3,inset 0 -1px 0 #0004,0 1px 1px oklch(from var(--shade) l c h / .25)}
-.sname .took{padding:.3rem .5rem;font:700 12px/1 var(--mono)}
-.exit{padding:.3rem .5rem;font:700 12px/1 var(--mono);letter-spacing:.04em;text-transform:uppercase}.exit.ok{--tape:var(--ok)}.exit.bad{--tape:var(--bad)}.exit.ok,.exit.bad{color:var(--tape-text);background:linear-gradient(oklch(from var(--tape) calc(l + .05) c h),var(--tape))}
-.face .role{--tape:var(--black);padding:.2rem .35rem;border-radius:3px;font:700 12px/1 var(--sans);letter-spacing:.04em;text-transform:uppercase}
-.concern li>.label{--tape:var(--tone)}.fw-note,.concern li>.label{padding:.2rem .45rem;font:700 12px/1.2 var(--sans);letter-spacing:.06em;text-transform:uppercase}.concern li>.label{justify-self:start}
-.verdict i,.dot{background:radial-gradient(circle at 35% 30%,#fffc 0 18%,transparent 50%),var(--dotc,var(--faint));box-shadow:0 0 0 1.5px oklch(from var(--shade) l c h / .2),0 0 6px var(--dotc,transparent)}
-.flag{background:radial-gradient(circle at 35% 30%,#fffc 0 16%,transparent 48%),var(--dotc,var(--amber));box-shadow:0 0 0 2px var(--s1),0 0 0 3px oklch(from var(--shade) l c h / .25),0 0 8px var(--dotc,var(--amber))}.flag.bad,.flag.defect{color:#fff}
-.concern h3{color:var(--tone)}
-.lb-cap .label{color:var(--dim)}
-.doc .block{border-top:3px solid var(--sep,var(--navy))}.doc .block:is(.ok,.warn,.bad,.defect){--sep:var(--dotc)}.doc .s-findings{--sep:var(--steel)}.doc .s-outputs{--sep:var(--blue)}.doc .s-package{--sep:var(--navy)}
-.block p.vwhy{color:var(--tone)}.vblock .reasons,.doc .defect .reasons{padding-left:1rem;border-left:3px solid var(--dotc)}
-.tabs a span,.doc h3 .count{display:inline-grid;place-items:center;min-width:1.5rem;height:1.25rem;padding:0 .35rem;border-radius:4px;font:700 12px/1 var(--mono);letter-spacing:0;background:var(--term);color:var(--term-dim);box-shadow:inset 0 1px 2px #000c,0 1px 0 #fff8;vertical-align:.15em}
-.tabs a span.has,.doc h3 .count{color:var(--orange);text-shadow:0 0 4px oklch(from var(--orange) l c h / .6)}
-.concern{padding-top:calc(1rem + 4px);background:linear-gradient(var(--dotc),var(--dotc)) top/100% 4px no-repeat,var(--s1);box-shadow:0 0 0 1px var(--key-edge),0 2px 6px oklch(from var(--shade) l c h / .08)}
-@media(prefers-reduced-motion:reduce){*{transition:none!important}}
-@media print{.app{height:auto;display:block}.track,.arrow,.mid,.lightbox,.enlarge{display:none}.center{display:block}.step{display:block!important;break-inside:avoid;margin-bottom:1rem}.view{display:flex!important}.stage{background:none}}`;
-
-// src/relay-trajectory-viewer/server.ts
-var types = {
-  ".json": "application/json; charset=utf-8",
-  ".jsonl": "text/plain; charset=utf-8",
-  ".ndjson": "text/plain; charset=utf-8",
-  ".log": "text/plain; charset=utf-8",
-  ".txt": "text/plain; charset=utf-8",
-  ".md": "text/plain; charset=utf-8",
-  ".csv": "text/plain; charset=utf-8",
-  ".tsv": "text/plain; charset=utf-8",
-  ".yaml": "text/plain; charset=utf-8",
-  ".yml": "text/plain; charset=utf-8",
-  ".xml": "text/plain; charset=utf-8",
-  ".toml": "text/plain; charset=utf-8",
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".webp": "image/webp",
-  ".gif": "image/gif"
-};
-var html = "text/html; charset=utf-8";
-var plain = "text/plain; charset=utf-8";
-var escape2 = (value) => value.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-var href = (...parts) => `/${parts.map(encodeURIComponent).join("/")}/`;
-var policy = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
-var shell = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light"><title>Relay review</title><link rel="icon" href="/.app/icon.svg"><link rel="stylesheet" href="/.app/review.css"><script type="module" src="/.app/review.js"></script></head><body><p class="loading">Reading the trajectory\u2026</p></body></html>`;
-var list = (title, items) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${escape2(title)}</title><link rel="icon" href="/.app/icon.svg"><link rel="stylesheet" href="/.app/review.css"></head><body class="runs"><h1>${escape2(title)}</h1><ul>${items.map(([h, text4]) => `<li><a href="${escape2(h)}">${escape2(text4)}</a></li>`).join("")}</ul></body></html>`;
-var git = async (dir, ...args) => {
-  try {
-    return (await promisify(execFile)("git", ["-C", dir, ...args])).stdout.trim() || void 0;
-  } catch {
-    return void 0;
-  }
-};
-async function projectOf(dir) {
-  const remote = await git(dir, "remote", "get-url", "origin");
-  if (remote) return basename(remote.replace(/\/+$/, "")).replace(/\.git$/, "");
-  const top = await git(dir, "rev-parse", "--show-toplevel");
-  return basename(top ?? dirname10(dir));
-}
-async function runOf(dir) {
-  const { taskId, startedAt } = await deliveredPackageRun(dir);
-  return `${startedAt.replace(/[:.]/g, "-")}-${/-([0-9a-f]{8})$/.exec(taskId)?.[1] ?? taskId}`;
-}
-var ReviewServer = class {
-  constructor(script, port = 0) {
-    this.script = script;
-    this.port = port;
-  }
-  /** project → run → package folder */
-  projects = /* @__PURE__ */ new Map();
-  server;
-  listening;
-  /** Serve a package; returns the address of its page. The same package keeps its address. */
-  async add(dir) {
-    const root = await realpath2(resolve10(dir));
-    const project = (await projectOf(root)).replace(/^\.+/, "") || "package", run = await runOf(root);
-    const runs = this.projects.get(project) ?? this.projects.set(project, /* @__PURE__ */ new Map()).get(project);
-    const existing = runs.get(run);
-    if (existing && existing !== root) throw new Error(`${root} and ${existing} would both be served at /${project}/${run}/`);
-    runs.set(run, root);
-    return `http://127.0.0.1:${await this.listen()}${href(project, run)}`;
-  }
-  /** The packages served, as their page addresses. */
-  async addresses() {
-    const port = await this.listen();
-    return [...this.projects].flatMap(([project, runs]) => [...runs.keys()].map((run) => `http://127.0.0.1:${port}${href(project, run)}`));
-  }
-  listen() {
-    this.listening ??= new Promise((done, fail2) => {
-      const server = createServer((request, response) => void this.handle(request.url ?? "/", request.headers.host, response));
-      server.once("error", fail2);
-      server.listen(this.port, "127.0.0.1", () => {
-        server.unref();
-        done(server.address().port);
-      });
-      this.server = server;
-    });
-    return this.listening;
-  }
-  close() {
-    this.server?.close();
-  }
-  async handle(url, host, response) {
-    const send = (status, type, body, headers = {}) => {
-      response.writeHead(status, { "content-type": type, "cache-control": "no-store", "x-content-type-options": "nosniff", "content-security-policy": policy, ...headers });
-      response.end(body);
-    };
-    const redirect = (location) => {
-      response.writeHead(301, { location });
-      response.end();
-    };
-    try {
-      const port = await this.listen();
-      if (host !== `127.0.0.1:${port}` && host !== `localhost:${port}`) return send(421, plain, "unknown host");
-      const path = new URL(url, "http://127.0.0.1").pathname;
-      if (path === "/.app/review.js") return send(200, "text/javascript; charset=utf-8", await this.script());
-      if (path === "/.app/review.css") return send(200, "text/css; charset=utf-8", reviewCss);
-      if (path === "/.app/icon.svg") return send(200, "image/svg+xml", relayIcon);
-      const api = /^\/\.api\/([^/]+)\/([^/]+)\.json$/.exec(path);
-      if (api) {
-        const root2 = this.projects.get(decodeURIComponent(api[1]))?.get(decodeURIComponent(api[2]));
-        return root2 ? send(200, types[".json"], JSON.stringify(await reviewData(root2))) : send(404, plain, "unknown run");
-      }
-      const [, project = "", run, ...rest] = path.split("/").map(decodeURIComponent);
-      if (!project) return send(200, html, list("Relay reviews", [...this.projects].flatMap(([p, runs2]) => [...runs2.keys()].map((r) => [href(p, r), `${p} / ${r}`]))));
-      const runs = this.projects.get(project);
-      if (!runs) return send(404, plain, `unknown project ${project}`);
-      if (run === void 0) return redirect(href(project));
-      if (!run) return send(200, html, list(project, [...runs.keys()].map((r) => [href(project, r), r])));
-      const root = runs.get(run);
-      if (!root) return send(404, plain, `unknown run ${run} of ${project}`);
-      if (!rest.length) return redirect(href(project, run));
-      const file = rest.join("/");
-      if (!file) return send(200, html, shell);
-      const target2 = await realpath2(resolve10(root, file)).catch(() => void 0);
-      if (!target2 || !target2.startsWith(root + sep)) return send(404, plain, "not in the package");
-      return send(200, types[extname2(target2).toLowerCase()] ?? "application/octet-stream", await readFile11(target2));
-    } catch (error2) {
-      return send(500, plain, error2 instanceof Error ? error2.message : String(error2));
-    }
-  }
-};
-
 // src/server.ts
 var SERVER_NAME = "relay";
 var SERVER_VERSION = true ? "0.7.0" : JSON.parse(readFileSync(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8")).version;
 var STATUS_TOOL = "relay_status";
-var TRAJECTORY_TOOL = "relay_trajectory";
 var PLUGIN_TOOL_PREFIX = "mcp__plugin_mcp-vm-relay_relay__";
 var message = (error2) => error2 instanceof Error ? error2.message : String(error2);
 var text3 = (value, isError = false) => ({ content: [{ type: "text", text: value }], isError });
@@ -31547,10 +31160,9 @@ function relayContent(result2) {
 }
 function projectDirectory(env = process.env, cwd = process.cwd()) {
   const given = env.MCP_VM_RELAY_PROJECT;
-  return given && !given.includes("${") ? resolve11(given) : cwd;
+  return given && !given.includes("${") ? resolve10(given) : cwd;
 }
 var readOnlyStatus = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
-var trajectoryAnnotations = { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false };
 var statusToolDefinition = {
   name: STATUS_TOOL,
   title: "Show relay status",
@@ -31558,36 +31170,18 @@ var statusToolDefinition = {
   inputSchema: { type: "object", properties: {}, additionalProperties: false },
   annotations: readOnlyStatus
 };
-var trajectoryToolDefinition = {
-  name: TRAJECTORY_TOOL,
-  title: "Open the trajectory viewer",
-  description: "Verify a delivered relay evidence package (every artifact, hash and reference) and open its trajectory review in the local browser, served by this relay on 127.0.0.1 from the package's data. Human review remains pending.",
-  inputSchema: { type: "object", properties: { directory: { type: "string", description: "The package directory, absolute or relative to the project." } }, required: ["directory"], additionalProperties: false },
-  annotations: trajectoryAnnotations
-};
 function allToolDefinitions() {
   return [
     ...relayTools.map((tool) => ({ name: tool.name, title: tool.title, description: tool.description, inputSchema: relayToolInputSchema(tool), annotations: tool.annotations })),
-    statusToolDefinition,
-    trajectoryToolDefinition
+    statusToolDefinition
   ];
 }
 var SHUTDOWN_GRACE_MS = 12e4;
 var SHUTDOWN_CANCEL_MS = 5e3;
-var reviewApp = true ? async () => 'var ee=e=>({...e,details:new Map(Object.entries(e.details))}),ce=/\\.(json|jsonl|ndjson|log|txt|md|csv|tsv|ya?ml|xml|toml)$/i,l=e=>String(e??"").replace(/[&<>"\']/g,t=>({"&":"&amp;","<":"&lt;",">":"&gt;",\'"\':"&quot;","\'":"&#39;"})[t]),R=e=>l(e.split("/").map(encodeURIComponent).join("/")),te=e=>`#step-${encodeURIComponent(e.id)}`,F=e=>e&&Number.isFinite(Date.parse(e))?new Date(e).toISOString().slice(11,19):void 0,re=e=>e&&Number.isFinite(Date.parse(e))?new Date(e).toISOString().slice(11,23):void 0,ae=e=>e<6e4?`${(e/1e3).toFixed(1)} s`:`${Math.floor(e/6e4)} min ${Math.round(e%6e4/1e3)} s`,de=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],Y=(e,t=!1)=>{let o=new Date(e),n=s=>String(s).padStart(2,"0");return`${de[o.getUTCMonth()]} ${o.getUTCDate()}, ${t?`${o.getUTCFullYear()}, `:""}${n(o.getUTCHours())}:${n(o.getUTCMinutes())} UTC`},ne=\'<clipPath id="relay-face"><path d="M3 21C3 7.5 7.5 3 21 3H43C56.5 3 61 7.5 61 21V43C61 56.5 56.5 61 43 61H21C7.5 61 3 56.5 3 43Z"/></clipPath><path d="M0 20C0 5 5 0 20 0H44C59 0 64 5 64 20V44C64 59 59 64 44 64H20C5 64 0 59 0 44Z" fill="#f2c9a0"/><path d="M3 21C3 7.5 7.5 3 21 3H43C56.5 3 61 7.5 61 21V43C61 56.5 56.5 61 43 61H21C7.5 61 3 56.5 3 43Z" fill="#11161d"/><g clip-path="url(#relay-face)" fill="none" stroke-width="2.92"><path d="M-4 33.9H24A9.9 9.9 0 0 0 33.9 24V-4" stroke="#1b3a5e"/><path d="M-4 36.7H24A12.7 12.7 0 0 0 36.7 24V-4" stroke="#25597f"/><path d="M-4 39.5H24A15.5 15.5 0 0 0 39.5 24V-4" stroke="#4a8497"/><path d="M-4 42.3H24A18.3 18.3 0 0 0 42.3 24V-4" stroke="#6fb6b5"/><path d="M-4 45.1H24A21.1 21.1 0 0 0 45.1 24V-4" stroke="#f2c9a0"/><path d="M-4 47.9H24A23.9 23.9 0 0 0 47.9 24V-4" stroke="#ea9a3a"/><path d="M-4 50.7H24A26.7 26.7 0 0 0 50.7 24V-4" stroke="#b3301f"/><path d="M-4 53.5H24A29.5 29.5 0 0 0 53.5 24V-4" stroke="#8c1e1a"/></g><circle cx="24" cy="24" r="6.5" fill="#f2c9a0"/>\',pe=`<svg viewBox="0 0 64 64" width="40" height="40" aria-hidden="true">${ne}</svg>`,je=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">${ne}</svg>`,D=e=>e>=1e6?`${(e/1e6).toFixed(1)} MB`:e>=1e3?`${(e/1e3).toFixed(1)} kB`:`${e} B`,V=(e,t)=>e===1?t:`${t}s`,me=(e,t)=>`${e} ${V(e,t)}`,P=e=>T(e.execution)!=="ok",T=e=>["passed","complete","completed"].includes(e)?"ok":["failed","refused"].includes(e)?"bad":"warn",K=e=>["bad","warn","defect"].find(t=>e.includes(t))??"ok",B=e=>`<span class="verdict ${T(e)}"><i aria-hidden="true"></i>${l(e)}</span>`,ge=e=>/^[\\w@%+=:,./-]+$/.test(e)?e:`\'${e.replace(/\'/g,"\'\\\\\'\'")}\'`;function he(e){let t=o=>Date.parse(e.details.get(o.id)?.at??"");return e.steps.map((o,n)=>({step:o,index:n})).sort((o,n)=>(Number.isFinite(t(o.step))?t(o.step):1/0)-(Number.isFinite(t(n.step))?t(n.step):1/0)||o.index-n.index).map(({step:o})=>o)}function fe(e){let t=new Map;for(let n of e){let s=/^(diagnostic|request|action) (\\S+) (.*)$/.exec(n),h=s?`${s[1]} ${s[3]}`:n,g=t.get(h)??{sentence:n,ids:[]};s&&g.ids.push(s[2]),t.set(h,g)}let o=n=>n.replace(/^./,s=>s.toUpperCase());return[...t.entries()].map(([n,s])=>{if(s.ids.length<2)return{text:o(s.sentence),ids:[]};let[h,...g]=n.split(" "),x=g.join(" ").replace(/^has /,"have ").replace(/^is /,"are ").replace(/^lacks /,"lack ");return{text:`${s.ids.length} ${h}s ${x}`,ids:s.ids}})}function J(e,t){let o=t?.argv?.length?t.argv.map(ge).join(" "):void 0,n=!!o&&(e.title==="Diagnostic command"||e.title.startsWith("exec ")),s=n&&e.because?e.because:e.title,h=s.split(`\n`)[0].trimEnd(),g=h.length>140?`${h.slice(0,139).trimEnd()}\\u2026`:h===s?s:`${h} \\u2026`,x=e.inputMode==="diagnostic"?"Diagnostic":o&&!e.snapshots?"Command":"Action";return{headline:g,command:o??(g===s?void 0:s),reasonShown:!(n&&e.because),kind:x}}function ue(e){let t=/^Authoritative receipt outcomes: (\\[.*\\])$/m.exec(e??"");if(t)try{let o=new Set;return JSON.parse(t[1]).filter(n=>{let s=JSON.stringify(n);return o.has(s)?!1:(o.add(s),!0)})}catch{return}}var G=(e,t)=>`<span class="exit ${e.code===0&&!t?"ok":"bad"}">exit ${l(e.code??"none")}${e.signal?` \\xB7 ${l(e.signal)}`:""}${t?" \\xB7 timed out":""}</span>`;function ve(e,t,o=!0){let n=l(e.observed??"No confirmed result"),s=`<details class="raw"><summary>Receipt as recorded</summary><pre>${n}</pre></details>`;if(t){let g=t.exit===void 0?"":G({code:t.exit,signal:t.signal},t.timedOut),x=o?Z(t):"";return`${g}${x||(o?\'<p class="quiet">No output.</p>\':"")}${s}`}let h=ue(e.observed);return h?.length?`<ul class="receipts">${h.map(g=>`<li>${B(g.execution??g.outcome?.kind??"unknown")}${g.outcome?.exitStatus?G(g.outcome.exitStatus):""}${g.outcome?.diagnostic?`<span class="diag">${l(g.outcome.diagnostic)}</span>`:""}</li>`).join("")}</ul>${s}`:`<pre class="plain">${n}</pre>`}var Z=e=>["stdout","stderr"].filter(t=>e[t]?.trim()).map(t=>`<div class="stream"><span class="label">${t}</span><pre>${l(e[t].trimEnd())}</pre></div>`).join("");function U(e){let t=Date.parse(e?.afterAt??"")-Date.parse(e?.beforeAt??"");return Number.isFinite(t)&&t>=0?ae(t):void 0}var W=(e,t)=>`lightbox-${e.id}--${t}`,X=e=>l(e).replace(/^Step (\\d+)/,\'Step <span class="d">$1</span>\'),be=\'<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M9.5 2.5h4v4M6.5 13.5h-4v-4M13.5 2.5 9 7M2.5 13.5 7 9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>\';function Q(e){let t=(o,n)=>o?`<button type="button" class="lb-nav ${n}" popovertarget="${l(o.id)}" aria-label="${n==="prev"?"Previous":"Next"}: ${l(o.label)}, ${l(o.title)}"><span class="dir" aria-hidden="true">${n==="prev"?"\\u2039":"\\u203A"}</span><span class="role">${X(o.nav??o.label)}</span></button>`:"";return e.map((o,n)=>`<div class="lightbox" id="${l(o.id)}" data-step="${l(o.step)}" popover><div class="lb-body">${o.body}</div>${t(e[n-1],"prev")}<p class="lb-cap"><span class="label">${X(o.label)}</span>${o.caption}<button type="button" class="close" popovertarget="${l(o.id)}" popovertargetaction="hide" aria-label="Close">\\xD7</button></p>${t(e[n+1],"next")}</div>`).join(`\n`)}function xe(e,t,o){return e.flatMap(n=>{let s=t.details.get(n.id),h=o.get(n.id),{headline:g,command:x}=J(n,s),y=m=>`step-${n.id}--${m}`;if(!n.snapshots){let m=F(s?.at);return[{id:W(n,"command"),step:y("command"),label:`Step ${h} \\xB7 ${n.inputMode==="diagnostic"?"Diagnostic":"Command"}`,title:g,body:`<div class="lb-term"><pre class="term-cmd"><span class="prompt" aria-hidden="true">$</span>${l(x??g)}</pre>${s?.output?Z(s.output)||\'<p class="quiet">No output.</p>\':""}<p class="term-note">${n.inputMode==="diagnostic"?"Screenshots were not requested for this diagnostic.":"No snapshots were captured for this step."}</p></div>`,caption:m?`<time>${m} UTC</time>`:""}]}return["before","after"].filter(m=>n.snapshots?.[m]).map(m=>{let $=n.snapshots[m],w=m==="before"?"Before":"After",b=re(m==="before"?s?.beforeAt:s?.afterAt);return{id:W(n,m),step:y(m),label:`Step ${h} \\xB7 ${w}`,title:g,body:`<img loading="lazy" alt="${w} dispatch snapshot, enlarged" src="${R($)}">`,caption:`${b?`<time>${b}</time>`:""}<a href="${R($)}">Open the original</a>`}})})}function we(e){let t=[];for(let o of e)(o.snapshots?["before","after"]:["command"]).forEach((n,s)=>t.push({step:o,role:n,id:`step-${o.id}--${n}`,index:t.length,first:s===0}));return t}var oe=e=>`#${encodeURIComponent(e.id)}`,I=e=>e.role==="before"?"Before":e.role==="after"?"After":e.step.inputMode==="diagnostic"?"Diagnostic":"Command";function ye(e,t,o,n){let s=e.step,{headline:h,command:g}=J(s,t),x=o.get(s.id),y=M=>o.get(M.step.id),m=(M,C,r)=>M?`<a class="arrow ${C} ${r}" href="${l(oe(M))}" aria-label="${C==="prev"?"Previous":"Next"}${r==="errs"?" with errors":""}: step ${y(M)}, ${I(M).toLowerCase()}">${C==="prev"?"\\u2039":"\\u203A"}</a>`:"",$=m(n.previous,"prev","all")+m(n.previousError,"prev","errs"),w=m(n.next,"next","all")+m(n.nextError,"next","errs"),b=U(t),E=e.role==="command"?F(t?.at)?`${F(t?.at)} UTC`:void 0:re(e.role==="before"?t?.beforeAt:t?.afterAt),j=(M,C="")=>`<div class="chin"><span class="nav">${$}</span><p class="info" data-role="${e.role}"><img class="plate" src="/.app/icon.svg" alt="" width="24" height="24"><b>${M}</b>${E?`<time>${E}</time>`:""}</p><span class="nav">${C}${w}</span></div>`,A=`<h2 class="sname" title="${l(h)}"><span class="d">${x}</span><span class="h">${l(h)}</span>${b?`<span class="took" title="Time from the before snapshot to the after snapshot">${b}</span>`:""}</h2>`,L=`<section class="stage view${e.role==="command"?" terminal":""}${e.first?" first":""}" id="${l(e.id)}" data-v="${e.index}" aria-label="Step ${x}, ${I(e).toLowerCase()}"><div class="unit">${A}`;if(e.role==="command"){let M=s.inputMode==="diagnostic"?"Diagnostic command":"Command";return`${L}<div class="monitor"><div class="term"><pre class="term-cmd"><span class="prompt" aria-hidden="true">$</span>${l(g??h)}</pre>${t?.output?Z(t.output)||\'<p class="quiet">No output.</p>\':""}\n<p class="term-note">${s.inputMode==="diagnostic"?"Screenshots were not requested for this diagnostic.":"No snapshots were captured for this step."}</p></div>\n${j(M,`<button type="button" class="enlarge" popovertarget="${l(W(s,"command"))}" title="Enlarge the command">${be}Enlarge</button>`)}</div></div></section>`}let H=s.snapshots?.[e.role],q=H?`<button type="button" class="zoom" popovertarget="${l(W(s,e.role))}" title="Enlarge the ${e.role} snapshot"><img alt="${I(e)} dispatch snapshot" src="${R(H)}"></button>`:`<div class="void">${I(e)}: unavailable \\u2014 incomplete evidence</div>`;return`${L}<div class="monitor"><div class="screen">${q}</div>${j(I(e))}</div></div></section>`}var ie=e=>e?`<p class="do"><b>What you can do:</b> ${l(e)}</p>`:"";function ke(e,t,o,n,s){let{headline:h,command:g,reasonShown:x,kind:y}=J(e,t),m=e.snapshots?.declaredAfterIntervalMs,$=F(t?.at),w=(b,E)=>`<div><dt>${b}</dt><dd>${E}</dd></div>`;return`<aside class="panel" aria-label="Step ${o} details"><div class="panel-scroll">\n<div class="stephead"><h2 class="stepno"><span class="lg">Step</span> <span class="disp"><span class="d">${o}</span> <span class="of">of <span class="d">${String(n).padStart(2,"0")}</span></span></span></h2><a class="permalink" href="${l(te(e))}" title="Stable link to this step" aria-label="Stable link to step ${o}">${$e}</a></div>\n<p class="meta"><span>${y}</span>${$?`<time>${$} UTC</time>`:""}<span class="state"><span class="sr">Execution: </span>${B(e.execution)}</span></p>\n${s.length?`<section class="concern ${K(s.map(b=>b.tone))}"><h3>Why this step affects the verdicts</h3><ul>${s.map(b=>`<li class="${b.tone}"><span class="label">${l(b.verdict)}</span><p>${l(b.text)}</p>${ie(b.action)}</li>`).join("")}</ul></section>`:""}\n${x?`<section class="block"><h3>Reason</h3><p>${l(e.because??"Not present in retained host metadata")}</p></section>`:""}\n${g&&e.snapshots?`<section class="block"><h3>Command</h3><pre class="command">${l(g)}</pre></section>`:""}\n<section class="block"><h3>Expected</h3><p>${l(e.expected||"Not supplied")}</p></section>\n<section class="block"><h3>Observed</h3>${ve(e,t?.output,!!e.snapshots)}</section>\n<dl class="facts">${w("State",l(e.state))}${w("Input",l(e.inputMode))}${w("After interval",m===void 0?"unavailable":`${m} ms`)}${U(t)?w("Before to after",U(t)):""}${e.snapshots?.groupId?w("Group",l(e.snapshots.groupId)):""}</dl>\n</div></aside>`}var $e=\'<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M6.6 9.4l2.8-2.8M7.2 4.6l.9-.9a2.8 2.8 0 0 1 4 4l-.9.9M8.8 11.4l-.9.9a2.8 2.8 0 0 1-4-4l.9-.9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>\',Se=\'<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7.2 8 10.4l3.2-3.2M3 13h10" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>\';function Me(e,t,o,n,s){let{headline:h,command:g}=J(e,t),x=U(t),y=s.map((m,$)=>{let w=m.role==="command"?void 0:e.snapshots?.[m.role],b=m.role==="command"?`<pre aria-hidden="true"><span class="prompt">$</span>${l(g??h)}</pre>`:w?`<img loading="lazy" alt="" src="${R(w)}">`:`<span class="none">No ${m.role} snapshot</span>`;return`<a data-t="${m.index}" href="${l(oe(m))}" title="${l(`Step ${o} \\xB7 ${I(m)} \\xB7 ${h}`)}"><span class="face${m.role==="command"?" text":""}">${b}${m.role==="command"?"":`<span class="role">${I(m)}</span>`}${n&&$===0?`<span class="flag ${n}" title="This step affects the verdicts">!</span>`:""}</span></a>`}).join("");return`<li class="${T(e.execution)}${e.inputMode==="diagnostic"?" diagnostic":""}${P(e)?" err":""}"><div class="faces">${y}</div><span class="cap"><span class="n">${o}</span><i class="dot" aria-hidden="true"></i><span class="t">${l(h)}</span>${x?`<span class="took">${x}</span>`:""}</span><span class="sr">${l(e.execution)}</span></li>`}var ze=(e,t,o)=>e?Array.from({length:e},(n,s)=>`.app:has(.center>.step:nth-of-type(${s+1}):target) .track li:nth-child(${s+1}),.app:has(.center>.step:nth-of-type(${s+1}) :target) .track li:nth-child(${s+1})`).join(",")+",.app:not(:has(.center :target)) .track li:first-child{background:color-mix(in oklch,var(--aura) 55%,transparent)}"+[...Array.from({length:o},(n,s)=>`.app:has([data-v="${s}"]:target) .track [data-t="${s}"] .face`),...t.map(n=>`.app:has(.center>.step[data-first="${n}"]:target) .track [data-t="${n}"] .face`),\'.app:not(:has(.center :target)) .track [data-t="0"] .face\'].join(",")+"{box-shadow:0 0 0 1px var(--s1),0 0 0 4px var(--pop)}":"";function Ee(e,t){let o=l(t.label);return`<div class="fwin" id="${e}" data-step="overview" data-src="${t.href}" popover aria-label="${o}"><div class="fw-card"><div class="fw-bar"><span class="fw-name" title="${o}">${o}</span><span class="fw-note" title="The download is the original file" hidden>Formatted</span><span class="size">${D(t.bytes)}</span><a class="fw-dl" href="${t.href}" download="${l(t.name)}">${Se}<span>Download</span></a><button type="button" class="close" popovertarget="${e}" popovertargetaction="hide" aria-label="Close">\\xD7</button></div><pre class="fw-body"><span class="quiet">Reading the file\\u2026</span></pre></div></div>`}function se(e){let t=he(e),o=new Map(t.map((a,d)=>[a.id,String(d+1).padStart(2,"0")])),n=we(t),s=t.map(a=>Date.parse(e.details.get(a.id)?.at??"")).filter(Number.isFinite),h=t.filter(a=>a.inputMode==="diagnostic").length,g=t.length-h,x=t.filter(P).length,y=s.length?new Date(Math.min(...s)).toISOString():void 0,m=new Map,$=e.reasons.defects??[];for(let[a,d,f]of[["snapshots",`Snapshots ${e.completeness}`,T(e.completeness)],["execution",`Execution ${e.execution}`,T(e.execution)],["defects","Relay defect","defect"]])for(let S of a==="defects"?$:e.reasons[a])for(let N of S.stepIds)m.set(N,[...m.get(N)??[],{verdict:d,tone:f,text:S.text,action:S.action}]);let w=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,b=new Map;for(let a of e.outputs){let[,d="",...f]=a.path.split("/");b.set(d,[...b.get(d)??[],{...a,label:f.filter(S=>!w.test(S)).join("/")||a.path.split("/").at(-1)}])}let E=[],j=[],A=(a,d)=>(j.push(Ee(a,d)),`<button type="button" class="fopen" popovertarget="${a}" title="View ${l(d.name)}">${l(d.label)}</button>`),L=a=>ce.test(a.path)?A(`window-output-${j.length+1}`,{href:R(a.path),label:a.label,name:a.label.split("/").at(-1),bytes:a.bytes}):`<a href="${R(a.path)}">${l(a.label)}</a>`,H=[...b].map(([a,d])=>{let f=d.filter(k=>/\\.(png|jpe?g|webp|gif)$/i.test(k.path)),S=d.filter(k=>!f.includes(k)),N=d.reduce((k,O)=>k+O.bytes,0);return`<details class="group"${e.outputs.length<=12?" open":""}><summary><span class="where">${l(a)}</span><span class="count">${me(d.length,"file")} \\xB7 ${D(N)}</span></summary>${S.length?`<ul class="flist">${S.map(k=>`<li>${L(k)}<span>${D(k.bytes)}</span></li>`).join("")}</ul>`:""}${f.length?`<div class="gallery">${f.map(k=>{let O=`lightbox-output-${E.length+1}`,_=k.label.split("/").at(-1);return E.push({id:O,step:"overview",label:a,title:k.label,nav:_,body:`<img loading="lazy" alt="${l(k.label)}, enlarged" src="${R(k.path)}">`,caption:`<span class="file">${l(k.label)}</span><span class="size">${D(k.bytes)}</span><a href="${R(k.path)}">Open the original</a>`}),`<button type="button" class="gthumb" popovertarget="${O}" title="Enlarge ${l(_)}"><img loading="lazy" alt="${l(k.label)}" src="${R(k.path)}"><span>${l(_)}<small>${D(k.bytes)}</small></span></button>`}).join("")}</div>`:""}</details>`}).join(""),q={"manifest.json":"Checksums of every artifact","OPENING.txt":"How to review this package","summary.json":"Verdicts as an earlier relay derived them","trajectory.json":"Steps as an earlier relay derived them","walkthrough.json":"Steps as an earlier relay derived them"},M=e.files.map(a=>`<li>${A(`window-${a.path.replace(/\\W+/g,"-")}`,{href:R(a.path),label:a.path,name:a.path.split("/").at(-1),bytes:a.bytes})}${q[a.path]?`<span>${q[a.path]}</span>`:""}</li>`).join(""),C=(a,d)=>`<li><b>${d}</b>${a?` <span>${a}</span>`:""}</li>`,r=a=>[...a.reduce((d,f)=>d.set(f.text,{...f,stepIds:[...new Set([...d.get(f.text)?.stepIds??[],...f.stepIds])]}),new Map).values()],i=a=>a.map(d=>`<a href="${l(`#step-${encodeURIComponent(d)}`)}">Step <span class="d">${o.get(d)??"?"}</span></a>`).join(""),c=a=>`<ul class="reasons">${r(a).map(d=>`<li><p>${l(d.text)}</p>${ie(d.action)}${d.stepIds.length?`<p class="steps">${i(d.stepIds)}</p>`:""}</li>`).join("")}</ul>`,p=(a,d)=>a==="snapshots"?`Why snapshots are ${d}`:d==="failed"?"Why execution failed":`Why execution is ${d}`,u=(a,d,f)=>e.reasons[a].length?`<li class="pill ${T(f)}"><button type="button" popovertarget="why-${a}" title="${p(a,f)}"><span>${d}</span>${B(f)}<span class="q" aria-hidden="true">?</span></button><div class="why" id="why-${a}" popover><h3>${p(a,f)}</h3>${c(e.reasons[a])}</div></li>`:`<li class="pill ${T(f)}"><span>${d}</span>${B(f)}</li>`,v=(a,d,f,S)=>`<div class="vblock ${T(f)}"><h4>${d} ${B(f)}</h4>${e.reasons[a].length?`<p class="vwhy">${p(a,f)}:</p>${c(e.reasons[a])}`:`<p class="quiet">${S}</p>`}</div>`,z=`<article class="step overview" id="overview"><section class="stage doc" aria-label="Package overview"><div class="doc-in">\n<h2>Overview</h2><p class="lede">Delivery integrity is separate from execution success. Snapshots are dispatch-time evidence, not continuous video: each shows the screen just before a step was sent and shortly after it returned.</p>\n<section class="block ${K([T(e.completeness),T(e.execution)])}"><h3>Verdicts</h3>${v("snapshots","Snapshots",e.completeness,"Every snapshot the steps declared is present and tied to its step.")}${v("execution","Execution",e.execution,"Every step completed, and every retained receipt confirms it.")}</section>\n${$.length?`<section class="block defect"><h3>Relay defects <span class="count">${r($).length}</span></h3><div><p class="vwhy">These are faults in the relay\'s own records, not in the run, and they change no verdict.</p>${c($)}</div></section>`:""}\n<section class="block s-findings"><h3>Findings as recorded <span class="count">${e.findings.length}</span></h3>${e.findings.length?`<ul class="findings">${fe(e.findings).map(a=>`<li>${a.ids.length?`<details><summary>${l(a.text)}</summary><code>${a.ids.map(l).join("<br>")}</code></details>`:l(a.text)}</li>`).join("")}</ul>`:\'<p class="quiet">No findings.</p>\'}</section>\n<section class="block s-outputs"><h3>Declared outputs <span class="count">${e.outputs.length}</span></h3>${H?`<div class="outputs">${H}</div>`:\'<p class="quiet">No declared outputs were delivered.</p>\'}</section>\n<section class="block s-package"><h3>Package</h3><div class="package"><dl class="ids"><div><dt>Package</dt><dd>${l(e.packageId)}</dd></div><div><dt>Task</dt><dd>${l(e.taskId)}</dd></div><div><dt>Session</dt><dd>${l(e.sessionId)}</dd></div>${y?`<div><dt>Started</dt><dd>${Y(y,!0)}</dd></div>`:""}</dl>\n<ul class="files">${M}</ul></div></section></div></section></article>`;return{title:`Relay review: ${e.packageId}`,selection:ze(t.length,n.filter(a=>a.first).map(a=>a.index),n.length),html:`<div class="app">\n<header class="top"><div class="brand"><span class="mark" aria-hidden="true">${pe}</span><h1 title="${l(e.packageId)}">Relay</h1>\n<ul class="stats">${C(V(t.length,"step"),String(t.length))}${C(V(g,"action"),String(g))}${C(V(h,"diagnostic"),String(h))}${y?`<li class="at"><time datetime="${y}" title="Started ${y}">${Y(y)}</time><span class="local" hidden><span class="sep" aria-hidden="true">\\xB7</span><time datetime="${y}" data-local title="Started, in your time zone"></time></span></li>`:""}${s.length?C("",ae(Math.max(...s)-Math.min(...s))):""}</ul></div>\n<nav class="tabs mid" aria-label="View"><a class="t-traj" href="${t[0]?l(te(t[0])):"#"}">Trajectory</a><a class="t-over" href="#overview">Overview<span class="${e.findings.length?"has":""}">${e.findings.length}</span></a></nav>\n<ul class="pills"><li class="keys" title="Keyboard shortcuts"><kbd aria-label="Left arrow">\\u2190</kbd><kbd aria-label="Right arrow">\\u2192</kbd><span>Steps</span><kbd>Space</kbd><span>Enlarge</span></li>${u("snapshots","Snapshots",e.completeness)}${u("execution","Execution",e.execution)}</ul></header>\n<main class="center">${x?\'<label class="focus" title="Highlight the steps with errors, and move between them with the arrows"><input type="checkbox" id="focus-errors">Focus on errors</label>\':""}${t.map(a=>{let d=n.filter(f=>f.step===a);return`<article id="step-${l(a.id)}" data-first="${d[0].index}" class="step ${T(a.execution)}${P(a)?" err":""}">${d.map(f=>ye(f,e.details.get(a.id),o,{previous:n[f.index-1],next:n[f.index+1],previousError:n.slice(0,f.index).findLast(S=>P(S.step)),nextError:n.slice(f.index+1).find(S=>P(S.step))})).join("")}${ke(a,e.details.get(a.id),o.get(a.id),t.length,m.get(a.id)??[])}</article>`}).join(`\n`)}\n${z}</main>\n<footer class="track" aria-label="Steps"><ol>${t.map(a=>Me(a,e.details.get(a.id),o.get(a.id),m.has(a.id)?K(m.get(a.id).map(d=>d.tone)):void 0,n.filter(d=>d.step===a))).join("")}</ol></footer>\n</div>\n${Q(xe(t,e,o))}\n${Q(E)}${j.join("")}`}}function le(e=document){let t=()=>[...e.querySelectorAll(".center .view")],o=()=>matchMedia("(prefers-reduced-motion: reduce)").matches,n=r=>r.querySelector(".lb-body>*"),s=r=>r?e.getElementById(r.getAttribute("popovertarget")??""):null,h=r=>{for(let i of e.querySelectorAll(".zoom,.enlarge,.gthumb")){if(i.getAttribute("popovertarget")!==r.id)continue;let c=i.classList.contains("enlarge")?i.closest(".monitor")?.querySelector(".term")??null:i.querySelector("img");if(c&&c.getBoundingClientRect().width)return c}return null},g=r=>{let i=r.getBoundingClientRect();if(!(r instanceof HTMLImageElement)||getComputedStyle(r).objectFit!=="contain"||!r.naturalWidth||!r.naturalHeight)return i;let c=Math.min(i.width/r.naturalWidth,i.height/r.naturalHeight),p=r.naturalWidth*c,u=r.naturalHeight*c;return{left:i.left+(i.width-p)/2,top:i.top+(i.height-u)/2,width:p,height:u}},x=(r,i)=>{let c=getComputedStyle(r).transform;r.style.transition="none",r.style.transform="none";let p=r.getBoundingClientRect(),u=g(i);if(r.style.transform=c==="none"?"":c,r.getBoundingClientRect(),r.style.transition="",!p.width)return{transform:"",clip:""};let v=u.width/p.width;if(i instanceof HTMLImageElement)return{transform:`translate(${u.left+u.width/2-p.left-p.width*v/2}px,${u.top+u.height/2-p.top-p.height*v/2}px) scale(${v})`,clip:""};let z=parseFloat(getComputedStyle(i).borderTopLeftRadius)||0;return{transform:`translate(${u.left-p.left}px,${u.top-p.top}px) scale(${v})`,clip:`inset(0 0 ${Math.max(0,p.height-u.height/v)}px 0 round ${z/v}px)`}},y=r=>`inset(0 0 0 0 round ${getComputedStyle(r).borderTopLeftRadius})`,m="transform .36s cubic-bezier(.3,.9,.3,1),clip-path .36s cubic-bezier(.3,.9,.3,1)",$=(r,i)=>{let c=n(r);if(!c?.classList.contains("lb-term"))return;if(!i){c.style.width="",c.style.removeProperty("--z");return}let p=i.getBoundingClientRect().width,u=i.scrollHeight,v=Math.max(1,Math.min(20/14,(innerWidth-48)/p,(innerHeight-120)/u));c.style.width=`${p*v}px`,c.style.setProperty("--z",String(v))},w=null,b=0,E=()=>{w&&(w.style.visibility=""),w=null},j=r=>{b++,E();let i=h(r),c=o()?null:i;$(r,i),r.toggleAttribute("data-flip",!!c),r.showPopover();let p=n(r);if(p&&(p.style.opacity=""),c&&p){let u=x(p,c);p.style.transition="none",p.style.transform=u.transform,p.style.clipPath=u.clip,p.getBoundingClientRect(),p.style.transition="",p.style.transform="",p.style.clipPath=u.clip?y(p):"",c.style.visibility="hidden",w=c}},A=r=>{if(r.hasAttribute("data-instant"))return;let i=n(r),c=w,p=++b;if(c&&i&&!o()&&c.getBoundingClientRect().width){r.setAttribute("data-flip","");let u=x(i,c);u.clip&&!i.style.clipPath&&(i.style.transition="none",i.style.clipPath=y(i),i.getBoundingClientRect(),i.style.transition=""),i.style.transform=u.transform,i.style.clipPath=u.clip,setTimeout(()=>{p===b&&(E(),i.style.transition=`${m},opacity .1s linear`,i.style.opacity="0")},240)}else r.removeAttribute("data-flip"),E();setTimeout(()=>{p===b&&!r.matches(":popover-open")&&i&&(i.style.transform="",i.style.clipPath="",i.style.transition="",i.style.opacity="")},520)};e.querySelectorAll(".lightbox").forEach(r=>r.addEventListener("beforetoggle",i=>{i.newState==="closed"&&A(r)}));let L=r=>{let i=r.closest(".lightbox"),c=s(r);if(!c)return;let p=[i,c].filter(a=>!!a);p.forEach(a=>a.setAttribute("data-instant","")),b++,E(),i&&i.hidePopover();let u=c.dataset.step;u&&decodeURIComponent(location.hash.slice(1))!==u&&(location.hash=encodeURIComponent(u));let v=n(c);v&&(v.style.transform="",v.style.clipPath="",v.style.transition="",v.style.opacity=""),c.showPopover();let z=h(c);$(c,z),z&&(z.style.visibility="hidden",w=z),setTimeout(()=>p.forEach(a=>a.removeAttribute("data-instant")),60)};e.querySelectorAll(".fwin").forEach(r=>r.addEventListener("beforetoggle",i=>{i.newState==="open"&&Ce(r)})),e.addEventListener("click",r=>{let i=r.target instanceof Element?r.target:null,c=i?.closest(".lb-nav");if(c){r.preventDefault(),L(c);return}let p=s(i?.closest(".zoom,.enlarge,.gthumb")??null);if(p){r.preventDefault(),j(p);return}i instanceof HTMLElement&&(i.classList.contains("lightbox")||i.classList.contains("fwin"))&&i.hidePopover()});try{e.querySelectorAll("time[data-local]").forEach(r=>{let i=new Date(r.dateTime);if(isNaN(i.getTime())||!i.getTimezoneOffset())return;r.textContent=new Intl.DateTimeFormat(void 0,{...i.getFullYear()!==i.getUTCFullYear()?{year:"numeric"}:{},month:"short",day:"numeric",hour:"numeric",minute:"2-digit",timeZoneName:"short"}).format(i);let c=r.closest("[hidden]");c&&(c.hidden=!1)})}catch{}let H=()=>{let r=null;try{r=e.getElementById(decodeURIComponent(location.hash.slice(1)))}catch{}if(!r)return 0;let i=r.classList.contains("step")?r.querySelector(".view.first"):r.closest(".view");return i?t().indexOf(i):-1},q=()=>!!e.getElementById("focus-errors")?.checked,M="",C=()=>{let r=H();r<0||(M=location.hash,e.querySelector(`.track a[data-t="${r}"]`)?.scrollIntoView({block:"nearest",inline:"nearest"}))};e.addEventListener("keydown",r=>{if(r.defaultPrevented||r.altKey||r.ctrlKey||r.metaKey||r.shiftKey)return;let i=r.target;if(i instanceof HTMLElement&&(i.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(i.tagName)))return;let c=e.querySelector(".lightbox:popover-open");if(r.key===" "){if(c){r.preventDefault(),r.repeat||c.hidePopover();return}let z=i instanceof Element?i.closest(".zoom,.enlarge,.gthumb"):null;if(i instanceof Element&&!z&&(i.closest("summary")||i.closest("button"))||(r.preventDefault(),r.repeat))return;if(z?.classList.contains("gthumb")){let S=s(z);S&&j(S);return}let a=H(),d=a<0?null:t()[a],f=d&&e.getElementById(d.id.replace(/^step-/,"lightbox-"));f&&j(f);return}let p=r.key==="ArrowRight"?1:r.key==="ArrowLeft"?-1:0;if(!p)return;if(c){r.preventDefault();let z=c.querySelector(p<0?".lb-nav.prev":".lb-nav.next");z&&L(z);return}let u=t(),v=H();if(!(v<0)){do v+=p;while(v>=0&&v<u.length&&q()&&!u[v].closest(".step").classList.contains("err"));v<0||v>=u.length||(r.preventDefault(),location.hash=encodeURIComponent(u[v].id))}}),e.querySelector(".tabs .t-traj")?.addEventListener("click",r=>{M&&(r.preventDefault(),location.hash=M)}),addEventListener("hashchange",()=>{let r="";try{r=decodeURIComponent(location.hash.slice(1))}catch{}e.querySelectorAll(":popover-open").forEach(i=>{i.dataset.step!==r&&i.hidePopover()}),C()}),C()}async function Ce(e){if(e.dataset.filled)return;e.dataset.filled="reading";let t=e.querySelector(".fw-body"),o=e.querySelector(".fw-note");try{let n=await fetch(e.dataset.src);if(!n.ok)throw new Error(`${n.status}`);let s=new Uint8Array(await n.arrayBuffer()),h=s.length>1e6,g=new TextDecoder().decode(h?s.subarray(0,1e6):s);if(!h&&/\\.json$/i.test(e.dataset.src))try{let x=JSON.stringify(JSON.parse(g),null,2);x!==g.trimEnd()&&(g=x,o.hidden=!1)}catch{}t.textContent=g,g||(t.innerHTML=\'<span class="quiet">Empty file.</span>\'),h&&t.insertAdjacentHTML("beforeend",`\n<span class="quiet">Showing the first megabyte; download the file for the rest.</span>`),e.dataset.filled="done"}catch{t.innerHTML=\'<span class="quiet">The file could not be read.</span>\',delete e.dataset.filled}}async function Te(){let[,e="",t=""]=location.pathname.split("/");try{let o=await fetch(`/.api/${e}/${t}.json`);if(!o.ok)throw new Error(`The review server answered ${o.status}.`);let n=se(ee(await o.json()));document.title=n.title;let s=new CSSStyleSheet;s.replaceSync(n.selection),document.adoptedStyleSheets=[...document.adoptedStyleSheets,s],document.body.innerHTML=n.html}catch(o){let n=document.createElement("p");n.className="loading",n.textContent=`The trajectory could not be loaded. ${o instanceof Error?o.message:""}`,document.body.replaceChildren(n);return}location.hash&&location.replace(location.hash),le()}Te();\n' : /* @__PURE__ */ (() => {
-  let script;
-  return () => script ??= null.then((m) => m.buildReviewApp());
-})();
-async function openInBrowser(url) {
-  const run = promisify2(execFile2);
-  if (process.platform === "darwin") await run("/usr/bin/open", ["-a", "Google Chrome", url]);
-  else await run("xdg-open", [url]);
-}
 function createRelayServer(options2 = {}) {
   const sessionId = options2.sessionId ?? process.env.MCP_VM_RELAY_SESSION ?? randomUUID9();
   const project = options2.project ?? projectDirectory();
   let manager;
-  const review = options2.review ?? new ReviewServer(reviewApp);
   const get = options2.manager ?? (() => {
     if (!manager) {
       const environment = selectedEnvironment();
@@ -31607,16 +31201,6 @@ function createRelayServer(options2 = {}) {
     const { name, arguments: args } = request.params;
     try {
       if (name === STATUS_TOOL) return text3(JSON.stringify(statusPayload(), null, 2));
-      if (name === TRAJECTORY_TOOL) {
-        const directory2 = args?.directory;
-        if (typeof directory2 !== "string" || !directory2.trim()) throw new Error("directory is required");
-        const root = resolve11(project, directory2.trim());
-        const verified = await verifyDeliveredPackage(root);
-        if (!verified.deliveryVerified) throw new Error(`Package failed verification; refusing to open the review: ${JSON.stringify(verified)}`);
-        const address = await review.add(root);
-        await (options2.open ?? openInBrowser)(address);
-        return text3(`Opened the review of verified package ${root} at ${address}. It is served while this relay runs. Human review remains pending.`);
-      }
       if (relayTools.some((tool) => tool.name === name)) return relayContent(await relayCall(get, relayToolInput(name, args ?? {}), { signal: AbortSignal.any([extra.signal, shutdownController.signal]), toolCallId: String(extra.requestId) }));
       throw new Error(`Unknown tool: ${name}`);
     } catch (error2) {
@@ -31693,7 +31277,7 @@ async function main(args) {
   });
   await relay.server.connect(new StdioServerTransport());
 }
-if (process.argv[1] && await realpath3(process.argv[1]).catch(() => "") === await realpath3(new URL(import.meta.url)).catch(() => "")) {
+if (process.argv[1] && await realpath2(process.argv[1]).catch(() => "") === await realpath2(new URL(import.meta.url)).catch(() => "")) {
   main(process.argv.slice(2)).catch((error2) => {
     process.stderr.write(`mcp-vm-relay: ${message(error2)}
 `);
@@ -31707,7 +31291,6 @@ export {
   SHUTDOWN_CANCEL_MS,
   SHUTDOWN_GRACE_MS,
   STATUS_TOOL,
-  TRAJECTORY_TOOL,
   allToolDefinitions,
   createRelayServer,
   projectDirectory,

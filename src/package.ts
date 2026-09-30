@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { lstat, readFile, readdir, mkdir, writeFile, rm } from "node:fs/promises";
 import { dirname, join, resolve, parse } from "node:path";
 import { buildManifest, verifyPackage, type PackageManifest, type ReviewStep, type SnapshotArtifact } from "@wezzard/relay-driver-host-sdk";
-import { type CommandOutput, type Reason, type ReviewData, type StepDetail } from "./relay-trajectory-viewer/page.js";
+import type { CommandOutput, Reason, ReviewData, StepDetail } from "./review-data.js";
 
 export interface DeliverPackageOptions {
   packageId: string;
@@ -389,17 +389,10 @@ function explainFinding(finding: string, steps: Step[], byExecution: Map<string,
 function result(root: string, a: Analysis): DeliveryResult {
   return { manifestPath: join(root, "manifest.json"), deliveryVerified: true, snapshots: a.completeness, execution: a.execution, findings: a.findings };
 }
-/** When an already delivered package's run started: its earliest step, or the package's creation without timed steps. Development use only. */
-export async function deliveredPackageRun(rootDir: string): Promise<{ taskId: string; startedAt: string }> {
-  const root = await rootPath(rootDir), m = await readJson(root, "manifest.json");
-  const options = { packageId: text(m.packageId, "package id"), sessionId: text(m.sessionId, "session id"), taskId: text(m.taskId, "task id") };
-  const times = [...(await analyze(root, options, await filesUnder(root))).details.values()].map(d => Date.parse(d.at ?? "")).filter(Number.isFinite);
-  return { taskId: options.taskId, startedAt: times.length ? new Date(Math.min(...times)).toISOString() : text(m.createdAt, "creation time") };
-}
 
-/** The package's own files the review page lists: its seal, its opening note, and an earlier relay's derived files. */
+/** The package's own files the review data lists: its seal, its opening note, and an earlier relay's derived files. */
 const listedFiles = ["manifest.json", "OPENING.txt", "summary.json", "trajectory.json", "walkthrough.json"];
-/** The review data of a verified package: the model the review app renders its page from. It writes nothing. */
+/** The review data of a verified package: its steps, verdicts and reasons as the relay derives them. It writes nothing. */
 export async function reviewData(rootDir: string): Promise<ReviewData> {
   const root = await rootPath(rootDir), m = await readJson(root, "manifest.json"), files = await filesUnder(root);
   const options = { packageId: text(m.packageId, "package id"), sessionId: text(m.sessionId, "session id"), taskId: text(m.taskId, "task id") };
@@ -427,7 +420,7 @@ export async function deliverPackage(rootDir: string, options: DeliverPackageOpt
     created.push(path);
   };
   try {
-    await save("OPENING.txt", "Review this package with the relay's trajectory review command: /mcp-vm-relay:trajectory <this directory> in Claude Code, /mcp-vm-relay-trajectory <this directory> in pi, or the relay_trajectory tool. It verifies the package and opens the review app on it in the browser; the steps and verdicts are derived from the evidence when you review it. Snapshot completeness and execution are separate verdicts, and the page says why each one is not complete or passed and what you can do. Originals are under state/, host metadata under host/, and declared extractions under extractions/. manifest.json checksums every artifact except itself.\n");
+    await save("OPENING.txt", "Read this package's steps and verdicts with the review data export of the relay's npm package, @wezzard/mcp-vm-relay/review-data; pi-secretary's computer-use extension shows them beside the agent's session. The steps and verdicts are derived from the evidence when you review it. Snapshot completeness and execution are separate verdicts, and the review data says why each one is not complete or passed and what you can do. Originals are under state/, host metadata under host/, and declared extractions under extractions/. manifest.json checksums every artifact except itself.\n");
     const snapshotPaths = new Set(a.snapshots.map(s => s.path)), all = await filesUnder(root);
     await save("manifest.json", json(await buildManifest({ ...options, rootDir: root, media: [], segments: [], attempts: [],
       snapshots: a.snapshots.map(s => ({ ...s, absolutePath: join(root, s.path), packagePath: s.path })),

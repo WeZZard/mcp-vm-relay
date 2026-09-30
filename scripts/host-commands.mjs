@@ -17,13 +17,6 @@ export const COMMANDS = [
     description: "Report this session's owned VM lease exactly as the relay_status tool sees it. Read-only.",
     body: 'Call the `relay_status` tool once, with no arguments, and report its answer to the user exactly as it is. Do not act on the lease from here: `relay_finish` and `relay_release` are separate relay actions.',
   },
-  {
-    name: 'trajectory',
-    tool: 'relay_trajectory',
-    description: 'Verify a delivered relay evidence package and open its trajectory viewer. Human review remains pending.',
-    argumentHint: '<directory>',
-    body: 'Call the `relay_trajectory` tool with `directory` set to "$ARGUMENTS". If no directory was given, ask the user for the package directory instead of guessing one. Report the tool\'s answer as given. Opening the viewer does not mean the work was approved: human review remains pending until the user says otherwise.',
-  },
 ];
 
 /** The directories the build owns completely: any other file in them is stale. */

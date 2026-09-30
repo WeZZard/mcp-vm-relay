@@ -4,10 +4,9 @@ The Model Context Protocol front end of the VM relay, packaged as a Claude Code
 plugin and as a pi package. [pi-vm-relay](https://github.com/WeZZard/pi-vm-relay),
 which gave pi a native `relay` tool directly, is retired; mcp-vm-relay replaces
 it for both Claude Code and pi, the latter loaded through `pi-mcp-adapter`. It
-is an MCP server: nineteen `relay_*` tools, each with its own schema, title
-and annotations, and the server's `instructions`. The two user commands,
-status and trajectory, ship as one small command file per host (see
-"Commands"). There is no skill and no hook. Together they offer recorded,
+is an MCP server: eighteen `relay_*` tools, each with its own schema, title
+and annotations, and the server's `instructions`. The user command, status,
+ships as one small command file per host (see "Commands"). There is no skill and no hook. Together they offer recorded,
 snapshot-evidenced **interruptive** computer-use and browser-use in a fresh,
 dedicated VM. The agent judges interruption; non-disruptive work stays with the
 agent's local tools. Nothing here executes local computer-use, spawns
@@ -44,9 +43,9 @@ adds nothing Claude-Code-specific beyond the marketplace packaging and the
 
 | In pi-vm-relay (retired, native pi extension) | Here (MCP server) |
 |---|---|
-| a registered `relay` tool with thirteen actions | nineteen `relay_*` MCP tools from the server `relay`, each with its own schema, title and annotations |
+| a registered `relay` tool with thirteen actions | eighteen `relay_*` MCP tools from the server `relay`, each with its own schema, title and annotations |
 | doctrine injected before each agent turn | the server's MCP `instructions`, plus a compact version in the `relay_probe` and `relay_acquire` descriptions for clients that do not surface `instructions` |
-| `/relay-status`, `/relay-trajectory` commands | `/mcp-vm-relay-status` and `/mcp-vm-relay-trajectory` in pi, `/mcp-vm-relay:status` and `/mcp-vm-relay:trajectory` in Claude Code; each asks the assistant to call `relay_status` or `relay_trajectory` |
+| `/relay-status` command | `/mcp-vm-relay-status` in pi, `/mcp-vm-relay:status` in Claude Code; it asks the assistant to call `relay_status` |
 | prompt-composed enclosure | the `vm-relay-operator` agent definition (Claude Code only), limited to the relay's tools and read-only file tools |
 | typed image blocks in a run result, with pi's `tool_result` hook keeping the error flag | MCP image content blocks in the tool result, with the MCP `isError` flag set beside them |
 | session shutdown pauses lease renewal | the same when the server's stdio closes or it is signalled: renewal pauses after one final renewal for the rest of the lease's TTL, the recording detaches, the VM is retained until that TTL for an explicit `relay_finish` or `relay_release`, and the vm-service TTL is the backstop |
@@ -69,10 +68,10 @@ Or add this repository as a marketplace and install the plugin from it:
 /plugin install mcp-vm-relay@mcp-vm-relay
 ```
 
-Once loaded, the model sees the nineteen tools as
+Once loaded, the model sees the eighteen tools as
 `mcp__plugin_mcp-vm-relay_relay__relay_search`,
 `mcp__plugin_mcp-vm-relay_relay__relay_probe`, and so on through
-`mcp__plugin_mcp-vm-relay_relay__relay_trajectory` (see "The tools" below for
+`mcp__plugin_mcp-vm-relay_relay__relay_status` (see "The tools" below for
 the full table). The `vm-relay-operator` agent definition allows them by those
 names. The server can also be configured directly in a project's `.mcp.json`
 with `node /path/to/mcp-vm-relay/dist/server.mjs`, in which case the tools are
@@ -85,10 +84,9 @@ pi install npm:@wezzard/mcp-vm-relay
 ```
 
 This needs `pi-mcp-adapter` installed. The tools appear as `relay_search`,
-`relay_probe`, and so on through `relay_trajectory`, with no host-specific
+`relay_probe`, and so on through `relay_status`, with no host-specific
 prefix (`pi-mcp.json` sets `toolPrefix: "none"`). The package also
-ships pi prompt templates for the two commands, `/mcp-vm-relay-status` and
-`/mcp-vm-relay-trajectory`.
+ships a pi prompt template for the command, `/mcp-vm-relay-status`.
 
 ### Use with npx
 
@@ -146,7 +144,6 @@ Evidence is automatic for all four: see "relay_run" below.
 | `relay_console_open` | Open console viewing | `console-open` | Open explicitly user-requested viewing on the service host, with `console_id`, `attempt_id`, `userRequested: true`, `reason` and `expected`. |
 | `relay_console_cancel` | Cancel console viewing | `console-cancel` | Cancel the identified viewing attempt without releasing the VM. |
 | `relay_status` | Show relay status | (unchanged) | This session's owned lease: backend binding, guest state, renewal state, console observation, last error, staging state and evidence path, plus the project directory, the VM service origin and the selected environment; `{"active": false}` when nothing is owned. |
-| `relay_trajectory` | Open the trajectory viewer | (unchanged) | Verify a delivered evidence package (every artifact, hash and reference) and open its trajectory review in the local human-facing browser, served by the relay on 127.0.0.1 from the package's data. The viewer explains every verdict that is not green. |
 
 `readOnlyHint`/`idempotentHint` are true for `relay_search`, `relay_probe`,
 `relay_acquisition_capabilities`, `relay_console_resolve`, `relay_image` and
@@ -163,22 +160,21 @@ full receipt stays in the evidence package.
 
 ## Commands
 
-Each command asks the assistant to call one relay tool and report the answer.
+The command asks the assistant to call one relay tool and report the answer.
 It changes nothing itself.
 
 | Command in pi | Command in Claude Code | Arguments | Purpose |
 |---|---|---|---|
 | `/mcp-vm-relay-status` | `/mcp-vm-relay:status` | none | Calls `relay_status` and reports this session's owned lease as is. Read-only. |
-| `/mcp-vm-relay-trajectory` | `/mcp-vm-relay:trajectory` | the package directory | Calls `relay_trajectory`, which verifies the package and opens its viewer. |
 
-They are not MCP prompts. pi's MCP adapter can only name a prompt
+It is not an MCP prompt. pi's MCP adapter can only name a prompt
 `/mcp__<package>__<server>__<prompt>`, so each host gets its own command file
 instead: pi prompt templates in `pi-prompts/` (listed in `package.json` under
 `pi.prompts`) and Claude Code plugin commands in `commands/`. Both are
 generated by `npm run build` from `scripts/host-commands.mjs`; do not edit them
 by hand. CI and the release workflow check the packed tarball with
 `scripts/verify-package.mjs`: the generated files must match their source, pi's
-glob must select exactly the two templates, and the packed server must start
+glob must select exactly the one template, and the packed server must start
 without the prompts capability. The release publishes and attaches the same
 tarball it checked.
 
@@ -312,14 +308,13 @@ Default output is `relay-evidence/<unique-task>/` under the project, with
 `host/` (reasons, submissions, transfer facts, receipts, diagnostics, image
 deliveries and lifecycle events), `extractions/` (declared files, including the
 page captures), `manifest.json`, which checksums everything, and `OPENING.txt`.
-The package is the raw evidence only; `/mcp-vm-relay:trajectory <directory>`
-(the `relay_trajectory` tool) verifies it and opens the review app on it, served by
-the relay on 127.0.0.1 while it runs. The steps and verdicts are derived from the
-evidence when you review it, so an earlier package is reviewed with today's rules.
+The package is the raw evidence only; pi-secretary's computer-use extension
+shows its steps and verdicts beside the agent's session. The steps and verdicts
+are derived from the evidence when you review it, so an earlier package is reviewed with today's rules.
 A program that reads relay packages gets the same derivation from
 `@wezzard/mcp-vm-relay/review-data`: `await reviewData(<directory>)` returns the
 steps (with each snapshot's package path), the verdicts and their reasons. No network, VM or external assets are
-needed. Diagnostic commands appear in the trajectory
+needed. Diagnostic commands appear in the review data
 as command-only steps without screenshots. `finish` verifies the package before
 destroying the VM; a failed delivery removes only the derived files it created
 and retains the VM for a corrected attempt. Cleanup checks the read-only host

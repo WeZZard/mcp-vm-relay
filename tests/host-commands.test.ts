@@ -14,8 +14,8 @@ test('the committed host command files are exactly what the build generates', as
 
 test('each host names the commands the same way: /mcp-vm-relay-<name> in pi, /mcp-vm-relay:<name> in Claude Code', () => {
   assert.deepEqual(Object.keys(hostCommandFiles()).sort(), [
-    'commands/status.md', 'commands/trajectory.md',
-    'pi-prompts/mcp-vm-relay-status.md', 'pi-prompts/mcp-vm-relay-trajectory.md',
+    'commands/status.md',
+    'pi-prompts/mcp-vm-relay-status.md',
   ]);
 });
 

@@ -109,8 +109,7 @@ An application composes the enclosure by prompting a subagent, which then uses
 ### 6.1 Tool and command surface
 
 Exactly one model-callable tool, `relay`, is registered. No legacy `relay_*` aliases
-or extra search tool are introduced. Slash commands remain `/relay-status` and
-`/relay-trajectory <package-directory>`.
+or extra search tool are introduced. The slash command remains `/relay-status`.
 
 **Action contract:**
 
@@ -130,7 +129,7 @@ or extra search tool are introduced. Slash commands remain `/relay-status` and
 | `finish` | Deliver verified evidence and close the enclosure | Not allowed |
 | `release` | Abandon safely without claiming successful completion | Not allowed |
 
-- Section 6.8 describes live viewing through these actions. `/relay-trajectory` remains an evidence-review command, not a live console. Console actions do not accept screenshot metadata or create screenshot evidence.
+- Section 6.8 describes live viewing through these actions. Evidence review is not a live console. Console actions do not accept screenshot metadata or create screenshot evidence.
 
 ### 6.2 Application discovery
 
@@ -297,9 +296,9 @@ The tool does not invent a default wait or silently substitute stability detecti
 
 ### 6.10 Evidence review page
 
-`/mcp-vm-relay:trajectory` (the `relay_trajectory` tool; `/mcp-vm-relay-trajectory` in pi) opens the review app on a delivered package. The app serves a person who must understand what happened without the agent's conversation.
+The review app moved to pi-secretary, in pi-secretary's `extensions/secretary/computer-use/viewer/`, where it shows a computer-use agent's session beside the review data of each machine the agent used (owner decision, 2026-09-30). The relay no longer ships the app, the `relay_trajectory` tool or a trajectory command. It keeps the review data: `@wezzard/mcp-vm-relay/review-data` derives a delivered package's steps, verdicts and reasons for any program that reads packages. The app serves a person who must understand what happened without the agent's conversation. The rest of this section is the app's design as the relay left it; pi-secretary owns it now.
 
-- The package is the data; nothing renders a page for it. Delivery writes the package's data only, with no `index.html`. The review app is one static app shipped with the relay. `relay_trajectory` verifies the package, then serves the app, the package's review data and the package's files from the relay's own process at `http://127.0.0.1:<port>/<project>/<run timestamp>-<run id>/`, and opens that address in the browser. The page draws itself from the data in the browser. The address works while the relay that served it runs; running the command again opens it anew. The app's Content-Security-Policy admits only its own script and stylesheet and requests only its own server. Within the page, navigation uses links, anchors and disclosure elements; the script adds the keys, the lightbox motion, the local time and the file windows.
+- The package is the data; nothing renders a page for it. Delivery writes the package's data only, with no `index.html`. The app draws its page from the review data in the browser. Its Content-Security-Policy admits only its own script and stylesheet and requests only its own server. Within the page, navigation uses links, anchors and disclosure elements; the script adds the keys, the lightbox motion, the local time and the file windows.
 - The top row shows the run and names its package in the title's tooltip. Snapshot completeness and execution appear as two separate verdicts, because neither implies the other. The relay is a computer-use server that records a trajectory; it performs no human review, so the page claims none.
 - Findings that repeat one sentence for many identifiers are stated once with a count. The identifiers remain available inside the finding.
 - Declared outputs are grouped by their declared name, and each file shows its guest path and size. Image outputs show a thumbnail that opens the lightbox. A text output (JSON, JSONL, log, text, Markdown, CSV, YAML, XML or TOML) opens in a window over the page: a card headed by its path and size, with a Download button and a close button, over its text in monospace. The window reads the file from the package when it opens, and shows at most its first megabyte, saying so. JSON that is not already laid out is shown formatted and marked so; the download is always the original file. Other outputs stay links to the file. The package's own files, manifest.json, summary.json and trajectory.json, open the same way. A focused file name is ringed around its own line of text. Escape, Space on the file's button, the close button or a click outside the card closes the window. When a package has more than 12 outputs, each group starts folded.
@@ -308,7 +307,7 @@ The tool does not invent a default wait or silently substitute stability detecti
 - A command result shows the exit status, standard output and standard error separately. An action's receipts are summarized by execution outcome and exit status. The receipt as recorded stays available in a disclosure element.
 - Each snapshot shows its capture time on its monitor's chin, and the step's title above it carries the time elapsed between its before and after snapshots, as do the step's caption in the track and its panel.
 - Every step keeps a stable link, which opens its first view, and every view has a link of its own. The viewport links to the previous and next views in time order.
-- **Rendering.** `src/relay-trajectory-viewer/page.ts` renders the page from a model and runs in the browser; `src/relay-trajectory-viewer/main.ts` is the app around it. The relay's review server builds the model from the package's retained evidence when the app asks for it (`/.api/<project>/<run>.json`), and serves the package's files beside it. Every package is therefore shown by the relay version that opens it, and a template or theme change never touches a package or its verification. The project in the address is the repository that ran the relay, named by its git remote. The run timestamp is when the run's first step started, and the run id is the random suffix of the relay's task id. `npm run dev:review-page -- <package-dir>...` runs the same server on a fixed port with the app built from source.
+- **Rendering.** The app's page, its script and its local server are in pi-secretary's `extensions/secretary/computer-use/viewer/`. The server builds the page's model from each package's retained evidence through `reviewData` when the app asks for it, and serves the package's files beside it. Every package is therefore shown by the relay version that pi-secretary depends on, and a template or theme change never touches a package or its verification.
 - Verification checks the package's data, not a page. A package delivered with an `index.html` keeps it, checked by its manifest entry like any other artifact.
 
 **Visual design.** The owner decided on 2026-09-28 that the review page must be well designed, with a three-row layout, one snapshot at a time in the viewport, and arrow-key navigation, and later that day that its theme uses a 1980s stripe palette as tints over light, warm backgrounds, on a grid with a limited type hierarchy, with continuous corners and with the main content and navigation centred or balanced on the visual centre of their containers. The design belongs to the review app, not to one package.

@@ -45,8 +45,7 @@ flowchart TB
     Guest --> Browser[Fresh guest Playwright browser]
     Guest --> CUA[Guest CuaDriver]
     Manager --> Evidence[Host evidence and declared extractions]
-    Pi -->|relay_trajectory| Review[Review server: app, review data and package files on 127.0.0.1]
-    Review --> Evidence
+    Reader[Package reader, such as pi-secretary's trajectory viewer] -->|review-data export| Evidence
     Maintainer[Human / agent image maintainer] --> Provision[Provision image and install applications]
     Provision --> Tests[Run application test plans on a fresh clone]
     Provision --> Inventory[Extract installed-application inventory]
@@ -59,8 +58,7 @@ flowchart TB
 |---|---|
 | Pi extension (`src/index.ts`, `src/schema.ts`, `src/tool.ts`) | Registration, model guidance, validation, bounded rendering and action dispatch |
 | `RelayManager` | Durable ownership, same-session operation ordering, lease heartbeat, staging, delivery and cleanup |
-| Relay Trajectory Viewer: review server and app (`src/relay-trajectory-viewer/`) | On `relay_trajectory`, serves one static review app, a verified package's review data and its files on 127.0.0.1 for the life of the relay process; the review data is derived from the raw evidence when it is served, and the page renders in the browser from it. Delivery writes no page and no derived data. |
-| Review data export (`src/review-data.ts`, `dist/review-data.mjs`) | `@wezzard/mcp-vm-relay/review-data`: the same derivation for programs that read relay packages, such as a harness report; it reads a package and writes nothing. |
+| Review data export (`src/review-data.ts`, `dist/review-data.mjs`) | `@wezzard/mcp-vm-relay/review-data`: derives a delivered package's steps, verdicts and reasons from its raw evidence for programs that read relay packages, such as pi-secretary's `extensions/secretary/computer-use/viewer/` trajectory viewer or a harness report; it reads a package and writes nothing. Delivery writes no page and no derived data. |
 | vm-service | Disposable leases, guest command/transfer API, guest sharing, service-host viewer management, access revocation and verified destruction. |
 | relay-driver | Recorded/admitted submissions, journal, durable receipts, snapshots and evidence-package substrate |
 | Image/backend layer (planned integration) | Authoritative published-image application inventory and search/catalog API |
@@ -86,7 +84,7 @@ installed and operated.
 
 Register exactly one model tool, `relay`, through one `pi.registerTool` call.
 A required `action` selects one of thirteen operations; no legacy `relay_*` aliases or extra
-search tool are allowed. Keep `/relay-status` and `/relay-trajectory <pkg>`.
+search tool are allowed. Keep `/relay-status`.
 
 Only `action` is universally required. Each branch is closed: fields not listed
 for that action are invalid. `run.reason` is a required nonblank string of at most
