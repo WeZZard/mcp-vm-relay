@@ -19488,7 +19488,7 @@ var Registry = class {
 };
 
 // src/transfer.ts
-import { mkdir as mkdir4, readFile as readFile5, lstat as lstat3, mkdtemp, rm, open as open4 } from "node:fs/promises";
+import { copyFile, mkdir as mkdir4, readFile as readFile5, lstat as lstat3, mkdtemp, rm, open as open4 } from "node:fs/promises";
 import { constants as constants2, linkSync } from "node:fs";
 import { dirname as dirname5, join as join7, resolve as resolve5, relative as relative4, isAbsolute as isAbsolute4 } from "node:path";
 import { tmpdir } from "node:os";
@@ -19971,6 +19971,14 @@ var Transfer = class {
             await bounded3(async () => {
               await this.options.onRetry?.({ operation: "pull", attempt, diagnostic });
             });
+            const wait = options2.retryDelaysMs?.[attempt - 1];
+            if (wait) await bounded3(() => new Promise((done) => {
+              const timer2 = setTimeout(done, wait);
+              controller.signal.addEventListener("abort", () => {
+                clearTimeout(timer2);
+                done();
+              }, { once: true });
+            }));
             continue;
           }
           await readImage(staged, before);
@@ -20043,6 +20051,32 @@ var Transfer = class {
       }
     }
   }
+  /** Copy the first host candidate whose size and hash match the guest scan; a mismatching copy is removed, never kept. */
+  async reuseLocal(file, path, localRoot, source) {
+    for (const candidate of source.candidates(file)) {
+      let written = false;
+      try {
+        await assertHostPath(source.root, candidate);
+        const info = await lstat3(candidate);
+        if (!info.isFile() || info.size !== file.bytes) continue;
+        await assertHostPath(localRoot, path, true);
+        await copyFile(candidate, path, constants2.COPYFILE_EXCL);
+        written = true;
+        await assertHostPath(localRoot, path);
+        const copied = await hashFile(path);
+        if (copied.sha256 === file.sha256 && copied.bytes === file.bytes) {
+          source.reused = (source.reused ?? 0) + 1;
+          return true;
+        }
+      } catch {
+      }
+      if (written) {
+        await assertHostPath(localRoot, path);
+        await rm(path, { force: true });
+      }
+    }
+    return false;
+  }
   /** Capture source hashes before pull, compare host bytes, then source inventory again.
    * `beforePull` sees the source inventory before any byte is pulled and may refuse the pull. */
   async pullVerified(remote, local, approvedRoot = remote, localRoot = dirname5(local), options2 = {}) {
@@ -20069,6 +20103,7 @@ var Transfer = class {
         await assertHostPath(localRoot, path, true);
         await mkdir4(dirname5(path), { recursive: true, mode: 448 });
         await assertHostPath(localRoot, path, true);
+        if (options2.reuse && await this.reuseLocal(file, path, localRoot, options2.reuse)) continue;
         const guestPath = within(remote, file.path);
         await this.guestPath(approvedRoot, guestPath);
         await this.copy("pull", () => this.vm.pull(this.name, guestPath, path), async () => {
@@ -29224,7 +29259,7 @@ var ImageStore = class {
     await publish(this.options.catalogRoot, join11(this.options.catalogRoot, `${imageId}.json`), Buffer.from(canonical({ ...record3, binding: this.binding })), options2.signal);
     return record3;
   }
-  async metadata(relative6, recording, options2, extraPaths = []) {
+  async metadata(relative6, recording, options2, extraPaths = [], hostOnly = false) {
     const cached2 = join11(recording.path, "host", "image-evidence", relative6);
     let local;
     for (const path2 of [...extraPaths, join11(recording.path, "state", relative6), cached2]) {
@@ -29235,6 +29270,7 @@ var ImageStore = class {
       }
     }
     if (local !== void 0) return local;
+    if (hostOnly) return void 0;
     if (!recording.guestState) fail("capture-unknown", "This recording has no available retained metadata or supported guest evidence location.");
     await this.options.ensureGuest(options2.signal, options2.deadline);
     guard(options2.signal);
@@ -29296,7 +29332,8 @@ var ImageStore = class {
     if (matches.length > 1 || matches.length === 1 && !sameSnapshot(matches[0], sn)) fail("integrity-failed", "Saved reverse snapshot reference contradicts the capture.");
     return matches.length === 1;
   }
-  async display(target2, options2) {
+  /** The saved capture a display selector names, from the request and the receipt. With `hostOnly`, no guest I/O: undefined when the receipt is not on the host. */
+  async displaySelection(target2, options2, hostOnly = false) {
     if (!safeId2(target2.sessionId) || !safeId2(target2.executionId) || !["before", "after"].includes(target2.phase)) fail("unauthorized-reference", "Invalid display identity.");
     const recording = this.recordings.find((r) => r.sessionId === target2.sessionId);
     if (!recording) fail("unauthorized-reference", "Recording does not belong to this enclosure.");
@@ -29306,7 +29343,8 @@ var ImageStore = class {
     const group = request.snapshots?.group;
     const requested = !request.diagnostic && (target2.phase === "before" ? !group || group.phase === "first" : !group || group.phase === "last");
     if (!requested) return { status: "not-requested", diagnostic: "The declared snapshot plan does not capture this phase." };
-    const receipt = await this.metadata(join11("receiver", "receipts", `${target2.executionId}.json`), recording, options2, [join11(recording.path, "host", "receiver-receipts", `${target2.executionId}.json`)]);
+    const receipt = await this.metadata(join11("receiver", "receipts", `${target2.executionId}.json`), recording, options2, [join11(recording.path, "host", "receiver-receipts", `${target2.executionId}.json`)], hostOnly);
+    if (receipt === void 0) return void 0;
     if (receipt?.executionId !== request.executionId) fail("integrity-failed", "Receipt execution identity mismatch.");
     const evidence = receipt.imageEvidence;
     if (!evidence) return { status: "capture-unknown", diagnostic: "Recording predates saved-image descriptors; no input was replayed." };
@@ -29317,7 +29355,16 @@ var ImageStore = class {
     }
     const matches = evidence.snapshots.filter((s) => s.phase === target2.phase);
     if (!matches.length) return { status: evidence.status === "capture-failed" ? "capture-failed" : "capture-unknown", diagnostic: "No saved image is established for the requested phase." };
-    const sn = matches[0];
+    return { recording, request, sn: matches[0] };
+  }
+  displayDescriptor(sn) {
+    return { source: "display", enclosure: this.options.enclosure, sessionId: sn.sessionId, executionId: sn.executionId, actionId: sn.actionId, ...sn.stepId ? { stepId: sn.stepId } : {}, phase: sn.phase, capturedAt: sn.capturedAt, ...sn.groupId ? { groupId: sn.groupId } : {}, sha256: sn.sha256, bytes: sn.bytes, mimeType: sn.mimeType };
+  }
+  async display(target2, options2) {
+    const selected = await this.displaySelection(target2, options2);
+    if (!selected || "status" in selected) return selected ?? fail("capture-unknown", "No saved receipt is available.");
+    const { recording, request, sn } = selected;
+    const group = request.snapshots?.group;
     let action;
     try {
       action = await this.metadata(join11("records", "action", `${sn.actionId}.json`), recording, options2);
@@ -29327,7 +29374,7 @@ var ImageStore = class {
     }
     if (!action || action.actionId !== sn.actionId || action.sessionId !== request.sessionId || action.executionId !== request.executionId || action.attemptId !== request.attemptId || action.groupId !== group?.groupId || action.stepId !== request.step?.id || action.snapshotRole !== void 0 && action.snapshotRole !== (group?.phase ?? "single")) fail("integrity-failed", "Saved action identity does not corroborate the image.");
     if (!this.checkReferences(action.snapshots, sn)) await this.corroborateJournal(recording, request, sn, options2);
-    const descriptor = { source: "display", enclosure: this.options.enclosure, sessionId: sn.sessionId, executionId: sn.executionId, actionId: sn.actionId, ...sn.stepId ? { stepId: sn.stepId } : {}, phase: sn.phase, capturedAt: sn.capturedAt, ...sn.groupId ? { groupId: sn.groupId } : {}, sha256: sn.sha256, bytes: sn.bytes, mimeType: sn.mimeType };
+    const descriptor = this.displayDescriptor(sn);
     const state = recording.guestState ?? join11(this.options.guestRoot, "state");
     return this.register(descriptor, recording.path, join11(state, "snapshots", recording.sessionId, sn.fileName), state, options2, sn.fileName);
   }
@@ -29368,12 +29415,39 @@ var ImageStore = class {
     guard(options2.signal);
     return this.options.transfer.pullImage(record3.remote, record3.local, record3.approvedRoot, record3.recording, record3.descriptor, options2);
   }
+  /**
+   * A run's after-image as `pending`: its identity from the request and the
+   * receipt on the host, with no guest I/O (docs/screenshot-delivery.md §10,
+   * AD-1). Without the receipt on the host it is `pending` with no identity.
+   */
+  async pending(target2) {
+    const deadline = Date.now() + imageCapability.deadlineMs;
+    const options2 = { signal: AbortSignal.timeout(imageCapability.deadlineMs), deadline, attemptBudget: { remaining: 0 } };
+    try {
+      const selected = await this.displaySelection(target2, options2, true);
+      if (!selected) return { status: "pending", diagnostic: "The receipt is not on the host yet; retrieve the image with its display selector." };
+      if ("status" in selected) return selected;
+      const descriptor = this.displayDescriptor(selected.sn);
+      const imageId = this.identity(descriptor, selected.sn.fileName);
+      return { status: "pending", image: { ...descriptor, imageId, originalPath: join11(selected.recording.path, "host", "images", imageId, `original${extension(descriptor.mimeType)}`) } };
+    } catch (error2) {
+      return imageFailure(error2);
+    }
+  }
+  /** Retrieve and present one image: the `relay_image` delivery. */
   async get(target2, signal, requestedDeadline = Date.now() + imageCapability.deadlineMs) {
+    return this.deliver(target2, true, signal, requestedDeadline);
+  }
+  /** A background download (AD-2): the same checks and verified original as `get`, without the preview. */
+  async download(target2, signal, options2 = {}) {
+    return this.deliver(target2, false, signal, Date.now() + imageCapability.deadlineMs, options2.retryDelaysMs);
+  }
+  async deliver(target2, present, signal, requestedDeadline, retryDelaysMs) {
     const deadline = Math.min(requestedDeadline, Date.now() + imageCapability.deadlineMs);
     if (!Number.isFinite(deadline)) return imageFailure(new ImageError("transfer-failed", "Invalid image deadline."));
     if (Date.now() >= deadline) return imageFailure(new ImageError("transfer-failed", "Image delivery deadline exceeded."));
     const boundedSignal = AbortSignal.any([AbortSignal.timeout(Math.max(1, Math.ceil(deadline - Date.now()))), ...signal ? [signal] : []]);
-    const options2 = { signal: boundedSignal, deadline, attemptBudget: { remaining: imageCapability.transferAttempts } };
+    const options2 = { signal: boundedSignal, deadline, attemptBudget: { remaining: imageCapability.transferAttempts }, ...retryDelaysMs ? { retryDelaysMs } : {} };
     let record3;
     try {
       return await bounded2(async () => {
@@ -29383,6 +29457,12 @@ var ImageStore = class {
         record3 = selected;
         const bytes = await this.original(record3, options2);
         guard(boundedSignal);
+        if (!present) {
+          const image2 = { ...record3.descriptor, originalPath: record3.local };
+          await publish(record3.recording, join11(record3.recording, "host", "images", record3.descriptor.imageId, `delivery-${randomUUID5()}.json`), Buffer.from(canonical({ image: image2, at: (/* @__PURE__ */ new Date()).toISOString(), status: "downloaded" })), boundedSignal);
+          guard(boundedSignal);
+          return { status: "downloaded", image: image2 };
+        }
         const presentation = await bounded2(() => prepareImage(bytes, record3.descriptor.mimeType), boundedSignal);
         const image = { ...record3.descriptor, originalPath: record3.local, ...record3.descriptor.source === "application" ? { retrievedAt: (/* @__PURE__ */ new Date()).toISOString() } : {} };
         const receipt = { image, presentation: presentation.presentation, at: (/* @__PURE__ */ new Date()).toISOString(), status: "attached" };
@@ -29393,6 +29473,19 @@ var ImageStore = class {
     } catch (error2) {
       return { ...imageFailure(error2), ...record3 ? { image: record3.descriptor } : {} };
     }
+  }
+  /** Verified display originals this recording already holds on the host, by `sha256:bytes`; the finish's state pull copies them instead of pulling (AD-6). No guest I/O. */
+  async heldOriginals(recordingRoot) {
+    const held = /* @__PURE__ */ new Map();
+    if (!this.recordings.some((r) => r.path === recordingRoot)) return held;
+    const names = await optional2(() => readdir5(this.options.catalogRoot)) ?? [];
+    for (const name of names.filter((n) => n.endsWith(".json"))) {
+      const record3 = await this.load(name.slice(0, -5)).catch(() => void 0);
+      if (!record3 || record3.recording !== recordingRoot || record3.descriptor.source !== "display") continue;
+      const key = `${record3.descriptor.sha256}:${record3.descriptor.bytes}`;
+      held.set(key, [...held.get(key) ?? [], record3.local]);
+    }
+    return held;
   }
   /** Call before merging incoming guest state. This method performs no guest I/O. */
   async materializeDisplayOriginals(recordingRoot) {
@@ -29430,9 +29523,136 @@ function mime(path) {
   return ext === ".png" ? "image/png" : [".jpg", ".jpeg"].includes(ext) ? "image/jpeg" : ext === ".webp" ? "image/webp" : fail("presentation-unavailable", "Only PNG, JPEG, and WebP images are supported.");
 }
 
+// src/downloads.ts
+var transient = (job) => job.result?.status === "transfer-failed" && !job.controller.signal.aborted;
+var DownloadQueue = class {
+  constructor(options2) {
+    this.options = options2;
+  }
+  state = "open";
+  /** Set after a transient failure: the worker takes nothing until a relay operation reaches the guest (AD-4). */
+  paused = false;
+  queued = [];
+  current;
+  ended = { downloaded: 0, failed: 0, cancelled: 0 };
+  enqueue(input, run) {
+    if (this.state !== "open") throw new Error(`The download queue is ${this.state}`);
+    let resolve11;
+    const done = new Promise((r) => {
+      resolve11 = r;
+    });
+    const job = { ...input, queuedAt: (/* @__PURE__ */ new Date()).toISOString(), done, run, resolve: resolve11, controller: new AbortController() };
+    this.queued.push(job);
+    this.kick();
+    return job;
+  }
+  /** The queued or in-flight job a reference or display selector names. */
+  find(match) {
+    return [this.current, ...this.queued].find((job) => job && (match.imageId && job.image?.imageId === match.imageId || match.key && job.key === match.key));
+  }
+  /** `relay_image` asks for this job: it runs next, even while the worker is paused (AD-3). */
+  promote(job) {
+    const index = this.queued.indexOf(job);
+    if (index < 0) return;
+    job.promoted = true;
+    if (index > 0) {
+      this.queued.splice(index, 1);
+      this.queued.unshift(job);
+    }
+    this.kick();
+  }
+  /** Queued and in-flight downloads. */
+  get pending() {
+    return this.queued.length + (this.current ? 1 : 0);
+  }
+  counts() {
+    return { queued: this.queued.length, inFlight: this.current ? 1 : 0, ...this.ended, paused: this.paused, state: this.state };
+  }
+  /** A relay operation reached the guest and completed. */
+  resume() {
+    if (this.paused) {
+      this.paused = false;
+      this.kick();
+    }
+  }
+  /** AD-2: while over the bound, wait for the oldest download, unless the worker is paused. */
+  async withinBound() {
+    while (this.pending > this.options.bound && !this.paused && this.state === "open") await (this.current ?? this.queued[0]).done;
+  }
+  /**
+   * AD-5: close to new downloads, lift the pause and wait until every download
+   * has ended. While closing, the first transient failure cancels the rest.
+   * Call `reopen` when the lifecycle operation ends.
+   */
+  async drain() {
+    if (this.state === "closed") return;
+    this.state = "closing";
+    this.paused = false;
+    this.kick();
+    while (this.current || this.queued.length) await (this.current ?? this.queued[0]).done;
+  }
+  reopen() {
+    if (this.state === "closing") {
+      this.state = "open";
+      this.kick();
+    }
+  }
+  /** Shutdown: nothing more starts or is written; the download in flight is aborted. `wait` waits for it to stop. */
+  async close(wait) {
+    this.state = "closed";
+    for (const job of this.queued.splice(0)) {
+      job.end = "cancelled";
+      job.resolve();
+    }
+    const current = this.current;
+    current?.controller.abort(new Error("The relay is shutting down"));
+    if (wait) await current?.done;
+  }
+  kick() {
+    if (this.current || this.state === "closed" || !this.queued.length || this.paused && !this.queued[0].promoted) return;
+    void this.work(this.queued.shift());
+  }
+  async work(job) {
+    this.current = job;
+    job.startedAt = (/* @__PURE__ */ new Date()).toISOString();
+    try {
+      job.result = await job.run(job.controller.signal);
+    } catch (error2) {
+      job.result = imageFailure(error2);
+    }
+    job.endedAt = (/* @__PURE__ */ new Date()).toISOString();
+    job.end = job.result.status === "downloaded" ? "downloaded" : "failed";
+    try {
+      if (this.state !== "closed") await this.options.record(job).catch(() => {
+      });
+      this.ended[job.end]++;
+      if (job.end === "downloaded") this.paused = false;
+      else if (transient(job)) {
+        if (this.state === "closing") await this.cancelQueued();
+        else if (this.state === "open") this.paused = true;
+      }
+    } finally {
+      this.current = void 0;
+      job.resolve();
+      this.kick();
+    }
+  }
+  /** DC-7: a lifecycle operation's state pull fetches these originals instead. */
+  async cancelQueued() {
+    for (const job of this.queued.splice(0)) {
+      job.end = "cancelled";
+      job.endedAt = (/* @__PURE__ */ new Date()).toISOString();
+      this.ended.cancelled++;
+      await this.options.record(job).catch(() => {
+      });
+      job.resolve();
+    }
+  }
+};
+
 // src/evidence-merge.ts
 import { constants as constants5 } from "node:fs";
-import { copyFile, lstat as lstat7, mkdir as mkdir8, mkdtemp as mkdtemp2, readFile as readFile8, readdir as readdir6, rename as rename4 } from "node:fs/promises";
+import { copyFile as copyFile2, lstat as lstat7, mkdir as mkdir8, mkdtemp as mkdtemp2, readFile as readFile8, readdir as readdir6, rename as rename4 } from "node:fs/promises";
 import { dirname as dirname8, isAbsolute as isAbsolute5, join as join12, parse as parse6, relative as relative5, resolve as resolve8 } from "node:path";
 function safePath(value) {
   if (!value || /[\\\x00-\x1f\x7f:#?]/.test(value) || value.split("/").some((p) => p === "." || p === "..")) {
@@ -29522,7 +29742,7 @@ async function refreshEvidenceState(incoming, destination, archiveRoot, options2
       if (kind === "directory") await directory(target2, true);
       else {
         await directory(dirname8(target2), true);
-        await copyFile(join12(source, path), target2, constants5.COPYFILE_EXCL);
+        await copyFile2(join12(source, path), target2, constants5.COPYFILE_EXCL);
       }
     }
   };
@@ -29676,7 +29896,10 @@ var MIN_RENEWAL_MS = 0.1 * 36e5;
 var RELAY_RUN_OUTPUTS = "relay-run";
 var MCP_START_ALLOWANCE_MS = 6e4;
 var MAX_TOOL_IMAGES = 4;
-var instructions = "This server offers eighteen tools for one interruptive VM enclosure: relay_search, relay_probe, relay_acquisition_capabilities, relay_acquire, relay_stage, relay_run, relay_tools, the command tools relay_exec/relay_script/relay_code, relay_image, relay_extract, relay_finish, relay_release, relay_console_resolve, relay_console_open, relay_console_cancel and relay_status. relay_run sends the cua-driver, Playwright MCP or Chrome DevTools MCP tool calls you already know to that server inside the VM; evidence is automatic. Relay only interruptive computer-use or browser-use that would otherwise take over a real desktop or browser, judged for yourself from relay_probe facts; unknown is not idle, and non-disruptive or headless work stays with local tools. One task gets one enclosure: call relay_acquire once per task, never reused for a second task. Work an enclosure in order: relay_probe, then relay_acquire, then relay_stage, then relay_run or the command tools, then relay_image or relay_extract as needed, then relay_finish or relay_release. Always call relay_finish or relay_release explicitly before you return an answer; ending the session only pauses lease renewal, it does not destroy the VM, and the backend's own expiry is the last-resort safeguard. A refused, uncertain or nonzero operation keeps the VM so you can diagnose and submit a corrected operation; never replay input whose effect is uncertain. A tool result, an attached image or a verified evidence package, is evidence for a human reviewer, never the review itself. The relay never targets a physical or local display and offers no video or spawn API. Every tool's text result is capped at 50 KiB / 2000 lines; a larger result is retained whole in a local file the result names.";
+var DOWNLOAD_BOUND = 64;
+var DOWNLOAD_RETRY_DELAYS_MS = [1e3, 3e3];
+var downloadKey = (target2) => `${target2.sessionId}/${target2.executionId}/${target2.phase}`;
+var instructions = "This server offers eighteen tools for one interruptive VM enclosure: relay_search, relay_probe, relay_acquisition_capabilities, relay_acquire, relay_stage, relay_run, relay_tools, the command tools relay_exec/relay_script/relay_code, relay_image, relay_extract, relay_finish, relay_release, relay_console_resolve, relay_console_open, relay_console_cancel and relay_status. relay_run sends the cua-driver, Playwright MCP or Chrome DevTools MCP tool calls you already know to that server inside the VM; evidence is automatic, and its after-image is returned as pending and downloaded in the background, so call relay_image with the imageId when you need to see it. Relay only interruptive computer-use or browser-use that would otherwise take over a real desktop or browser, judged for yourself from relay_probe facts; unknown is not idle, and non-disruptive or headless work stays with local tools. One task gets one enclosure: call relay_acquire once per task, never reused for a second task. Work an enclosure in order: relay_probe, then relay_acquire, then relay_stage, then relay_run or the command tools, then relay_image or relay_extract as needed, then relay_finish or relay_release. Always call relay_finish or relay_release explicitly before you return an answer; ending the session only pauses lease renewal, it does not destroy the VM, and the backend's own expiry is the last-resort safeguard. A refused, uncertain or nonzero operation keeps the VM so you can diagnose and submit a corrected operation; never replay input whose effect is uncertain. A tool result, an attached image or a verified evidence package, is evidence for a human reviewer, never the review itself. The relay never targets a physical or local display and offers no video or spawn API. Every tool's text result is capped at 50 KiB / 2000 lines; a larger result is retained whole in a local file the result names.";
 var NO_OWNED_LEASE = "This session owns no lease, so nothing was released. Each server process has its own session identity (a new random one unless MCP_VM_RELAY_SESSION sets it); a lease acquired under another identity is not visible here. Restart the server with that MCP_VM_RELAY_SESSION to reconcile and release it, or let the backend TTL expire it.";
 var RelayManager = class {
   constructor(options2) {
@@ -29696,6 +29919,7 @@ var RelayManager = class {
       push: (name, local_path, remote_path) => this.vm.push(name, { local_path, remote_path }),
       pull: (name, remote_path, local_path, options3) => this.vm.pull(name, { remote_path, local_path }, options3)
     };
+    this.downloads = new DownloadQueue({ bound: options2.downloadBound ?? DOWNLOAD_BOUND, record: (job) => this.recordDownload(job) });
   }
   vm;
   environment;
@@ -29714,6 +29938,8 @@ var RelayManager = class {
   initialized = false;
   ownerLock;
   shuttingDown = false;
+  /** After-image downloads, outside the serialized section (docs/screenshot-delivery.md §10). */
+  downloads;
   serialized(fn) {
     const next = this.queue.then(fn, fn);
     this.queue = next.catch(() => {
@@ -29786,7 +30012,7 @@ var RelayManager = class {
   }
   status() {
     const e = this.enclosure;
-    return e ? { task: e.task, backend: e.backend, vm: e.lease?.vm, lease_id: e.lease?.lease_id, console: e.consoleObservation, consoleAttempt: e.consoleAttempt, purpose: e.purpose, staged: e.staged, lastError: e.lastError ?? e.failed, released: e.released, active: e.active ?? false, guestState: e.guestState ?? "unknown", previousEvidence: e.previousEvidence, recordingResetPending: !!e.pendingReset, expiresAt: e.expiresAt ?? e.lease?.ttl_expires_at, output: e.hostRoot } : { active: false };
+    return e ? { task: e.task, backend: e.backend, vm: e.lease?.vm, lease_id: e.lease?.lease_id, console: e.consoleObservation, consoleAttempt: e.consoleAttempt, purpose: e.purpose, staged: e.staged, lastError: e.lastError ?? e.failed, released: e.released, active: e.active ?? false, guestState: e.guestState ?? "unknown", previousEvidence: e.previousEvidence, recordingResetPending: !!e.pendingReset, expiresAt: e.expiresAt ?? e.lease?.ttl_expires_at, output: e.hostRoot, downloads: this.downloads.counts() } : { active: false };
   }
   async reconcile() {
     const e = this.enclosure;
@@ -30148,6 +30374,7 @@ var RelayManager = class {
       this.startHeartbeat();
       const result2 = await fn();
       signal?.throwIfAborted();
+      this.downloads.resume();
       return result2;
     } catch (error2) {
       await this.fail(error2);
@@ -30237,7 +30464,10 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
           await this.log("execution-failed", record3.because, result2);
           await this.fail(new Error(`Execution ${result2.executionId}: ${JSON.stringify(outcome)}`));
         }
-        const imageDelivery = await this.imageStore().get({ source: "display", sessionId: e.sessionId, executionId: result2.executionId, phase: "after" }, signal);
+        const target2 = { source: "display", sessionId: e.sessionId, executionId: result2.executionId, phase: "after" };
+        const store = this.imageStore();
+        const imageDelivery = await store.pending(target2);
+        if (imageDelivery.status === "pending") await this.queueDownload(store, target2, imageDelivery.image);
         const common2 = { step: record3.step, snapshots: record3.snapshots, timeoutMs: timeoutMs2, evidencePath: e.hostRoot, leaseReleased: !this.enclosure, owned: this.status(), imageDelivery };
         if (input.kind === "mcp") return { ...result2, ...await this.mcpResult(e, input.target, input.tool, outcome, signal), ...common2 };
         return { ...result2, ...this.transport?.response, ...common2 };
@@ -30498,10 +30728,55 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
       this.assertBinding();
       if (bounded3.aborted) return { status: "transfer-failed", diagnostic: "Image delivery cancelled or deadline exceeded while loading ownership." };
       if (!this.enclosure || this.enclosure.released || this.enclosure.delivered) return { status: "stale-reference", diagnostic: "Enclosure is closed or sealed; inspect delivered originals with the host read tool." };
+      const job = this.downloads.find(target2.source === "reference" ? { imageId: target2.imageId } : target2.source === "display" ? { key: downloadKey(target2) } : {});
+      if (job) {
+        this.downloads.promote(job);
+        let stop;
+        const stopped = new Promise((done) => {
+          stop = done;
+          bounded3.addEventListener("abort", stop, { once: true });
+        });
+        try {
+          await Promise.race([job.done, stopped]);
+        } finally {
+          bounded3.removeEventListener("abort", stop);
+        }
+        if (bounded3.aborted) return { status: "transfer-failed", ...job.image ? { image: job.image } : {}, diagnostic: "Image delivery cancelled or deadline exceeded while its background download was still running." };
+      }
       return this.imageStore().get(target2, bounded3, deadline);
     });
   }
-  async resetRecording() {
+  async queueDownload(store, target2, image) {
+    if (this.downloads.state !== "open") return;
+    const retryDelaysMs = this.options.downloadRetryDelaysMs ?? DOWNLOAD_RETRY_DELAYS_MS;
+    this.downloads.enqueue(
+      { key: downloadKey(target2), ...image ? { image } : {}, recordPath: join14(this.current().hostRoot, "host", "image-downloads", `${target2.executionId}-${target2.phase}.json`) },
+      (signal) => store.download(target2, signal, { retryDelaysMs })
+    );
+    await this.downloads.withinBound();
+  }
+  async recordDownload(job) {
+    const image = job.result?.image ?? job.image;
+    await jsonFile(job.recordPath, { status: job.end, key: job.key, ...image ? { image } : {}, ...job.result?.diagnostic ? { diagnostic: job.result.diagnostic } : {}, ...job.result && job.end === "failed" ? { failure: job.result.status } : {}, queuedAt: job.queuedAt, startedAt: job.startedAt, endedAt: job.endedAt });
+  }
+  /** AD-6: the host files that may already hold a guest state file's bytes. */
+  async localState(recording) {
+    const held = await this.imageStore().heldOriginals(recording);
+    return { root: recording, candidates: (file) => [join14(recording, "state", file.path), ...held.get(`${file.sha256}:${file.bytes}`) ?? []] };
+  }
+  /** A lifecycle operation's gate (AD-5): every download ends before the guest state is touched; the queue opens again after. */
+  async drained(fn) {
+    await this.downloads.drain();
+    try {
+      return await fn();
+    } finally {
+      this.downloads.reopen();
+    }
+  }
+  resetRecording() {
+    return this.drained(() => this.archiveRecording());
+  }
+  async archiveRecording() {
     const e = this.current();
     if (!e.staged || !e.sessionId) throw new Error("Recording reset requires a staged recording");
     if (!e.pendingReset) {
@@ -30515,7 +30790,9 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
     const marker = await transfer.checked([e.node, "-e", 'const fs=require("fs"),p=require("path");console.log(fs.existsSync(p.join(process.argv[1],"recordings",process.argv[2]))?"archived":"current");', e.guestRoot, reset.id]);
     const attempts = `${reset.from}.reset-attempts`;
     const incoming = join14(attempts, randomUUID7(), "state");
-    await transfer.pullVerified(marker.trim() === "archived" ? archive : join14(e.guestRoot, "state"), incoming, e.guestRoot, attempts, { beforePull: (facts) => this.assertFreeSpace(reset.from, facts) });
+    const reuse = await this.localState(reset.from);
+    await transfer.pullVerified(marker.trim() === "archived" ? archive : join14(e.guestRoot, "state"), incoming, e.guestRoot, attempts, { beforePull: (facts) => this.assertFreeSpace(reset.from, facts), reuse });
+    if (reuse.reused) await this.log("state-reused", void 0, { files: reuse.reused });
     await this.imageStore().materializeDisplayOriginals(reset.from);
     await refreshEvidenceState(incoming, join14(reset.from, "state"), join14(attempts, "previous"));
     await this.log("recording-reset-intent", void 0, reset);
@@ -30611,7 +30888,9 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
     if (!e.staged || !e.sessionId) throw new Error("No staged session to package");
     const attempts = `${e.hostRoot}.finalization-attempts`;
     const incoming = join14(attempts, randomUUID7(), "state");
-    await this.transfer().pullVerified(join14(e.guestRoot, "state"), incoming, e.guestRoot, attempts, { beforePull: (facts) => this.assertFreeSpace(e.hostRoot, facts) });
+    const reuse = await this.localState(e.hostRoot);
+    await this.transfer().pullVerified(join14(e.guestRoot, "state"), incoming, e.guestRoot, attempts, { beforePull: (facts) => this.assertFreeSpace(e.hostRoot, facts), reuse });
+    if (reuse.reused) await this.log("state-reused", void 0, { files: reuse.reused });
     await this.imageStore().materializeDisplayOriginals(e.hostRoot);
     await refreshEvidenceState(incoming, join14(e.hostRoot, "state"), join14(attempts, "previous"));
     const result2 = await deliverPackage(e.hostRoot, { packageId: `pkg-${e.purpose}`, sessionId: e.sessionId, taskId: e.purpose });
@@ -30620,7 +30899,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
     return result2;
   }
   finish(signal) {
-    return this.serialized(() => this.guarded(signal, async () => {
+    return this.serialized(() => this.guarded(signal, () => this.drained(async () => {
       const e = this.current();
       await this.log("finish");
       let incomplete = [];
@@ -30631,7 +30910,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
       const result2 = e.delivered ?? await this.packageInternal();
       await this.releaseInternal("finished");
       return incomplete.length ? { ...result2, incompleteExtractions: incomplete } : result2;
-    }));
+    })));
   }
   async fail(error2) {
     const e = this.enclosure;
@@ -30665,21 +30944,24 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
       this.assertBinding();
       await this.assertBackend();
       if (!this.enclosure) return { active: false, ownedLease: false, released: false, diagnostic: NO_OWNED_LEASE };
-      try {
-        await this.log("release");
-        if (this.enclosure?.staged && !this.enclosure.delivered) {
-          await this.stopMcpHost("release");
-          await this.extractAvailable();
-          await this.packageInternal();
-        }
-      } catch (error2) {
-        if (this.enclosure) await jsonFile(`${this.enclosure.hostRoot}.delivery-error.json`, { error: String(error2) }).catch(() => {
-        });
-      } finally {
-        await this.releaseInternal("released");
-      }
+      await this.drained(() => this.releaseDrained());
       return this.status();
     });
+  }
+  async releaseDrained() {
+    try {
+      await this.log("release");
+      if (this.enclosure?.staged && !this.enclosure.delivered) {
+        await this.stopMcpHost("release");
+        await this.extractAvailable();
+        await this.packageInternal();
+      }
+    } catch (error2) {
+      if (this.enclosure) await jsonFile(`${this.enclosure.hostRoot}.delivery-error.json`, { error: String(error2) }).catch(() => {
+      });
+    } finally {
+      await this.releaseInternal("released");
+    }
   }
   async releaseInternal(reason2) {
     this.assertBinding();
@@ -30792,6 +31074,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
    */
   async pauseNow(reason2) {
     this.shuttingDown = true;
+    void this.downloads.close(false);
     try {
       await this.pause(`${reason2}; an in-flight operation did not settle and was abandoned`);
     } finally {
@@ -30803,6 +31086,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
     return this.serialized(async () => {
       this.shuttingDown = true;
       try {
+        await this.downloads.close(true);
         await this.pause(reason2);
         await this.session?.close();
         this.session = void 0;
@@ -30965,7 +31249,7 @@ var relayTools = [
     kind: "exec",
     title: "Run a guest command",
     annotations: acts(true),
-    description: "Run one guest command (`argv`) as one recorded operation; never hide several interactions in one call. Evidence is automatic: the relay snapshots the display before and after and records a step derived from the command. Optional `reason` (intent, never authorization), `step` (`id`, `title`, `expected`, `inputMode`) and `snapshots.afterIntervalMs` (default 500 ms) enrich or tune the record; consecutive keystrokes may form an explicit text group with `snapshots.group` (`first`/`member`/`last`). `timeoutMs` bounds execution (default 120000, up to 3600000). The result carries the outcome, bounded stdout/stderr and the after-snapshot inline. A refused, uncertain or nonzero result keeps the VM; never replay input whose effect is uncertain. `diagnostic: true` records a diagnosis or repair without snapshots, even before relay_stage; it is never visual verification, and its result has one `output` field with stdout and stderr combined."
+    description: "Run one guest command (`argv`) as one recorded operation; never hide several interactions in one call. Evidence is automatic: the relay snapshots the display before and after and records a step derived from the command. Optional `reason` (intent, never authorization), `step` (`id`, `title`, `expected`, `inputMode`) and `snapshots.afterIntervalMs` (default 500 ms) enrich or tune the record; consecutive keystrokes may form an explicit text group with `snapshots.group` (`first`/`member`/`last`). `timeoutMs` bounds execution (default 120000, up to 3600000). The result carries the outcome and bounded stdout/stderr; it names the after-snapshot as `pending` with its `imageId` while the image downloads in the background, so call relay_image with that `imageId` to see it. A refused, uncertain or nonzero result keeps the VM; never replay input whose effect is uncertain. `diagnostic: true` records a diagnosis or repair without snapshots, even before relay_stage; it is never visual verification, and its result has one `output` field with stdout and stderr combined."
   },
   {
     name: "relay_script",
@@ -30989,7 +31273,7 @@ var relayTools = [
     kind: "mcp",
     title: "Run an MCP tool call in the VM",
     annotations: acts(true),
-    description: "Send one tool call to an MCP server inside the VM. `target` is `cua` (cua-driver), `playwright` (Playwright MCP) or `chrome-devtools` (Chrome DevTools MCP); `tool` and `args` are that server's own tool name and arguments, forwarded unchanged. Use relay_tools to see a target's exact tools. Evidence is automatic: snapshots before and after, and a step record; `reason`, `expected` and `afterIntervalMs` are optional overrides. Never replay an uncertain call."
+    description: "Send one tool call to an MCP server inside the VM. `target` is `cua` (cua-driver), `playwright` (Playwright MCP) or `chrome-devtools` (Chrome DevTools MCP); `tool` and `args` are that server's own tool name and arguments, forwarded unchanged. Use relay_tools to see a target's exact tools. Evidence is automatic: snapshots before and after, and a step record; `reason`, `expected` and `afterIntervalMs` are optional overrides. The result names the after-snapshot as `pending` with its `imageId` and does not wait for it: the image downloads in the background, relay_image with that `imageId` shows it, and relay_finish and relay_release wait for the downloads. Images the target tool itself returns stay inline. Never replay an uncertain call."
   },
   {
     name: "relay_tools",
@@ -31003,7 +31287,7 @@ var relayTools = [
     action: "image",
     title: "Retrieve a saved image",
     annotations: readOnly,
-    description: 'Retrieve one already-saved image; never a new capture, input or directory export, and it never acquires a VM. `target` selects a display phase (`sessionId`/`executionId`/`phase`: `before`/`after`), a declared application file (`name`, plus a relative `path` for a directory declaration), or an immutable `reference` (`imageId`). PNG, JPEG and WebP only; originals up to 64 MiB and 40,000,000 decoded pixels; the delivered preview is at most 2000x2000 px and 4 MiB of base64 (PNG originals are resampled in-process; JPEG/WebP pass through only within bounds). Each delivery has a 90-second deadline and up to three transfer attempts. A relay_run tool image is the application file `name: "relay-run"` at the `path` its result gives. If a run\'s inline image did not arrive, recover it here with the same `imageId` or display selector, never by repeating the input or capturing again, and stop after at most two such recovery calls if it still cannot be inspected. A closed enclosure returns `stale-reference` for a display or reference target; its delivered originals stay readable with host file tools. An attached image proves only that the block was included, not that anyone inspected or reviewed it.'
+    description: 'Retrieve one already-saved image; never a new capture, input or directory export, and it never acquires a VM. `target` selects a display phase (`sessionId`/`executionId`/`phase`: `before`/`after`), a declared application file (`name`, plus a relative `path` for a directory declaration), or an immutable `reference` (`imageId`). PNG, JPEG and WebP only; originals up to 64 MiB and 40,000,000 decoded pixels; the delivered preview is at most 2000x2000 px and 4 MiB of base64 (PNG originals are resampled in-process; JPEG/WebP pass through only within bounds). Each delivery has a 90-second deadline and up to three transfer attempts. A relay_run tool image is the application file `name: "relay-run"` at the `path` its result gives. A run\'s after-snapshot is `pending` in its result; retrieve it here with its `imageId` or display selector, which waits for its background download within the same deadline. If an image did not arrive, recover it here the same way, never by repeating the input or capturing again, and stop after at most two such recovery calls if it still cannot be inspected. A closed enclosure returns `stale-reference` for a display or reference target; its delivered originals stay readable with host file tools. An attached image proves only that the block was included, not that anyone inspected or reviewed it.'
   },
   {
     name: "relay_extract",
@@ -31073,7 +31357,7 @@ async function imageResult(value, delivery, executionFailed = false) {
   const { content: image, ...imageDelivery } = delivery;
   const { imageDelivery: _, passthrough, ...rest } = value;
   const rendered = await renderRelayResult(rest);
-  const failed = executionFailed || !["attached", "not-requested"].includes(delivery.status);
+  const failed = executionFailed || !["attached", "pending", "not-requested"].includes(delivery.status);
   return {
     text: `${JSON.stringify({ imageDelivery, executionFailed })}
 ${rendered.text}`,

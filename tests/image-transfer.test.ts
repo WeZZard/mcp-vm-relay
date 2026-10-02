@@ -360,3 +360,20 @@ test('expired and pre-aborted budgets dispatch nothing; shared metadata deadline
   await assert.rejects(f.transfer.imageFact(f.remote, f.guest, { deadline: Date.now() + 30 }), code('transfer-failed'));
   assert.equal(signal?.aborted, true);
 });
+
+test('a background download waits between byte-copy attempts, and cancellation ends the wait (DC-5)', async t => {
+  const f = await fixture(t);
+  let attempts = 0;
+  f.channel.pull = async (_name, r, l) => { if (++attempts < 3) throw Error('connection lost'); return copyFile(r, l); };
+  const started = Date.now();
+  assert.deepEqual(await f.pull(expected, { attemptBudget: { remaining: 3 }, retryDelaysMs: [150, 300] }), png);
+  assert.equal(attempts, 3); assert.ok(Date.now() - started >= 450, 'waited 150 ms, then 300 ms');
+  await rm(f.local);
+  attempts = 0;
+  const controller = new AbortController();
+  let cancelledAt = 0;
+  f.channel.pull = async () => { attempts++; setTimeout(() => { cancelledAt = Date.now(); controller.abort(); }, 50); throw Error('connection lost'); };
+  await assert.rejects(f.pull(expected, { attemptBudget: { remaining: 3 }, retryDelaysMs: [60000], signal: controller.signal }), code('transfer-failed'));
+  assert.ok(cancelledAt > 0, 'cancelled during the wait');
+  assert.ok(Date.now() - cancelledAt < 5000, 'cancellation does not wait out the retry delay'); assert.equal(attempts, 1);
+});

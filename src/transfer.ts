@@ -1,4 +1,4 @@
-import { mkdir, readFile, lstat, mkdtemp, rm, open } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, lstat, mkdtemp, rm, open } from 'node:fs/promises';
 import { constants, linkSync } from 'node:fs';
 import { dirname, join, resolve, relative, isAbsolute } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -40,6 +40,16 @@ export interface ImageTransferOptions {
   attemptBudget?: { remaining: number };
   /** Used only by pullImageMetadata; defaults to a single JSON document. */
   metadataFormat?: 'json' | 'jsonl';
+  /** Waits before the second and third byte-copy attempts; none by default. A background download waits 1 s, then 3 s (DC-5). */
+  retryDelaysMs?: readonly number[];
+}
+/** Host files that may already hold a guest file's bytes: `pullVerified` copies a candidate whose hash matches instead of pulling (AD-6). */
+export interface LocalSource {
+  /** Every candidate must be inside this host root. */
+  root: string;
+  candidates: (file: FileFact) => string[];
+  /** Counts the files taken from the host. */
+  reused?: number;
 }
 
 function imagePath(root: string, target: string) {
@@ -382,6 +392,8 @@ export class Transfer {
             if (cause instanceof ImageTransferError) throw cause;
             if (attempt >= 3 || attemptBudget.remaining <= 0 || !retryableImageCopy(cause)) throw new ImageTransferError('transfer-failed', `Image byte transfer failed: ${diagnostic}`, { cause });
             await bounded(async () => { await this.options.onRetry?.({ operation: 'pull', attempt, diagnostic }); });
+            const wait = options.retryDelaysMs?.[attempt - 1];
+            if (wait) await bounded(() => new Promise<void>(done => { const timer = setTimeout(done, wait); controller.signal.addEventListener('abort', () => { clearTimeout(timer); done(); }, { once: true }); }));
             continue;
           }
           await readImage(staged, before);
@@ -451,9 +463,27 @@ export class Transfer {
       finally { await assertHostPath(tempRoot, hostDirectory); await rm(hostDirectory, { recursive: true, force: true }); }
     }
   }
+  /** Copy the first host candidate whose size and hash match the guest scan; a mismatching copy is removed, never kept. */
+  private async reuseLocal(file: FileFact, path: string, localRoot: string, source: LocalSource): Promise<boolean> {
+    for (const candidate of source.candidates(file)) {
+      let written = false;
+      try {
+        await assertHostPath(source.root, candidate);
+        const info = await lstat(candidate);
+        if (!info.isFile() || info.size !== file.bytes) continue;
+        await assertHostPath(localRoot, path, true);
+        await copyFile(candidate, path, constants.COPYFILE_EXCL); written = true;
+        await assertHostPath(localRoot, path);
+        const copied = await hashFile(path);
+        if (copied.sha256 === file.sha256 && copied.bytes === file.bytes) { source.reused = (source.reused ?? 0) + 1; return true; }
+      } catch { /* Not usable: try the next candidate, then the guest. */ }
+      if (written) { await assertHostPath(localRoot, path); await rm(path, { force: true }); }
+    }
+    return false;
+  }
   /** Capture source hashes before pull, compare host bytes, then source inventory again.
    * `beforePull` sees the source inventory before any byte is pulled and may refuse the pull. */
-  async pullVerified(remote: string, local: string, approvedRoot = remote, localRoot = dirname(local), options: { beforePull?: (facts: FileFact[]) => Promise<void> } = {}) {
+  async pullVerified(remote: string, local: string, approvedRoot = remote, localRoot = dirname(local), options: { beforePull?: (facts: FileFact[]) => Promise<void>; reuse?: LocalSource } = {}) {
     const before = await this.scan(remote, approvedRoot);
     await options.beforePull?.(before);
     await assertHostPath(localRoot, local, true);
@@ -474,6 +504,7 @@ export class Transfer {
         await assertHostPath(localRoot, path, true);
         await mkdir(dirname(path), { recursive: true, mode: 0o700 });
         await assertHostPath(localRoot, path, true);
+        if (options.reuse && await this.reuseLocal(file, path, localRoot, options.reuse)) continue;
         const guestPath = within(remote, file.path);
         await this.guestPath(approvedRoot, guestPath);
         await this.copy('pull', () => this.vm.pull(this.name, guestPath, path), async () => { await this.guestPath(approvedRoot, guestPath); await assertHostPath(localRoot, path, true); });

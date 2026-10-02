@@ -190,3 +190,26 @@ test('R8 (PS-D12): relay state of about 14 MiB per recorded step scans and pulls
  assert.deepEqual(pulled, facts, 'the whole 518 MiB state is delivered, so finish can package it');
  assert.deepEqual(await inventory(join(root, 'host', 'state')), facts);
 });
+
+test('pullVerified copies matching host files instead of pulling them, and never uses a candidate with the wrong hash (AD-6)', async t => {
+ const root = await realpath(await mkdtemp(join(tmpdir(), 'relay-reuse-'))); t.after(() => rm(root, { recursive: true, force: true }));
+ const source = join(root, 'guest', 'state'), held = join(root, 'host');
+ await mkdir(join(source, 'snapshots'), { recursive: true }); await mkdir(join(held, 'state', 'snapshots'), { recursive: true }); await mkdir(join(held, 'images'), { recursive: true });
+ await writeFile(join(source, 'snapshots', 'a.png'), 'original a'); await writeFile(join(source, 'snapshots', 'b.png'), 'original b'); await writeFile(join(source, 'journal'), 'entries');
+ await writeFile(join(held, 'state', 'snapshots', 'a.png'), 'original a');
+ await writeFile(join(held, 'images', 'b.png'), 'tampered b'); // same size, wrong bytes
+ const pulled: string[] = [];
+ const channel: VmChannel = { exec: async (_name, argv) => command(argv), push: async (_name, l, r) => copyFile(l, r), pull: async (_name, r, l) => { pulled.push(r); return copyFile(r, l); } };
+ const transfer = new Transfer(channel, 'fake-vm', process.execPath);
+ const reuse = { root: held, candidates: (file: { path: string }) => [join(held, 'state', file.path), ...(file.path.endsWith('b.png') ? [join(held, 'images', 'b.png')] : [])] };
+ const local = join(root, 'attempt', 'state');
+ await transfer.pullVerified(source, local, source, root, { reuse });
+ assert.deepEqual(await inventory(local), await inventory(source));
+ assert.equal((reuse as { reused?: number }).reused, 1);
+ assert.deepEqual(pulled.filter(path => !path.includes('.inventory-')).sort(), [join(source, 'journal'), join(source, 'snapshots', 'b.png')]);
+ assert.equal(await readFile(join(held, 'images', 'b.png'), 'utf8'), 'tampered b', 'a rejected candidate is left alone');
+ const outside = { root: join(held, 'images'), candidates: () => [join(held, 'state', 'snapshots', 'a.png')] };
+ await transfer.pullVerified(source, join(root, 'outside', 'state'), source, root, { reuse: outside });
+ assert.equal((outside as { reused?: number }).reused, undefined, 'a candidate outside the declared root is not used');
+ assert.ok(pulled.includes(join(source, 'snapshots', 'a.png')));
+});

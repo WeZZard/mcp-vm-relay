@@ -17,9 +17,10 @@ step; add `reason` and `expected` when they help a reviewer. Split the work
 into single recorded events, one call each; do not hide an interaction
 sequence in one script.
 
-Inspect the after-image each run returns before choosing the next step.
-If a run reports that its image was not attached, retrieve it with
-relay_image using the reference the result gave; never repeat input to obtain
+Inspect the after-image of each run before choosing the next step: a run
+names it as `pending` with an `imageId`, and relay_image with that `imageId`
+shows it. If relay_image reports that the image was not attached, retry it
+with the same reference; never repeat input to obtain
 an image, and stop exploratory input if a required image is still
 uninspectable after two recovery calls. A failed operation keeps the VM:
 diagnose it, use relay_exec with `diagnostic: true` if the user's task calls

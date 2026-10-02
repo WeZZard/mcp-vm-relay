@@ -72,6 +72,14 @@ const acquireInput = (patch: Partial<AcquireInput> = {}): AcquireInput => ({ ima
 const operation = (id: string, patch: Partial<RunInput> = {}): RunInput => ({ because: reason, kind: 'exec', argv: [process.execPath, '-e', 'console.log("test output")'], step: { id, title: id, expected: 'Fixture command completes', inputMode: 'ordinary' }, snapshots: { afterIntervalMs: 0 }, ...patch });
 const deferred = () => { let resolve!: () => void; const promise = new Promise<void>(r => { resolve = r; }); return { promise, resolve }; };
 async function json(path: string): Promise<any> { return JSON.parse(await readFile(path, 'utf8')); }
+/** A run names its after-image as pending; relay_image waits for its background download and shows it (docs/screenshot-delivery.md §10). */
+async function shown(manager: RelayManager, run: { imageDelivery?: { status: string; image?: any } }) {
+  assert.equal(run.imageDelivery?.status, 'pending', JSON.stringify(run.imageDelivery));
+  const image = await manager.image({ source: 'reference', imageId: run.imageDelivery!.image!.imageId });
+  assert.equal(image.status, 'attached', JSON.stringify(image));
+  assert.deepEqual(image.image, run.imageDelivery!.image, 'relay_image shows the image the run named');
+  return image.image!;
+}
 
 /** Implements the actual HTTP contract. Only test-authored Node/transfer commands
  * run locally; the CUA executable ONLY writes a constant PNG and refuses input.
@@ -96,6 +104,8 @@ class FixtureService {
   screenshotPullFailures = 0;
   acquireHook?: () => Promise<void>;
   receiverHook?: () => Promise<void>;
+  /** Runs before any pull; a test can hold one open. */
+  pullHook?: (remote: string) => Promise<void>;
   /** Runs before any guest command; a test can hold one open. */
   execHook?: (argv: string[]) => Promise<void>;
   receiverActive = 0;
@@ -146,6 +156,7 @@ class FixtureService {
       return this.respond(res, 200, { vm, pushed: body.local_path, to: body.remote_path });
     }
     if (match[2] === 'pull') {
+      await this.pullHook?.(body.remote_path);
       if (body.remote_path.endsWith('.png') && this.screenshotPullFailures > 0) {
         this.screenshotPullFailures--; return this.respond(res, 503, { error: 'fixture screenshot transfer unavailable' });
       }
@@ -273,8 +284,8 @@ test('single relay tool: real HTTP/receiver acquire → stage → exec/script/co
     if (args.action === 'run') {
       const details = result.details as any;
       assert.equal(details.kind, 'relay-image-result-v1'); assert.equal(details.isError, false);
-      assert.equal(details.imageDelivery.status, 'attached', JSON.stringify(details.imageDelivery));
-      assert.equal(result.content.filter(c => c.type === 'image').length, 1);
+      assert.equal(details.imageDelivery.status, 'pending', JSON.stringify(details.imageDelivery));
+      assert.equal(result.content.filter(c => c.type === 'image').length, 0, 'the run does not wait for its after-image');
       return details.result;
     }
     assert.equal(result.content.length, 1);
@@ -351,17 +362,19 @@ test('the shipped MCP server stages its shipped receiver and completes a full HT
     // action (and, for run, kind) selects which one, and the rest of the
     // args are its own arguments (no action/kind field on the wire).
     const toolFor = ({ action, kind }: { action: string; kind?: string }) => `relay_${(kind ?? action).replace(/-/g, '_')}`;
+    let named: { imageId: string } | undefined;
     const invoke = async (args: Record<string, unknown>) => {
       const { action, kind, ...rest } = args as { action: string; kind?: string; [key: string]: unknown };
       const result: any = await client.callTool({ name: toolFor({ action, kind }), arguments: rest });
       assert.equal(result.isError, false, result.content[0].text);
       if (action === 'run') {
-        // The saved after-image rides as a typed image block, its identity leading the text.
+        // The saved after-image is named, its identity leading the text, and downloads in the background.
         const identity = JSON.parse(result.content[0].text.split('\n')[0]);
-        assert.equal(identity.imageDelivery.status, 'attached', JSON.stringify(identity));
+        assert.equal(identity.imageDelivery.status, 'pending', JSON.stringify(identity));
+        assert.match(identity.imageDelivery.image.imageId, /^image-[a-f0-9]{64}$/);
+        named = identity.imageDelivery.image;
         assert.equal(identity.executionFailed, false);
-        assert.equal(result.content.filter((c: any) => c.type === 'image').length, 1);
-        assert.equal(result.content.find((c: any) => c.type === 'image').mimeType, 'image/png');
+        assert.equal(result.content.filter((c: any) => c.type === 'image').length, 0);
       }
       return relayJson(result.content[0].text);
     };
@@ -369,6 +382,9 @@ test('the shipped MCP server stages its shipped receiver and completes a full HT
     await invoke({ action: 'stage', nodePath: process.execPath, cuaDriver: f.driver });
     const result = await invoke({ action: 'run', reason, kind: 'exec', argv: [process.execPath, '-e', "require('fs').writeFileSync('artifact.txt','compiled package')"], step: { id: 'compiled', title: 'Compiled package', expected: 'Declared artifact written', inputMode: 'ordinary' }, snapshots: { afterIntervalMs: 0 } });
     assert.equal(result.outcome.kind, 'completed');
+    const image: any = await client.callTool({ name: 'relay_image', arguments: { target: { source: 'reference', imageId: named!.imageId } } });
+    assert.equal(image.isError, false, image.content[0].text);
+    assert.equal(image.content.find((c: any) => c.type === 'image').mimeType, 'image/png', 'relay_image shows the downloaded after-image');
     const status: any = await client.callTool({ name: 'relay_status', arguments: {} });
     const owned = JSON.parse(status.content[0].text);
     assert.equal(owned.staged, true); assert.equal(owned.active, true); assert.equal(owned.service, f.manager.vm.baseUrl);
@@ -396,11 +412,14 @@ test('production tool boundary: saved source images, bounded recovery and one co
   const run = (id: string, code = 'console.log("fixture input")', snapshots: RunInput['snapshots'] = { afterIntervalMs: 0 }) => invoke({
     action: 'run', reason, kind: 'exec', argv: [process.execPath, '-e', code], step: operation(id).step, snapshots,
   } as RelayInput);
-  const first = imageDetails(await run('source', `const fs=require('fs');fs.mkdirSync('consumer');fs.writeFileSync('consumer/screenshot.png',Buffer.from('${png}','base64'));fs.writeFileSync('consumer/result.txt','consumer output');`), 'attached');
+  const first = imageDetails(await run('source', `const fs=require('fs');fs.mkdirSync('consumer');fs.writeFileSync('consumer/screenshot.png',Buffer.from('${png}','base64'));fs.writeFileSync('consumer/result.txt','consumer output');`), 'pending');
   assert.equal(first.isError, false); assert.equal(first.result.outcome.kind, 'completed');
   const descriptor = first.imageDelivery.image;
   assert.equal(descriptor.source, 'display'); assert.equal(descriptor.phase, 'after');
   assert.equal(descriptor.executionId, first.result.executionId);
+  // relay_image by display selector waits for the background download, then shows the image the run named.
+  const shownFirst = imageDetails(await invoke({ action: 'image', target: { source: 'display', sessionId: descriptor.sessionId, executionId: descriptor.executionId, phase: 'after' } }), 'attached');
+  assert.deepEqual(shownFirst.imageDelivery.image, descriptor);
   assert.deepEqual(await readFile(descriptor.originalPath), Buffer.from(png, 'base64'));
   const counters = async () => ({ receiver: f.service.receiverCalls,
     captures: (await readFile(join(f.root, 'captures.jsonl'), 'utf8')).trim().split('\n').length,
@@ -423,24 +442,26 @@ test('production tool boundary: saved source images, bounded recovery and one co
   imageDetails(await invoke({ action: 'image', target: { source: 'reference', imageId: `image-${'0'.repeat(64)}` } }), 'unauthorized-reference');
   imageDetails(await invoke({ action: 'image', target: { source: 'application', name: 'consumer', path: '../escape.png' } }), 'unsafe-path');
   for (const phase of ['first', 'member', 'last'] as const) {
-    const grouped = imageDetails(await run(`group-${phase}`, undefined, { group: { groupId: 'text-group', phase }, ...(phase === 'last' ? { afterIntervalMs: 0 } : {}) }), phase === 'last' ? 'attached' : 'not-requested');
+    const grouped = imageDetails(await run(`group-${phase}`, undefined, { group: { groupId: 'text-group', phase }, ...(phase === 'last' ? { afterIntervalMs: 0 } : {}) }), phase === 'last' ? 'pending' : 'not-requested');
     assert.equal(grouped.result.outcome.kind, 'completed');
-    if (phase === 'last') assert.equal(grouped.imageDelivery.image.groupId, 'text-group');
+    if (phase === 'last') { assert.equal(grouped.imageDelivery.image.groupId, 'text-group'); imageDetails(await invoke({ action: 'image', target: { source: 'reference', imageId: grouped.imageDelivery.image.imageId } }), 'attached'); }
   }
-  // Automatic delivery spends one of the shared three attempts on action metadata.
+  // The background download spends one of the shared three attempts on action metadata, so two failed
+  // byte copies fail it; it is not queued again, and relay_image then makes its own attempt with a fresh budget.
   f.service.screenshotPullFailures = 2;
   const pullsBefore = f.service.requests.filter(r => r.path.endsWith('/pull') && r.body.remote_path.endsWith('.png')).length;
-  const failedTransfer = imageDetails(await run('transfer-failure'), 'transfer-failed');
+  const failedTransfer = imageDetails(await run('transfer-failure'), 'pending');
   assert.equal(failedTransfer.result.outcome.kind, 'completed');
-  assert.equal(f.service.screenshotPullFailures, 0);
-  assert.equal(f.service.requests.filter(r => r.path.endsWith('/pull') && r.body.remote_path.endsWith('.png')).length - pullsBefore, 2);
   const recoveryBefore = await counters();
   const recovered = imageDetails(await invoke({ action: 'image', target: { source: 'reference', imageId: failedTransfer.imageDelivery.image.imageId } }), 'attached');
-  const { originalPath, ...recoveredDescriptor } = recovered.imageDelivery.image;
-  assert.deepEqual(recoveredDescriptor, failedTransfer.imageDelivery.image);
+  assert.equal(f.service.screenshotPullFailures, 0);
+  assert.equal(f.service.requests.filter(r => r.path.endsWith('/pull') && r.body.remote_path.endsWith('.png')).length - pullsBefore, 3, 'two failed download copies, then the retrieval\'s own copy');
+  const record = await json(join(acquired.output, 'host/image-downloads', `${failedTransfer.result.executionId}-after.json`));
+  assert.equal(record.status, 'failed'); assert.equal(record.failure, 'transfer-failed'); assert.equal(record.image.imageId, failedTransfer.imageDelivery.image.imageId);
+  assert.deepEqual(recovered.imageDelivery.image, failedTransfer.imageDelivery.image);
   assert.equal((await counters()).receiver, recoveryBefore.receiver); assert.equal((await counters()).captures, recoveryBefore.captures);
   assert.equal((await counters()).acquire, recoveryBefore.acquire); assert.deepEqual((await counters()).exports, []);
-  const failedExecution = imageDetails(await run('failed-execution', 'process.exit(9)'), 'attached');
+  const failedExecution = imageDetails(await run('failed-execution', 'process.exit(9)'), 'pending');
   assert.equal(failedExecution.isError, true); assert.equal(failedExecution.result.outcome.exitStatus.code, 9);
   const delivered = (await invoke({ action: 'finish' })).details as any;
   assert.equal(delivered.deliveryVerified, true); assert.equal(delivered.execution, 'failed');
@@ -628,8 +649,7 @@ test('restart attaches to the staged SDK session without replay and admits a new
 for (const previousRecording of [false, true]) test(`cached reference survives offline manager reload (${previousRecording ? 'previous recording, not staged' : 'current recording'})`, { timeout: 30000 }, async t => {
   const f = await fixture(t); await f.manager.acquire(acquireInput()); await f.stage();
   const run = await f.manager.run(operation('offline-original'));
-  assert.equal(run.imageDelivery.status, 'attached', JSON.stringify(run.imageDelivery));
-  const descriptor = run.imageDelivery.image!;
+  const descriptor = await shown(f.manager, run);
   if (previousRecording) {
     f.service.failPush = true;
     await assert.rejects(f.manager.stage({ resetRecording: true }), /fixture push failed/);
@@ -665,11 +685,10 @@ for (const previousRecording of [false, true]) test(`cached reference survives o
   }
 });
 
-test('finish restores a deleted guest snapshot from the inline original and verifies the package', { timeout: 30000 }, async t => {
+test('finish restores a deleted guest snapshot from the downloaded original and verifies the package', { timeout: 30000 }, async t => {
   const f = await fixture(t); const acquired = await f.manager.acquire(acquireInput()); await f.stage();
   const run = await f.manager.run(operation('deleted-guest-snapshot'));
-  assert.equal(run.imageDelivery.status, 'attached', JSON.stringify(run.imageDelivery));
-  const image = run.imageDelivery.image!;
+  const image = await shown(f.manager, run);
   const receipt = await json(join(acquired.output!, 'host/receiver-receipts', `${run.executionId}.json`));
   const snapshot = receipt.imageEvidence.snapshots.find((s: any) => s.phase === 'after'); assert.ok(snapshot);
   await rm(join(acquired.guestRoot, 'state/snapshots', image.sessionId!, snapshot.fileName));
@@ -685,8 +704,7 @@ test('finish restores a deleted guest snapshot from the inline original and veri
 test('recording reset snapshot conflict preserves retained original and each incoming attempt', { timeout: 30000 }, async t => {
   const f = await fixture(t); const acquired = await f.manager.acquire(acquireInput()); await f.stage();
   const run = await f.manager.run(operation('reset-conflict'));
-  assert.equal(run.imageDelivery.status, 'attached', JSON.stringify(run.imageDelivery));
-  const image = run.imageDelivery.image!;
+  const image = await shown(f.manager, run);
   const receipt = await json(join(acquired.output!, 'host/receiver-receipts', `${run.executionId}.json`));
   const snapshot = receipt.imageEvidence.snapshots.find((s: any) => s.phase === 'after'); assert.ok(snapshot);
   const relativeSnapshot = join('snapshots', image.sessionId!, snapshot.fileName);
@@ -836,7 +854,7 @@ test('a run without reason, step or interval derives its record and uses the def
   assert.equal(request.step.expected, 'Exits with status 0'); assert.equal(request.step.inputMode, 'ordinary');
   assert.deepEqual(request.snapshots, { afterIntervalMs: 500 });
   assert.match(request.because, /^Relay exec node .*\(no reason given\)$/);
-  assert.equal(result.imageDelivery.status, 'attached', 'snapshots are automatic');
+  assert.equal(result.imageDelivery.status, 'pending', 'snapshots are automatic');
   // A text group's last member without its own interval gets the default too; explicit values still win.
   const group = await f.manager.run(operation('group-first', { snapshots: { group: { groupId: 'g1', phase: 'first' } } }));
   assert.equal(group.outcome.kind, 'completed');
@@ -880,7 +898,7 @@ test('relay_run forwards unchanged tool calls through the receiver and the guest
   // No reason, step or interval: the record is derived and the evidence is automatic.
   const first = await call({ action: 'run', kind: 'mcp', target: 'playwright', tool: 'increment', args: { by: 2 } });
   assert.equal(first.isError, false, first.text);
-  assert.equal(first.imageDelivery?.status, 'attached'); assert.ok(first.image, 'the after-snapshot rides inline');
+  assert.equal(first.imageDelivery?.status, 'pending'); assert.equal(first.image, undefined, 'the after-snapshot downloads in the background');
   assert.deepEqual(first.content, [{ type: 'text', text: first.content![0].type === 'text' ? first.content![0].text : '' }]);
   assert.match((first.content![0] as { text: string }).text, /^count=2 /, 'the tool\'s own text passes through');
   const result = body(first.text);
@@ -913,7 +931,7 @@ test('relay_run forwards unchanged tool calls through the receiver and the guest
   assert.equal(failed.isError, true);
   assert.equal(body(failed.text).relayOutcome, 'completed-with-tool-error'); assert.equal(body(failed.text).outcome.exitStatus.code, 3);
   assert.equal((failed.content![0] as { text: string }).text, 'fixture tool error');
-  assert.equal(failed.imageDelivery?.status, 'attached', 'a failed call is still bracketed by snapshots');
+  assert.equal(failed.imageDelivery?.status, 'pending', 'a failed call is still bracketed by snapshots');
   await f.assertRetained(acquired.vm);
   assert.deepEqual((await f.mcpCalls()).map(entry => `${entry.server}.${entry.tool}`), ['playwright.increment', 'playwright.increment', 'cua.picture', 'chrome-devtools.fail']);
   // finish stops the host and brings the results home as the relay-run extraction.
@@ -1142,8 +1160,9 @@ test('fullWorkspace retry preserves the first immutable export after package tra
   const f = await fixture(t);
   const acquired = await f.manager.acquire(acquireInput({ fullWorkspace: true }));
   await f.stage(); await writeFile(join(acquired.workspace, 'seed.txt'), 'first workspace');
+  // The background download fails after two copies, so the host lacks the original and the state pull fails after three.
+  f.service.screenshotPullFailures = 5;
   await f.manager.run(operation('workspace-retry'));
-  f.service.screenshotPullFailures = 3;
   await assert.rejects(f.manager.finish(), /fixture screenshot transfer unavailable/);
   await f.assertRetained(acquired.vm);
   const directory = join(acquired.output!, 'extractions/full-workspace');
@@ -1279,7 +1298,7 @@ test('finish fails before pulling the relay state when the evidence volume has t
   const statfs = async (path: string) => { volumes.push(path); return { bavail: free / 4096n, bsize: 4096n }; };
   const f = await fixture(t, { statfs } as Partial<ManagerOptions>);
   const acquired = await f.manager.acquire(acquireInput()); await f.stage();
-  await f.manager.run(operation('state-needs-space'));
+  await shown(f.manager, await f.manager.run(operation('state-needs-space')));
   const guestState = await bytesUnder(join(acquired.guestRoot, 'state'));
   assert.ok(guestState > 4096, 'the fixture state is larger than the free space');
   const pulls = () => f.service.requests.filter(r => r.path.endsWith('/pull') && r.body.remote_path.startsWith(join(acquired.guestRoot, 'state'))).length;
@@ -1350,4 +1369,137 @@ for (const pause of ['cleanup', 'settle'] as const) test(`H6: a graceful pause (
   const lease = await json(join(f.manager.root, 'lease.json'));
   assert.equal(lease.active, false, 'renewal is paused');
   assert.ok(lease.expiresAt >= Date.now() / 1000 + 1.99 * 3600, 'the recorded expiry is the lease\'s own deadline');
+});
+
+// Background after-image downloads (docs/screenshot-delivery.md §10).
+const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+async function until(condition: () => boolean | Promise<boolean>, what: string, ms = 10000) {
+  const deadline = Date.now() + ms;
+  while (!await condition()) { if (Date.now() > deadline) assert.fail(`Timed out waiting for ${what}`); await sleep(10); }
+}
+/** Holds every screenshot pull at the fixture service until released. */
+function holdScreenshots(f: Awaited<ReturnType<typeof fixture>>) {
+  const hold = deferred(); let held = 0;
+  f.service.pullHook = async remote => { if (remote.endsWith('.png')) { held++; await hold.promise; } };
+  return { release: () => { f.service.pullHook = undefined; hold.resolve(); }, get held() { return held; } };
+}
+const screenshotPulls = (f: Awaited<ReturnType<typeof fixture>>) => f.service.requests.filter(r => r.path.endsWith('/pull') && r.body.remote_path.endsWith('.png')).length;
+const downloadRecord = (hostRoot: string, executionId: string) => json(join(hostRoot, 'host/image-downloads', `${executionId}-after.json`));
+const exists = (path: string) => lstat(path).then(() => true, () => false);
+
+test('a run returns before its after-image downloads; relay_image waits for that one download; over the bound a run waits for the oldest (AD-1 to AD-3)', { timeout: 30000 }, async t => {
+  const f = await fixture(t, { downloadBound: 1 }); const acquired = await f.manager.acquire(acquireInput()); await f.stage();
+  const hold = holdScreenshots(f);
+  const first = await f.manager.run(operation('first-download'));
+  assert.equal(first.imageDelivery.status, 'pending'); assert.match(first.imageDelivery.image!.imageId, /^image-[a-f0-9]{64}$/);
+  assert.equal(await exists(first.imageDelivery.image!.originalPath!), false, 'the run returned before its original reached the host');
+  await until(() => hold.held === 1, 'the first download to reach its byte copy');
+  let returned = false;
+  const second = f.manager.run(operation('second-download')).then(result => { returned = true; return result; });
+  await until(() => f.service.receiverCalls === 2, 'the second run to reach the guest'); await sleep(200);
+  assert.equal(returned, false, 'with one download over the bound, the run waits for the oldest');
+  assert.equal(f.manager.status().downloads?.inFlight, 1);
+  const image = f.manager.image({ source: 'reference', imageId: first.imageDelivery.image!.imageId });
+  hold.release();
+  const shownFirst = await image;
+  assert.equal(shownFirst.status, 'attached'); assert.deepEqual(shownFirst.image, first.imageDelivery.image);
+  await shown(f.manager, await second);
+  assert.equal(screenshotPulls(f), 2, 'one byte copy per image: relay_image waited instead of transferring again');
+  for (const run of [first, await second]) {
+    const record = await downloadRecord(acquired.output!, run.executionId!);
+    assert.equal(record.status, 'downloaded'); assert.equal(record.image.imageId, run.imageDelivery.image!.imageId);
+    assert.ok(record.queuedAt <= record.startedAt && record.startedAt <= record.endedAt);
+  }
+  const delivered = await f.manager.finish(); assert.equal(delivered.snapshots, 'complete'); await f.assertClean();
+});
+
+test('a transient download failure waits 1 s, then pauses the downloads until the next relay operation completes (AD-4, DC-5)', { timeout: 30000 }, async t => {
+  const f = await fixture(t); const acquired = await f.manager.acquire(acquireInput()); await f.stage();
+  const hold = holdScreenshots(f);
+  const a = await f.manager.run(operation('fails-transiently')), b = await f.manager.run(operation('waits-for-resume'));
+  await until(() => hold.held === 1, 'the first download to reach its byte copy');
+  f.service.screenshotPullFailures = 2; hold.release();
+  await until(() => f.manager.status().downloads?.failed === 1, 'the first download to fail');
+  const pulls = screenshotPulls(f); await sleep(300);
+  assert.deepEqual({ ...f.manager.status().downloads, pulls: screenshotPulls(f) }, { queued: 1, inFlight: 0, downloaded: 0, failed: 1, cancelled: 0, paused: true, state: 'open', pulls }, 'the worker is paused');
+  const failed = await downloadRecord(acquired.output!, a.executionId!);
+  assert.equal(failed.status, 'failed'); assert.equal(failed.failure, 'transfer-failed');
+  assert.ok(Date.parse(failed.endedAt) - Date.parse(failed.startedAt) >= 1000, 'the download waited 1 s before its second byte copy');
+  await f.manager.extract([]);
+  await until(() => f.manager.status().downloads?.downloaded === 1, 'the paused download to resume');
+  assert.equal((await downloadRecord(acquired.output!, b.executionId!)).status, 'downloaded');
+  assert.equal(f.manager.status().downloads?.paused, false);
+  const delivered = await f.manager.finish(); assert.equal(delivered.snapshots, 'complete'); await f.assertClean();
+});
+
+test('finish waits for the downloads; a transient failure while finishing cancels the rest, and the package is still complete (AD-5, DC-3, DC-7)', { timeout: 30000 }, async t => {
+  const f = await fixture(t, { downloadRetryDelaysMs: [] }); const acquired = await f.manager.acquire(acquireInput()); await f.stage();
+  const hold = holdScreenshots(f);
+  const runs = [await f.manager.run(operation('in-flight')), await f.manager.run(operation('queued-1')), await f.manager.run(operation('queued-2'))];
+  await until(() => hold.held === 1, 'the first download to reach its byte copy');
+  let finished = false;
+  const finishing = f.manager.finish().then(result => { finished = true; return result; });
+  await sleep(300); assert.equal(finished, false, 'finish waits while a download is in flight');
+  assert.equal(f.manager.status().downloads?.state, 'closing');
+  f.service.screenshotPullFailures = 2; hold.release();
+  const delivered = await finishing;
+  assert.equal(delivered.deliveryVerified, true); assert.equal(delivered.snapshots, 'complete');
+  assert.deepEqual(await verifyDeliveredPackage(acquired.output!), delivered);
+  assert.deepEqual(await Promise.all(runs.map(async run => (await downloadRecord(acquired.output!, run.executionId!)).status)), ['failed', 'cancelled', 'cancelled']);
+  for (const run of runs) {
+    const after = (await json(join(acquired.output!, 'host/receiver-receipts', `${run.executionId}.json`))).imageEvidence.snapshots.find((s: any) => s.phase === 'after');
+    assert.deepEqual(await readFile(join(acquired.output!, 'state/snapshots', run.imageDelivery.image!.sessionId!, after.fileName)), Buffer.from(png, 'base64'), 'the state pull fetched what the downloads did not');
+  }
+  await f.assertClean();
+});
+
+test('release and a recording reset wait for every queued download before touching the guest state (AD-5)', { timeout: 30000 }, async t => {
+  const f = await fixture(t); const acquired = await f.manager.acquire(acquireInput()); await f.stage();
+  let hold = holdScreenshots(f);
+  const beforeReset = await f.manager.run(operation('before-reset'));
+  await until(() => hold.held === 1, 'the download to reach its byte copy');
+  let reset = false;
+  const resetting = f.manager.stage({ resetRecording: true }).then(() => { reset = true; });
+  await sleep(300); assert.equal(reset, false, 'the reset waits for the download');
+  hold.release(); await resetting;
+  assert.equal((await downloadRecord(acquired.output!, beforeReset.executionId!)).status, 'downloaded');
+  assert.notEqual(f.manager.status().output, acquired.output);
+  hold = holdScreenshots(f);
+  const beforeRelease = await f.manager.run(operation('before-release'));
+  const recording = f.manager.status().output!;
+  await until(() => hold.held === 1, 'the download to reach its byte copy');
+  let released = false;
+  const releasing = f.manager.release().then(() => { released = true; });
+  await sleep(300); assert.equal(released, false, 'release waits for the download');
+  hold.release(); await releasing;
+  assert.equal((await downloadRecord(recording, beforeRelease.executionId!)).status, 'downloaded');
+  await f.assertClean();
+});
+
+test('finish copies the originals the host already holds instead of pulling them again (AD-6, DC-6)', { timeout: 30000 }, async t => {
+  const f = await fixture(t); const acquired = await f.manager.acquire(acquireInput()); await f.stage();
+  for (const id of ['held-1', 'held-2']) await shown(f.manager, await f.manager.run(operation(id)));
+  const pulls = screenshotPulls(f);
+  const delivered = await f.manager.finish();
+  assert.equal(delivered.deliveryVerified, true); assert.equal(delivered.snapshots, 'complete');
+  assert.deepEqual(await verifyDeliveredPackage(acquired.output!), delivered);
+  // The fixture captures one constant PNG, so the held originals match every snapshot, before and after, by hash.
+  assert.equal(screenshotPulls(f) - pulls, 0, 'no snapshot is pulled again');
+  const events = await Promise.all((await readdir(join(acquired.output!, 'host/events'))).map(name => json(join(acquired.output!, 'host/events', name))));
+  assert.equal(events.find(event => event.kind === 'state-reused')?.details.files, 4, 'two runs, each with a before and an after snapshot');
+  await f.assertClean();
+});
+
+test('cleanup aborts the download in flight and releases the owner lock without waiting for the guest (AD-5)', { timeout: 30000 }, async t => {
+  const f = await fixture(t); const acquired = await f.manager.acquire(acquireInput()); await f.stage();
+  const hold = holdScreenshots(f);
+  const run = await f.manager.run(operation('aborted-download'));
+  await until(() => hold.held === 1, 'the download to reach its byte copy');
+  await f.manager.cleanup('shutdown during a download');
+  const sibling = new RelayManager(f.options);
+  try { await sibling.initialize(); assert.equal(sibling.status().vm, acquired.vm, 'the owner lock was released'); }
+  finally { await sibling.cleanup('sibling check'); }
+  hold.release(); await sleep(300);
+  assert.equal(await exists(join(acquired.output!, 'host/image-downloads', `${run.executionId}-after.json`)), false, 'a closed queue writes nothing');
+  assert.equal(await exists(run.imageDelivery.image!.originalPath!), false, 'an aborted download does not publish');
 });

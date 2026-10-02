@@ -224,8 +224,7 @@ is sent; a mismatch is refused with the correct schema in the error.
   stop it.
 - **Results pass through.** The target's text blocks follow the relay's own
   result text, bounded like every result (50 KiB, 2000 lines); its images (up
-  to four) are delivered inline under the usual image rules, before the
-  relay's after-snapshot. Each call's full result, images and the servers'
+  to four) are delivered inline under the usual image rules. Each call's full result, images and the servers'
   logs land in `workspace/relay-run`, the extraction `relay-run`, and come home
   with `relay_finish`.
 - **Outcomes.** A call the relay proves was never sent is `refused`; a call
@@ -240,17 +239,22 @@ The launch commands, pinned versions and the full outcome mapping are in
 
 ## Saved images
 
-A run tool returns its saved after-image as a typed image block whenever the
-snapshot plan captures that phase: a standalone event or a text group's last
-event. A first or intermediate group event and a diagnostic command do not
-invent an image. Execution and image delivery are independent outcomes: a
-completed command can have a failed delivery, and a delivered image does not
-turn a failed command into a successful one. Either failure sets the MCP
-`isError` flag while the content, image included, is kept. The delivery
-identity (`imageDelivery`) leads the result text so it survives truncation.
+A run tool names its saved after-image whenever the snapshot plan captures that
+phase: a standalone event or a text group's last event. The result does not
+wait for the image. Its `imageDelivery` is `pending` with the image identity
+(`imageId`, `originalPath`, hash and size), and the relay downloads the image
+in the background, one download at a time. `relay_finish` and `relay_release`
+wait until every download has ended, and the finish copies the originals the
+host already holds instead of pulling them again. A first or intermediate
+group event and a diagnostic command do not invent an image. Execution and
+image delivery are independent outcomes: a pending image does not turn a
+failed command into a successful one. The delivery identity leads the result
+text so it survives truncation. The design is `docs/screenshot-delivery.md`
+§10.
 
-If inline delivery fails, `relay_image` retrieves the same saved image through
-one closed selector; it never repeats input, creates a capture, exports the
+`relay_image` shows a saved image. Asked for an image whose download is still
+queued or running, it waits for that download within its own deadline. It
+retrieves the same saved image through one closed selector; it never repeats input, creates a capture, exports the
 consumer directory or acquires a VM:
 
 ```json

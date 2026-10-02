@@ -17,7 +17,9 @@ import { acquireOwnerLock, type OwnerLock } from './owner-lock.js';
 import { searchCatalog, type SearchQuery } from './search.js';
 import { recordSearch } from './search-diagnostics.js';
 import { acquisitionCapabilities, consoleStatus, type ConsoleStatus } from './console.js';
-import { ImageStore, imageCapability, type ImageTarget, type ImageResult } from './images.js';
+import { ImageStore, imageCapability, type ImageDescriptor, type ImageTarget, type ImageResult } from './images.js';
+import { DownloadQueue, type DownloadJob } from './downloads.js';
+import type { LocalSource } from './transfer.js';
 import { refreshEvidenceState } from './evidence-merge.js';
 import { DEFAULT_AFTER_INTERVAL_MS, TARGET_PACKAGES, cachedTarball, tarballName, targetLaunches, type LaunchContext, type Target, type TargetLaunch, type TargetPackages, type TarballSource } from './targets.js';
 import { checkArguments } from './json-schema.js';
@@ -78,6 +80,10 @@ export interface ManagerOptions {
   renewalWindowMs?: number;
   /** Test seam: free space of the evidence volume; default `fs.promises.statfs`. */
   statfs?: (path: string) => Promise<{ bavail: number | bigint; bsize: number | bigint }>;
+  /** Background downloads a run may leave queued; default DOWNLOAD_BOUND. */
+  downloadBound?: number;
+  /** Waits between a background download's attempts; default DOWNLOAD_RETRY_DELAYS_MS. */
+  downloadRetryDelaysMs?: readonly number[];
 }
 /**
  * H6: the relay tracks each lease's own deadline (startedAt + ttlHours) and
@@ -94,6 +100,12 @@ export const RELAY_RUN_OUTPUTS = 'relay-run';
 export const MCP_START_ALLOWANCE_MS = 60000;
 /** At most this many of a call's own images are delivered inline; the rest stay retrievable with relay_image. */
 export const MAX_TOOL_IMAGES = 4;
+/** Background after-image downloads a run may leave queued before it waits for the oldest (DC-4). */
+export const DOWNLOAD_BOUND = 64;
+/** Waits before a background download's second and third attempts (DC-5). */
+export const DOWNLOAD_RETRY_DELAYS_MS = [1000, 3000] as const;
+type DisplayTarget = Extract<ImageTarget, { source: 'display' }>;
+const downloadKey = (target: DisplayTarget) => `${target.sessionId}/${target.executionId}/${target.phase}`;
 /**
  * The server's MCP `instructions`: the rules that cut across all eighteen
  * tools rather than belonging to one of them (see each tool's own
@@ -101,7 +113,7 @@ export const MAX_TOOL_IMAGES = 4;
  * rules also lives in the `relay_probe` and `relay_acquire` descriptions,
  * because not every MCP client surfaces server instructions to the model.
  */
-export const instructions = 'This server offers eighteen tools for one interruptive VM enclosure: relay_search, relay_probe, relay_acquisition_capabilities, relay_acquire, relay_stage, relay_run, relay_tools, the command tools relay_exec/relay_script/relay_code, relay_image, relay_extract, relay_finish, relay_release, relay_console_resolve, relay_console_open, relay_console_cancel and relay_status. relay_run sends the cua-driver, Playwright MCP or Chrome DevTools MCP tool calls you already know to that server inside the VM; evidence is automatic. Relay only interruptive computer-use or browser-use that would otherwise take over a real desktop or browser, judged for yourself from relay_probe facts; unknown is not idle, and non-disruptive or headless work stays with local tools. One task gets one enclosure: call relay_acquire once per task, never reused for a second task. Work an enclosure in order: relay_probe, then relay_acquire, then relay_stage, then relay_run or the command tools, then relay_image or relay_extract as needed, then relay_finish or relay_release. Always call relay_finish or relay_release explicitly before you return an answer; ending the session only pauses lease renewal, it does not destroy the VM, and the backend\'s own expiry is the last-resort safeguard. A refused, uncertain or nonzero operation keeps the VM so you can diagnose and submit a corrected operation; never replay input whose effect is uncertain. A tool result, an attached image or a verified evidence package, is evidence for a human reviewer, never the review itself. The relay never targets a physical or local display and offers no video or spawn API. Every tool\'s text result is capped at 50 KiB / 2000 lines; a larger result is retained whole in a local file the result names.';
+export const instructions = 'This server offers eighteen tools for one interruptive VM enclosure: relay_search, relay_probe, relay_acquisition_capabilities, relay_acquire, relay_stage, relay_run, relay_tools, the command tools relay_exec/relay_script/relay_code, relay_image, relay_extract, relay_finish, relay_release, relay_console_resolve, relay_console_open, relay_console_cancel and relay_status. relay_run sends the cua-driver, Playwright MCP or Chrome DevTools MCP tool calls you already know to that server inside the VM; evidence is automatic, and its after-image is returned as pending and downloaded in the background, so call relay_image with the imageId when you need to see it. Relay only interruptive computer-use or browser-use that would otherwise take over a real desktop or browser, judged for yourself from relay_probe facts; unknown is not idle, and non-disruptive or headless work stays with local tools. One task gets one enclosure: call relay_acquire once per task, never reused for a second task. Work an enclosure in order: relay_probe, then relay_acquire, then relay_stage, then relay_run or the command tools, then relay_image or relay_extract as needed, then relay_finish or relay_release. Always call relay_finish or relay_release explicitly before you return an answer; ending the session only pauses lease renewal, it does not destroy the VM, and the backend\'s own expiry is the last-resort safeguard. A refused, uncertain or nonzero operation keeps the VM so you can diagnose and submit a corrected operation; never replay input whose effect is uncertain. A tool result, an attached image or a verified evidence package, is evidence for a human reviewer, never the review itself. The relay never targets a physical or local display and offers no video or spawn API. Every tool\'s text result is capped at 50 KiB / 2000 lines; a larger result is retained whole in a local file the result names.';
 
 /** relay_release's diagnostic when this session owns no lease. */
 export const NO_OWNED_LEASE = 'This session owns no lease, so nothing was released. Each server process has its own session identity (a new random one unless MCP_VM_RELAY_SESSION sets it); a lease acquired under another identity is not visible here. Restart the server with that MCP_VM_RELAY_SESSION to reconcile and release it, or let the backend TTL expire it.';
@@ -124,6 +136,8 @@ export class RelayManager {
   private initialized = false;
   private ownerLock?: OwnerLock;
   private shuttingDown = false;
+  /** After-image downloads, outside the serialized section (docs/screenshot-delivery.md §10). */
+  private readonly downloads: DownloadQueue;
   constructor(readonly options: ManagerOptions) {
     this.environment = options.environment ?? selectedEnvironment();
     this.tartHome = this.environment?.profile.tartHome ?? canonicalPath(options.tartHome ?? process.env.TART_HOME ?? join(process.env.HOME ?? homedir(), '.tart'));
@@ -140,6 +154,7 @@ export class RelayManager {
       push: (name, local_path, remote_path) => this.vm.push(name, { local_path, remote_path }),
       pull: (name, remote_path, local_path, options) => this.vm.pull(name, { remote_path, local_path }, options),
     };
+    this.downloads = new DownloadQueue({ bound: options.downloadBound ?? DOWNLOAD_BOUND, record: job => this.recordDownload(job) });
   }
   private serialized<T>(fn: () => Promise<T>): Promise<T> {
     const next = this.queue.then(fn, fn); this.queue = next.catch(() => {}); return next;
@@ -186,7 +201,7 @@ export class RelayManager {
   }
   private async save() { await jsonFile(join(this.root, 'lease.json'), this.enclosure ?? null); }
   private async unlock() { if (this.ownerLock) { await this.ownerLock.release(); this.ownerLock = undefined; } }
-  status() { const e = this.enclosure; return e ? { task: e.task, backend: e.backend, vm: e.lease?.vm, lease_id: e.lease?.lease_id, console: e.consoleObservation, consoleAttempt: e.consoleAttempt, purpose: e.purpose, staged: e.staged, lastError: e.lastError ?? e.failed, released: e.released, active: e.active ?? false, guestState: e.guestState ?? 'unknown', previousEvidence: e.previousEvidence, recordingResetPending: !!e.pendingReset, expiresAt: e.expiresAt ?? e.lease?.ttl_expires_at, output: e.hostRoot } : { active: false }; }
+  status() { const e = this.enclosure; return e ? { task: e.task, backend: e.backend, vm: e.lease?.vm, lease_id: e.lease?.lease_id, console: e.consoleObservation, consoleAttempt: e.consoleAttempt, purpose: e.purpose, staged: e.staged, lastError: e.lastError ?? e.failed, released: e.released, active: e.active ?? false, guestState: e.guestState ?? 'unknown', previousEvidence: e.previousEvidence, recordingResetPending: !!e.pendingReset, expiresAt: e.expiresAt ?? e.lease?.ttl_expires_at, output: e.hostRoot, downloads: this.downloads.counts() } : { active: false }; }
   private async reconcile() {
     const e = this.enclosure; if (!e) return;
     this.assertBinding(); await this.assertBackend();
@@ -458,7 +473,10 @@ export class RelayManager {
       await this.init(); signal?.throwIfAborted();
       if (this.shuttingDown) throw new Error('Relay manager is shutting down');
       await this.reconcile(); this.current(); this.startHeartbeat();
-      const result = await fn(); signal?.throwIfAborted(); return result;
+      const result = await fn(); signal?.throwIfAborted();
+      // The operation reached the guest and completed: a paused download worker may go on (AD-4).
+      this.downloads.resume();
+      return result;
     } catch (error) { await this.fail(error); throw new Error(`${String(error)}\nVM state: ${JSON.stringify(this.status())}`, { cause: error }); }
   }
   stage(input: StageInput, signal?: AbortSignal) { return this.serialized(() => this.guarded(signal, async () => {
@@ -539,7 +557,11 @@ export class RelayManager {
       await this.log('execution-failed', record.because, result);
       await this.fail(new Error(`Execution ${result.executionId}: ${JSON.stringify(outcome)}`));
     }
-    const imageDelivery = await this.imageStore().get({ source: 'display', sessionId: e.sessionId!, executionId: result.executionId, phase: 'after' }, signal);
+    // The after-image is named, not delivered: it downloads in the background (AD-1, AD-2).
+    const target: DisplayTarget = { source: 'display', sessionId: e.sessionId!, executionId: result.executionId, phase: 'after' };
+    const store = this.imageStore();
+    const imageDelivery = await store.pending(target);
+    if (imageDelivery.status === 'pending') await this.queueDownload(store, target, imageDelivery.image);
     const common = { step: record.step, snapshots: record.snapshots, timeoutMs, evidencePath: e.hostRoot, leaseReleased: !this.enclosure, owned: this.status(), imageDelivery };
     if (input.kind === 'mcp') return { ...result, ...await this.mcpResult(e, input.target!, input.tool!, outcome, signal), ...common };
     // The guest's bounded output rides along in the receipt the transport filed.
@@ -759,9 +781,41 @@ export class RelayManager {
     // Verified local image recovery must not depend on a reachable guest. The
     // private catalog still requires this manager's owner lock and enclosure.
     if (!this.enclosure || this.enclosure.released || this.enclosure.delivered) return { status: 'stale-reference', diagnostic: 'Enclosure is closed or sealed; inspect delivered originals with the host read tool.' };
+    // AD-3: a background download of this image runs next and is waited for, never transferred twice at once.
+    const job = this.downloads.find(target.source === 'reference' ? { imageId: target.imageId } : target.source === 'display' ? { key: downloadKey(target) } : {});
+    if (job) {
+      this.downloads.promote(job);
+      let stop!: () => void;
+      const stopped = new Promise<void>(done => { stop = done; bounded.addEventListener('abort', stop, { once: true }); });
+      try { await Promise.race([job.done, stopped]); } finally { bounded.removeEventListener('abort', stop); }
+      if (bounded.aborted) return { status: 'transfer-failed', ...(job.image ? { image: job.image } : {}), diagnostic: 'Image delivery cancelled or deadline exceeded while its background download was still running.' };
+    }
     return this.imageStore().get(target, bounded, deadline);
   }); }
-  private async resetRecording() {
+  private async queueDownload(store: ImageStore, target: DisplayTarget, image?: ImageDescriptor) {
+    // Only an open queue takes downloads; otherwise relay_image and the state pull fetch the original.
+    if (this.downloads.state !== 'open') return;
+    const retryDelaysMs = this.options.downloadRetryDelaysMs ?? DOWNLOAD_RETRY_DELAYS_MS;
+    this.downloads.enqueue({ key: downloadKey(target), ...(image ? { image } : {}), recordPath: join(this.current().hostRoot, 'host', 'image-downloads', `${target.executionId}-${target.phase}.json`) },
+      signal => store.download(target, signal, { retryDelaysMs }));
+    await this.downloads.withinBound();
+  }
+  private async recordDownload(job: DownloadJob) {
+    const image = job.result?.image ?? job.image;
+    await jsonFile(job.recordPath, { status: job.end, key: job.key, ...(image ? { image } : {}), ...(job.result?.diagnostic ? { diagnostic: job.result.diagnostic } : {}), ...(job.result && job.end === 'failed' ? { failure: job.result.status } : {}), queuedAt: job.queuedAt, startedAt: job.startedAt, endedAt: job.endedAt });
+  }
+  /** AD-6: the host files that may already hold a guest state file's bytes. */
+  private async localState(recording: string): Promise<LocalSource> {
+    const held = await this.imageStore().heldOriginals(recording);
+    return { root: recording, candidates: file => [join(recording, 'state', file.path), ...(held.get(`${file.sha256}:${file.bytes}`) ?? [])] };
+  }
+  /** A lifecycle operation's gate (AD-5): every download ends before the guest state is touched; the queue opens again after. */
+  private async drained<T>(fn: () => Promise<T>): Promise<T> {
+    await this.downloads.drain();
+    try { return await fn(); } finally { this.downloads.reopen(); }
+  }
+  private resetRecording() { return this.drained(() => this.archiveRecording()); }
+  private async archiveRecording() {
     const e = this.current();
     if (!e.staged || !e.sessionId) throw new Error('Recording reset requires a staged recording');
     if (!e.pendingReset) {
@@ -776,7 +830,9 @@ export class RelayManager {
     const marker = await transfer.checked([e.node!, '-e', 'const fs=require("fs"),p=require("path");console.log(fs.existsSync(p.join(process.argv[1],"recordings",process.argv[2]))?"archived":"current");', e.guestRoot, reset.id]);
     const attempts = `${reset.from}.reset-attempts`;
     const incoming = join(attempts, randomUUID(), 'state');
-    await transfer.pullVerified(marker.trim() === 'archived' ? archive : join(e.guestRoot, 'state'), incoming, e.guestRoot, attempts, { beforePull: facts => this.assertFreeSpace(reset.from, facts) });
+    const reuse = await this.localState(reset.from);
+    await transfer.pullVerified(marker.trim() === 'archived' ? archive : join(e.guestRoot, 'state'), incoming, e.guestRoot, attempts, { beforePull: facts => this.assertFreeSpace(reset.from, facts), reuse });
+    if (reuse.reused) await this.log('state-reused', undefined, { files: reuse.reused });
     await this.imageStore().materializeDisplayOriginals(reset.from);
     await refreshEvidenceState(incoming, join(reset.from, 'state'), join(attempts, 'previous'));
     await this.log('recording-reset-intent', undefined, reset);
@@ -856,13 +912,15 @@ export class RelayManager {
     if (!e.staged || !e.sessionId) throw new Error('No staged session to package');
     const attempts = `${e.hostRoot}.finalization-attempts`;
     const incoming = join(attempts, randomUUID(), 'state');
-    await this.transfer().pullVerified(join(e.guestRoot, 'state'), incoming, e.guestRoot, attempts, { beforePull: facts => this.assertFreeSpace(e.hostRoot, facts) });
+    const reuse = await this.localState(e.hostRoot);
+    await this.transfer().pullVerified(join(e.guestRoot, 'state'), incoming, e.guestRoot, attempts, { beforePull: facts => this.assertFreeSpace(e.hostRoot, facts), reuse });
+    if (reuse.reused) await this.log('state-reused', undefined, { files: reuse.reused });
     await this.imageStore().materializeDisplayOriginals(e.hostRoot);
     await refreshEvidenceState(incoming, join(e.hostRoot, 'state'), join(attempts, 'previous'));
     const result = await deliverPackage(e.hostRoot, { packageId: `pkg-${e.purpose}`, sessionId: e.sessionId, taskId: e.purpose });
     e.delivered = result; await this.save(); return result;
   }
-  finish(signal?: AbortSignal) { return this.serialized(() => this.guarded(signal, async () => {
+  finish(signal?: AbortSignal) { return this.serialized(() => this.guarded(signal, () => this.drained(async () => {
     const e = this.current(); await this.log('finish');
     let incomplete: Array<{ name: string; path: string; error: string }> = [];
     if (!e.delivered) {
@@ -873,7 +931,7 @@ export class RelayManager {
     const result = e.delivered ?? await this.packageInternal();
     await this.releaseInternal('finished');
     return incomplete.length ? { ...result, incompleteExtractions: incomplete } : result;
-  })); }
+  }))); }
   private async fail(error: unknown) {
     const e = this.enclosure; if (!e || !this.bindingMatches(e)) return;
     e.lastError = String(error);
@@ -903,14 +961,17 @@ export class RelayManager {
     await this.init(); this.assertBinding(); await this.assertBackend();
     // Never guess at another session's lease: say plainly that nothing was released.
     if (!this.enclosure) return { active: false as const, ownedLease: false as const, released: false as const, diagnostic: NO_OWNED_LEASE };
+    await this.drained(() => this.releaseDrained());
+    return this.status();
+  }); }
+  private async releaseDrained() {
     try {
       await this.log('release');
       if (this.enclosure?.staged && !this.enclosure.delivered) { await this.stopMcpHost('release'); await this.extractAvailable(); await this.packageInternal(); }
     } catch (error) {
       if (this.enclosure) await jsonFile(`${this.enclosure.hostRoot}.delivery-error.json`, { error: String(error) }).catch(() => {});
     } finally { await this.releaseInternal('released'); }
-    return this.status();
-  }); }
+  }
   private async releaseInternal(reason: 'finished' | 'failed' | 'released') {
     this.assertBinding(); await this.assertBackend();
     const e = this.enclosure; if (!e) return;
@@ -989,12 +1050,13 @@ export class RelayManager {
    */
   async pauseNow(reason: string) {
     this.shuttingDown = true;
+    void this.downloads.close(false);
     try { await this.pause(`${reason}; an in-flight operation did not settle and was abandoned`); }
     finally { this.initialized = false; await this.unlock(); }
   }
   async cleanup(reason: string) { return this.serialized(async () => {
     this.shuttingDown = true;
-    try { await this.pause(reason); await this.session?.close(); this.session = undefined; this.transport = undefined; }
+    try { await this.downloads.close(true); await this.pause(reason); await this.session?.close(); this.session = undefined; this.transport = undefined; }
     finally { this.initialized = false; await this.unlock(); }
   }); }
 }

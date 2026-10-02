@@ -28,6 +28,7 @@ test('the CLI prints the instructions text and the full table of tool schemas', 
   assert.equal(stdout, `${instructions}\n`);
   assert.match(stdout, /relay_probe/);
   assert.match(stdout, /relay_acquire/);
+  assert.match(stdout, /after-image is returned as pending and downloaded in the background, so call relay_image with the imageId/);
   const schema = JSON.parse((await run(process.execPath, [server, '--schema'])).stdout);
   assert.deepEqual(schema.map((tool: any) => tool.name).sort(), [...allToolNames].sort());
   for (const tool of schema) {

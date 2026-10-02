@@ -153,6 +153,11 @@ test('an image-bearing run carries the image as its own block with its identity 
   }
   const notRequested = await relayCall(fakeManager({ ...completed, imageDelivery: { status: 'not-requested', diagnostic: 'group member' } }), run);
   assert.equal(notRequested.isError, false); assert.equal(notRequested.image, undefined);
+  const pending = await relayCall(fakeManager({ ...completed, imageDelivery: { status: 'pending', image: descriptor } }), run);
+  assert.equal(pending.isError, false, 'a pending after-image is not an error'); assert.equal(pending.image, undefined);
+  assert.deepEqual(JSON.parse(pending.text.split('\n')[0]), { imageDelivery: { status: 'pending', image: descriptor }, executionFailed: false }, 'the pending identity leads the text');
+  const pendingFailed = await relayCall(fakeManager({ ...completed, outcome: { kind: 'completed', exitStatus: { code: 7, signal: null } }, imageDelivery: { status: 'pending', image: descriptor } }), run);
+  assert.equal(pendingFailed.isError, true, 'a pending image does not hide a failed command');
   const legacy = await relayCall(fakeManager(completed), run);
   assert.equal(legacy.imageDelivery, undefined); assert.equal(legacy.image, undefined); assert.equal(legacy.text.startsWith('{"imageDelivery"'), false);
 });

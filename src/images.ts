@@ -11,7 +11,8 @@ export const imageCapability = { version: 1, action: 'image', sources: ['display
 export type ImageTarget = { source: 'display'; sessionId: string; executionId: string; phase: 'before' | 'after' }
   | { source: 'application'; name: string; path?: string }
   | { source: 'reference'; imageId: string };
-export type ImageStatus = 'not-requested' | 'capture-failed' | 'capture-unknown' | 'unauthorized-reference' | 'unsafe-path' | 'image-missing' | 'stale-reference' | 'integrity-failed' | 'transfer-failed' | 'presentation-unavailable' | 'attached';
+/** `pending` appears only in a run result and `downloaded` only in a background download's own result (docs/screenshot-delivery.md §10). */
+export type ImageStatus = 'not-requested' | 'capture-failed' | 'capture-unknown' | 'unauthorized-reference' | 'unsafe-path' | 'image-missing' | 'stale-reference' | 'integrity-failed' | 'transfer-failed' | 'presentation-unavailable' | 'pending' | 'downloaded' | 'attached';
 export interface ImageDescriptor {
   imageId: string; source: 'display' | 'application'; enclosure: string;
   sha256: string; bytes: number; mimeType: string;
@@ -25,7 +26,7 @@ export interface ImageResult {
 }
 interface Recording { path: string; sessionId: string; guestState?: string }
 interface StoredImage { descriptor: ImageDescriptor; fileName?: string; recording: string; remote: string; approvedRoot: string; local: string }
-interface Operation { signal: AbortSignal; deadline: number; attemptBudget: { remaining: number } }
+interface Operation { signal: AbortSignal; deadline: number; attemptBudget: { remaining: number }; retryDelaysMs?: readonly number[] }
 export interface ImageStoreOptions {
   owner: string; enclosure: string; backend: unknown; catalogRoot: string;
   hostRoot: string; guestRoot: string; sessionId?: string; previousEvidence?: Recording[];
@@ -167,7 +168,7 @@ export class ImageStore {
     await publish(this.options.catalogRoot, join(this.options.catalogRoot, `${imageId}.json`), Buffer.from(canonical({ ...record, binding: this.binding })), options.signal);
     return record;
   }
-  private async metadata(relative: string, recording: Recording, options: Operation, extraPaths: string[] = []): Promise<any> {
+  private async metadata(relative: string, recording: Recording, options: Operation, extraPaths: string[] = [], hostOnly = false): Promise<any> {
     const cached = join(recording.path, 'host', 'image-evidence', relative);
     let local: any;
     for (const path of [...extraPaths, join(recording.path, 'state', relative), cached]) {
@@ -178,6 +179,7 @@ export class ImageStore {
       }
     }
     if (local !== undefined) return local;
+    if (hostOnly) return undefined;
     if (!recording.guestState) fail('capture-unknown', 'This recording has no available retained metadata or supported guest evidence location.');
     await this.options.ensureGuest(options.signal, options.deadline); guard(options.signal);
     const path = join(recording.path, 'host', 'image-metadata', randomUUID(), 'metadata.json');
@@ -235,7 +237,8 @@ export class ImageStore {
     if (matches.length > 1 || (matches.length === 1 && !sameSnapshot(matches[0], sn))) fail('integrity-failed', 'Saved reverse snapshot reference contradicts the capture.');
     return matches.length === 1;
   }
-  private async display(target: Extract<ImageTarget, { source: 'display' }>, options: Operation): Promise<StoredImage | ImageResult> {
+  /** The saved capture a display selector names, from the request and the receipt. With `hostOnly`, no guest I/O: undefined when the receipt is not on the host. */
+  private async displaySelection(target: Extract<ImageTarget, { source: 'display' }>, options: Operation, hostOnly = false): Promise<{ recording: Recording; request: any; sn: any } | ImageResult | undefined> {
     if (!safeId(target.sessionId) || !safeId(target.executionId) || !['before', 'after'].includes(target.phase)) fail('unauthorized-reference', 'Invalid display identity.');
     const recording = this.recordings.find(r => r.sessionId === target.sessionId);
     if (!recording) fail('unauthorized-reference', 'Recording does not belong to this enclosure.');
@@ -245,20 +248,30 @@ export class ImageStore {
     const group = request.snapshots?.group;
     const requested = !request.diagnostic && (target.phase === 'before' ? !group || group.phase === 'first' : !group || group.phase === 'last');
     if (!requested) return { status: 'not-requested', diagnostic: 'The declared snapshot plan does not capture this phase.' };
-    const receipt = await this.metadata(join('receiver', 'receipts', `${target.executionId}.json`), recording, options, [join(recording.path, 'host', 'receiver-receipts', `${target.executionId}.json`)]);
+    const receipt = await this.metadata(join('receiver', 'receipts', `${target.executionId}.json`), recording, options, [join(recording.path, 'host', 'receiver-receipts', `${target.executionId}.json`)], hostOnly);
+    if (receipt === undefined) return undefined;
     if (receipt?.executionId !== request.executionId) fail('integrity-failed', 'Receipt execution identity mismatch.');
     const evidence = receipt.imageEvidence;
     if (!evidence) return { status: 'capture-unknown', diagnostic: 'Recording predates saved-image descriptors; no input was replayed.' };
     try { validateImageEvidence(evidence, request); } catch { fail('integrity-failed', 'Saved image evidence does not match its request.'); }
     const matches = evidence.snapshots.filter((s: any) => s.phase === target.phase);
     if (!matches.length) return { status: evidence.status === 'capture-failed' ? 'capture-failed' : 'capture-unknown', diagnostic: 'No saved image is established for the requested phase.' };
-    const sn = matches[0];
+    return { recording, request, sn: matches[0] };
+  }
+  private displayDescriptor(sn: any): Omit<ImageDescriptor, 'imageId'> {
+    return { source: 'display', enclosure: this.options.enclosure, sessionId: sn.sessionId, executionId: sn.executionId, actionId: sn.actionId, ...(sn.stepId ? { stepId: sn.stepId } : {}), phase: sn.phase, capturedAt: sn.capturedAt, ...(sn.groupId ? { groupId: sn.groupId } : {}), sha256: sn.sha256, bytes: sn.bytes, mimeType: sn.mimeType };
+  }
+  private async display(target: Extract<ImageTarget, { source: 'display' }>, options: Operation): Promise<StoredImage | ImageResult> {
+    const selected = await this.displaySelection(target, options);
+    if (!selected || 'status' in selected) return selected ?? fail('capture-unknown', 'No saved receipt is available.');
+    const { recording, request, sn } = selected;
+    const group = request.snapshots?.group;
     let action: any;
     try { action = await this.metadata(join('records', 'action', `${sn.actionId}.json`), recording, options); }
     catch (error) { if ((error as { code?: string }).code === 'image-missing') fail('integrity-failed', 'Receipt cites a missing authoritative action.'); throw error; }
     if (!action || action.actionId !== sn.actionId || action.sessionId !== request.sessionId || action.executionId !== request.executionId || action.attemptId !== request.attemptId || action.groupId !== group?.groupId || action.stepId !== request.step?.id || (action.snapshotRole !== undefined && action.snapshotRole !== (group?.phase ?? 'single'))) fail('integrity-failed', 'Saved action identity does not corroborate the image.');
     if (!this.checkReferences(action.snapshots, sn)) await this.corroborateJournal(recording, request, sn, options);
-    const descriptor: Omit<ImageDescriptor, 'imageId'> = { source: 'display', enclosure: this.options.enclosure, sessionId: sn.sessionId, executionId: sn.executionId, actionId: sn.actionId, ...(sn.stepId ? { stepId: sn.stepId } : {}), phase: sn.phase, capturedAt: sn.capturedAt, ...(sn.groupId ? { groupId: sn.groupId } : {}), sha256: sn.sha256, bytes: sn.bytes, mimeType: sn.mimeType };
+    const descriptor = this.displayDescriptor(sn);
     const state = recording.guestState ?? join(this.options.guestRoot, 'state');
     return this.register(descriptor, recording.path, join(state, 'snapshots', recording.sessionId, sn.fileName), state, options, sn.fileName);
   }
@@ -286,12 +299,37 @@ export class ImageStore {
     await this.options.ensureGuest(options.signal, options.deadline); guard(options.signal);
     return this.options.transfer.pullImage(record.remote, record.local, record.approvedRoot, record.recording, record.descriptor, options);
   }
+  /**
+   * A run's after-image as `pending`: its identity from the request and the
+   * receipt on the host, with no guest I/O (docs/screenshot-delivery.md §10,
+   * AD-1). Without the receipt on the host it is `pending` with no identity.
+   */
+  async pending(target: Extract<ImageTarget, { source: 'display' }>): Promise<ImageResult> {
+    const deadline = Date.now() + imageCapability.deadlineMs;
+    const options: Operation = { signal: AbortSignal.timeout(imageCapability.deadlineMs), deadline, attemptBudget: { remaining: 0 } };
+    try {
+      const selected = await this.displaySelection(target, options, true);
+      if (!selected) return { status: 'pending', diagnostic: 'The receipt is not on the host yet; retrieve the image with its display selector.' };
+      if ('status' in selected) return selected;
+      const descriptor = this.displayDescriptor(selected.sn);
+      const imageId = this.identity(descriptor, selected.sn.fileName);
+      return { status: 'pending', image: { ...descriptor, imageId, originalPath: join(selected.recording.path, 'host', 'images', imageId, `original${extension(descriptor.mimeType)}`) } };
+    } catch (error) { return imageFailure(error); }
+  }
+  /** Retrieve and present one image: the `relay_image` delivery. */
   async get(target: ImageTarget, signal?: AbortSignal, requestedDeadline = Date.now() + imageCapability.deadlineMs): Promise<ImageResult> {
+    return this.deliver(target, true, signal, requestedDeadline);
+  }
+  /** A background download (AD-2): the same checks and verified original as `get`, without the preview. */
+  async download(target: ImageTarget, signal?: AbortSignal, options: { retryDelaysMs?: readonly number[] } = {}): Promise<ImageResult> {
+    return this.deliver(target, false, signal, Date.now() + imageCapability.deadlineMs, options.retryDelaysMs);
+  }
+  private async deliver(target: ImageTarget, present: boolean, signal: AbortSignal | undefined, requestedDeadline: number, retryDelaysMs?: readonly number[]): Promise<ImageResult> {
     const deadline = Math.min(requestedDeadline, Date.now() + imageCapability.deadlineMs);
     if (!Number.isFinite(deadline)) return imageFailure(new ImageError('transfer-failed', 'Invalid image deadline.'));
     if (Date.now() >= deadline) return imageFailure(new ImageError('transfer-failed', 'Image delivery deadline exceeded.'));
     const boundedSignal = AbortSignal.any([AbortSignal.timeout(Math.max(1, Math.ceil(deadline - Date.now()))), ...(signal ? [signal] : [])]);
-    const options: Operation = { signal: boundedSignal, deadline, attemptBudget: { remaining: imageCapability.transferAttempts } };
+    const options: Operation = { signal: boundedSignal, deadline, attemptBudget: { remaining: imageCapability.transferAttempts }, ...(retryDelaysMs ? { retryDelaysMs } : {}) };
     let record: StoredImage | undefined;
     try {
       return await bounded(async () => {
@@ -300,6 +338,12 @@ export class ImageStore {
         if ('status' in selected) return selected;
         record = selected;
         const bytes = await this.original(record, options); guard(boundedSignal);
+        if (!present) {
+          const image = { ...record.descriptor, originalPath: record.local };
+          await publish(record.recording, join(record.recording, 'host', 'images', record.descriptor.imageId, `delivery-${randomUUID()}.json`), Buffer.from(canonical({ image, at: new Date().toISOString(), status: 'downloaded' })), boundedSignal);
+          guard(boundedSignal);
+          return { status: 'downloaded' as const, image };
+        }
         const presentation = await bounded(() => prepareImage(bytes, record!.descriptor.mimeType), boundedSignal);
         const image = { ...record.descriptor, originalPath: record.local, ...(record.descriptor.source === 'application' ? { retrievedAt: new Date().toISOString() } : {}) };
         const receipt = { image, presentation: presentation.presentation, at: new Date().toISOString(), status: 'attached' };
@@ -308,6 +352,20 @@ export class ImageStore {
         return { status: 'attached' as const, image, ...presentation };
       }, boundedSignal);
     } catch (error) { return { ...imageFailure(error), ...(record ? { image: record.descriptor } : {}) }; }
+  }
+  /** Verified display originals this recording already holds on the host, by `sha256:bytes`; the finish's state pull copies them instead of pulling (AD-6). No guest I/O. */
+  async heldOriginals(recordingRoot: string): Promise<Map<string, string[]>> {
+    const held = new Map<string, string[]>();
+    if (!this.recordings.some(r => r.path === recordingRoot)) return held;
+    const names = await optional(() => readdir(this.options.catalogRoot)) ?? [];
+    for (const name of names.filter(n => n.endsWith('.json'))) {
+      // Reuse is an optimization: an entry that does not load is skipped here and reported by materializeDisplayOriginals.
+      const record = await this.load(name.slice(0, -5)).catch(() => undefined);
+      if (!record || record.recording !== recordingRoot || record.descriptor.source !== 'display') continue;
+      const key = `${record.descriptor.sha256}:${record.descriptor.bytes}`;
+      held.set(key, [...(held.get(key) ?? []), record.local]);
+    }
+    return held;
   }
   /** Call before merging incoming guest state. This method performs no guest I/O. */
   async materializeDisplayOriginals(recordingRoot: string): Promise<number> {

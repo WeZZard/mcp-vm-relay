@@ -18,10 +18,11 @@
 
 ## 3. Agent interaction
 
-- A normal `run` result includes its saved after-image whenever the snapshot plan captures that phase. The agent inspects that image before selecting further exploratory input when its application requires visual observation.
+- A normal `run` result names its saved after-image whenever the snapshot plan captures that phase, with `imageDelivery.status: "pending"` and the image identity, and returns without waiting for the image to reach the host (§10). The host downloads the image in the background.
+- An agent whose application requires visual observation calls `relay_image` with the returned `imageId` before it selects further exploratory input. That call waits only for that image's download, then attaches it.
 - A standalone event and a text group's last event can produce an after-image. A first or intermediate group event does not invent an after-image. Diagnostic execution remains explicitly without screenshot evidence.
-- Before-images remain retrievable for diagnosis. Default command results attach only the captured after-image to keep results bounded.
-- If inline delivery fails, the agent retrieves the same saved image. Recovery never repeats an input event, creates another capture, exports the consumer directory, or allocates another VM.
+- Before-images remain retrievable for diagnosis. Command results name only the captured after-image to keep results bounded.
+- If delivery fails, the agent retrieves the same saved image. Recovery never repeats an input event, creates another capture, exports the consumer directory, or allocates another VM.
 - An application screenshot is retrieved separately when the application requires inspection of that exact artifact. It never substitutes silently for a Relay display image.
 
 ```mermaid
@@ -34,9 +35,14 @@ sequenceDiagram
     Relay->>Guest: Submit operation and explicit snapshot plan
     Guest->>Guest: Capture, dispatch, and retain evidence
     Guest-->>Relay: Execution outcome and saved-image descriptors
-    Relay->>Guest: Retrieve the authorized saved after-image
-    Relay-->>Host: Return receipt text and typed image content
-    Host-->>Agent: Present image subject to host and model capabilities
+    Relay-->>Agent: Return the outcome and the pending image identity
+    Relay->>Guest: Download the authorized saved after-image in the background
+    opt The agent needs to see the screen
+        Agent->>Relay: Retrieve the image by its imageId
+        Relay->>Relay: Wait for that image's download
+        Relay-->>Host: Return receipt text and typed image content
+        Host-->>Agent: Present image subject to host and model capabilities
+    end
     opt Image is unavailable to the agent
         Agent->>Relay: Retrieve the same saved image reference
         Relay->>Relay: Check ownership and verified local cache
@@ -56,6 +62,7 @@ sequenceDiagram
 - Each image descriptor includes an opaque `imageId`, original `sha256`, `bytes`, and `mimeType`. It includes dimensions when decoded and an authorized host-local original path after materialization.
 - The result carries the image identity in visible text and structured details. Identity and recovery information remain outside truncatable command output.
 - The image appears in the final returned `content` array using Pi's typed image block. A progress update, metadata object, filesystem path, or base64 string in text is not sufficient.
+- A `run` result carries no display image block. Its `imageDelivery` has the status `pending` and the image identity; `relay_image` returns the image (§10). A target tool's own images in a `run` result are delivered inline as before.
 
 ```ts
 {
@@ -150,6 +157,7 @@ relay_image {"target":{"source":"reference","imageId":"<returned-image-reference
 | `transfer-failed` | Verified transfer exhausted its attempts or deadline. Recovery can retry only the same original. |
 | `presentation-unavailable` | The supported host path cannot decode or present the image. A path or encoded string is not visual success. |
 | `attached` | Relay included a typed image block in its final result. Provider acceptance and inspection remain unconfirmed. |
+| `pending` | Only in a `run` result: the after-image is captured and its identity is known, and the host downloads it in the background (§10). Retrieve it with `relay_image` to see it. |
 
 - Each inline image-delivery phase or retrieval call has a 90-second total deadline and a shared budget of three byte-transfer attempts, including metadata transfers and initial attempts. Metadata work, original transfer, and presentation share the deadline; the budget is not renewed for each metadata file. This deadline is separate from command execution and the agent-selected snapshot interval.
 - Cancellation and the deadline propagate through metadata reads and transfers. A late unverified result must not be published after cancellation or timeout.
@@ -176,3 +184,75 @@ relay_image {"target":{"source":"reference","imageId":"<returned-image-reference
 - Verify one consumer-directory export at normal finalization, preservation of earlier failed-finalization attempts, package integrity, and actual isolated-VM destruction.
 - Build and clean-install checks have passed for the worktree. Before deployment, identify the exact revision and bundle that the target session will load; changing source does not update an already-running installed session.
 - Report automated results, agentic inspection, human review, capture-path mismatches, and consumer archive verification separately. Do not use a live Discord run for acceptance or rewrite historical evidence.
+
+## 10. Background download of after-images
+
+The decisions are DC-1 to DC-7 in the [decision record](decisions.md#screenshot-delivery).
+
+### Problem
+
+- `run` used to deliver its after-image before it returned. The delivery pulled the guest's action record and the original, verified the hash, scaled a preview and wrote a delivery receipt.
+- In a 155-operation run on a 3840 × 2160 macOS display, the after-image delivery took a median of 5.5 s per operation and 860 s in total, half of the 1,713 s run. The consumer in that run discarded the attached image.
+- `finish` then pulled the whole guest `state` tree again, including every original the host already held. In the same run the tree held 931 files and 2.0 GB, and the finish took 10 minutes.
+
+### AD-1: the run result names the image without waiting for it
+
+- `run` returns as soon as the guest's receipt is filed (DC-1, DC-2). There is no option to wait.
+- The result's `imageDelivery` has the status `pending` and the image identity. The relay derives the identity from the receipt's saved-image descriptor on the host, with no guest I/O: `imageId`, `sessionId`, `executionId`, `actionId`, `stepId`, `phase`, `capturedAt`, `groupId`, `sha256`, `bytes`, `mimeType`, and `originalPath`.
+- `originalPath` is where the original will be. A caller must not read it until a `relay_image` call reports `attached`, or until the package is delivered.
+- When the host cannot derive the identity without the guest, the result is `pending` without an image identity. The display selector of §5.1 still retrieves the image.
+- `pending` is not an error. A failed later download does not change the run's result.
+
+```ts
+imageDelivery: {
+  status: "pending",
+  image: { imageId, source: "display", sessionId, executionId, actionId, stepId, phase: "after", capturedAt, sha256, bytes, mimeType, originalPath }
+}
+```
+
+### AD-2: one background download queue per enclosure
+
+- Each run whose snapshot plan captured an after-image queues one download for it. The queue carries only the after-image deliveries `run` used to make. Before-images, application images, a target tool's own images and the finish's state pull keep their design.
+- A download does what a retrieval does, without the preview: it checks the action record, registers the catalogue entry, pulls and verifies the original, and writes a delivery receipt with the status `downloaded`. The preview is made only when `relay_image` asks for the image.
+- One worker per enclosure runs the downloads in order (DC-4). It runs outside the manager's serialized section, so the next operation does not wait for it, and in the manager process, which holds the owner lock.
+- The queue is bounded at 64 downloads (DC-4). When it is over the bound, `run` waits for the oldest download to end before it returns. While the worker is paused (AD-4) the bound does not make a run wait.
+- Cancelling a `run` does not cancel its download. The download is evidence of input that was already sent.
+- Each download writes a record to `host/image-downloads/<executionId>-after.json` when it ends: its status, the image identity when known, and the times it was queued, started and ended.
+
+### AD-3: `relay_image` waits only for the image it names
+
+- When a reference or display selector names a queued download that has not started, the worker takes it next. When the download is in flight, `relay_image` waits for it. There is never a second transfer of the same original at the same time.
+- A `relay_image` call that names a queued download runs it next even while the worker is paused (AD-4), because the call itself asks for the guest. Without that, the call would wait out its deadline behind a paused worker.
+- After the wait, `relay_image` works as before: it finds the verified original on the host and makes the preview. When the download failed, `relay_image` makes its own attempt with a fresh budget, as in §8.
+- The 90-second deadline of the call counts from the call, and covers the wait. When the deadline passes during the wait, the result is `transfer-failed` with the image identity, and the download goes on in the background.
+
+### AD-4: retry stays inside one download
+
+- A download has a 90-second deadline from the moment the worker starts it, and three byte-transfer attempts.
+- It retries only eligible transient transfer failures, as in §8. Between attempts it waits 1 s, then 3 s (DC-5).
+- Lasting failures are not retried: authorization, unsafe-path, capture, unsupported-format and integrity failures.
+- A download that ends without the original is not queued again. Two later paths fetch it: `relay_image` with a fresh budget, and the finish's state pull (AD-6).
+- After a download fails with a transient failure, the worker pauses (DC-7). It resumes when the next relay operation reaches the guest and completes, or when a download that `relay_image` asked for succeeds. Without the pause, one network outage would spend the attempts of every queued download.
+- A download only copies the same original again. It never repeats input or takes another capture.
+- `relay_status` reports the downloads that are queued, in flight, downloaded, failed and cancelled, and whether the worker is paused. A download counts as ended only after its record is written.
+
+### AD-5: the gate before lifecycle operations and before the owner lock is released
+
+- The queue has three states: open, closing and closed. A run queues a download only while the queue is open.
+- `finish`, `release` and a recording reset close the queue at the start of their serialized section, before they touch the guest state (DC-3). Each one:
+  1. lifts the pause of AD-4, because the operation itself needs the guest;
+  2. waits until every queued download has ended, by success or by recorded failure;
+  3. while it waits, the first transient failure cancels the downloads that have not started (DC-7). Each cancelled download writes its record with the status `cancelled`, and so has ended. The state pull fetches those originals, so the wait does not grow with the queue while the guest is unreachable.
+- The queue opens again when the operation ends, whether it succeeded or failed. A failed finish keeps the VM, and further runs are allowed.
+- The wait is bounded: each download has its own deadline, and the queue holds at most 64 downloads. In the normal case the wait is the backlog at the end of the run.
+- `cleanup` closes the queue, aborts the download in flight, waits for it to stop, and then releases the owner lock. `pauseNow` aborts it without waiting, because the process exits right after. A closed queue writes nothing more: an aborted download does not publish, and its record is not written.
+- The queue lives in memory. Downloads lost with the process cost no evidence: the next manager's `finish` pulls what the host lacks, and `relay_image` retrieves on demand.
+
+### AD-6: the finish reuses originals the host already holds
+
+- The verified state pull (`pullVerified`) of `finish`, `release` and a recording reset takes host copies as a local source (DC-6). For each file in the guest scan it first tries a host file that should hold the same bytes:
+  - the same relative path under the recording's host `state` directory;
+  - any verified original under `host/images/` with the same hash and size. Identical screenshots therefore share one held original. A catalogue entry that does not load is skipped.
+- It copies a candidate into the attempt directory and checks its hash and size against the guest scan. It pulls from the guest only the files without a matching candidate. A candidate with a wrong hash is discarded, never used.
+- The scans before and after the pull, the inventory comparison and package delivery are unchanged, so `deliveryVerified` and `snapshots` mean what they meant before.
+
