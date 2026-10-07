@@ -42,12 +42,12 @@ test('the JSON schema names every action and carries the strict branches; symbol
   const schema = relayJsonSchema();
   assert.equal(schema.type, 'object');
   assert.deepEqual((schema.properties as any).action.enum, [...relayActions]);
-  assert.equal((schema.anyOf as unknown[]).length, 17); // fourteen actions, run in four kinds
+  assert.equal((schema.anyOf as unknown[]).length, 18); // fifteen actions, run in four kinds
   assert.equal(Object.getOwnPropertySymbols(schema).length, 0);
 });
 
-test('the seventeen action-backed relay_* tools each derive a plain-object schema with no action, no kind and no root combinator', () => {
-  assert.equal(relayTools.length, 17);
+test('the eighteen action-backed relay_* tools each derive a plain-object schema with no action, no kind and no root combinator', () => {
+  assert.equal(relayTools.length, 18);
   assert.deepEqual(relayTools.map(t => t.name), [...new Set(relayTools.map(t => t.name))], 'tool names are unique');
   for (const tool of relayTools) {
     assert.match(tool.name, /^relay_[a-z_]+$/);
@@ -67,7 +67,7 @@ test('the seventeen action-backed relay_* tools each derive a plain-object schem
   const runSchema = relayToolInputSchema(relayTools.find(t => t.name === 'relay_run')!);
   assert.deepEqual(runSchema.required, ['target', 'tool']);
   assert.deepEqual((runSchema.properties as any).target.enum, ['cua', 'playwright', 'chrome-devtools']);
-  assert.deepEqual(Object.keys(runSchema.properties as object).sort(), ['afterIntervalMs', 'args', 'expected', 'reason', 'target', 'timeoutMs', 'tool']);
+  assert.deepEqual(Object.keys(runSchema.properties as object).sort(), ['afterIntervalMs', 'args', 'expected', 'hold', 'reason', 'target', 'timeoutMs', 'tool']);
   for (const name of ['relay_exec', 'relay_script', 'relay_code']) {
     const required = relayToolInputSchema(relayTools.find(t => t.name === name)!).required as string[];
     assert.ok(!required.some(key => ['reason', 'step', 'snapshots'].includes(key)), `${name} no longer requires the evidence fields`);

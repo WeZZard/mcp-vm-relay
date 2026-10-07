@@ -56,10 +56,10 @@ async function fixture(t: { after(fn: () => Promise<unknown>): void }) {
   return { root, project, client };
 }
 
-test('over stdio the server offers exactly the eighteen tools, each with a title, annotations and a plain-object schema with no root combinator', async t => {
+test('over stdio the server offers exactly the nineteen tools, each with a title, annotations and a plain-object schema with no root combinator', async t => {
   const { client } = await fixture(t);
   const { tools } = await client.listTools();
-  assert.equal(tools.length, 18);
+  assert.equal(tools.length, 19);
   assert.deepEqual(tools.map(tool => tool.name).sort(), [...allToolNames].sort());
   for (const tool of tools) {
     assert.ok(tool.title && tool.title.length > 0, tool.name);
@@ -92,7 +92,7 @@ test('each run tool maps to its own kind in the derived schema, without a kind f
     assert.ok(!(tool.inputSchema.required ?? []).some(key => ['reason', 'step', 'snapshots'].includes(key)), `${name} requires no evidence field`);
   }
   const relayRun = tools.find(t2 => t2.name === 'relay_run')!;
-  assert.deepEqual(Object.keys(relayRun.inputSchema.properties as object).sort(), ['afterIntervalMs', 'args', 'expected', 'reason', 'target', 'timeoutMs', 'tool']);
+  assert.deepEqual(Object.keys(relayRun.inputSchema.properties as object).sort(), ['afterIntervalMs', 'args', 'expected', 'hold', 'reason', 'target', 'timeoutMs', 'tool']);
   assert.deepEqual(relayRun.inputSchema.required, ['target', 'tool']);
   const relayToolsTool = tools.find(t2 => t2.name === 'relay_tools')!;
   assert.deepEqual(relayToolsTool.inputSchema.required, ['target']);

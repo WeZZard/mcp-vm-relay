@@ -15,3 +15,11 @@ The design is [screenshot-delivery.md §10](screenshot-delivery.md#10-background
 | DC-5 | Retry backoff of 1 s, then 3 s, within a download's three attempts. | The person, on the agent's recommendation (2026-10-02). |
 | DC-6 | `relay_finish` reuses the screenshots the host already holds. | The person, on the agent's recommendation (2026-10-02). |
 | DC-7 | The worker pauses after a transient failure. When a lifecycle operation lifts the pause and the next download fails again, the operation cancels the rest of the queue and pulls those originals itself. | The person, on the agent's recommendation (2026-10-02). |
+
+## Held input
+
+The design is [relay-run.md, Held input](relay-run.md#held-input).
+
+| ID | Decision | Owner |
+|---|---|---|
+| DC-8 | `relay_run` can deliver a call and hold it in the guest until `relay_gate` releases it, so a caller's check runs while the call travels. A call not released is refused with nothing sent. The hold sits before the before-snapshot; the decision is a file in the guest, and the first writer wins; the limit defaults to 60 s, at most 300 s; a withheld call is not a VM failure. | The person (2026-10-04), for pi-secretary's guardian (its decision PS-D45). The placement, the file signal, the limits and the failure rule are the agent's defaults. |

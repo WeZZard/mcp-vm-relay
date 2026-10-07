@@ -4,7 +4,7 @@ The Model Context Protocol front end of the VM relay, packaged as a Claude Code
 plugin and as a pi package. [pi-vm-relay](https://github.com/WeZZard/pi-vm-relay),
 which gave pi a native `relay` tool directly, is retired; mcp-vm-relay replaces
 it for both Claude Code and pi, the latter loaded through `pi-mcp-adapter`. It
-is an MCP server: eighteen `relay_*` tools, each with its own schema, title
+is an MCP server: nineteen `relay_*` tools, each with its own schema, title
 and annotations, and the server's `instructions`. The user command, status,
 ships as one small command file per host (see "Commands"). There is no skill and no hook. Together they offer recorded,
 snapshot-evidenced **interruptive** computer-use and browser-use in a fresh,
@@ -43,7 +43,7 @@ adds nothing Claude-Code-specific beyond the marketplace packaging and the
 
 | In pi-vm-relay (retired, native pi extension) | Here (MCP server) |
 |---|---|
-| a registered `relay` tool with thirteen actions | eighteen `relay_*` MCP tools from the server `relay`, each with its own schema, title and annotations |
+| a registered `relay` tool with thirteen actions | nineteen `relay_*` MCP tools from the server `relay`, each with its own schema, title and annotations |
 | doctrine injected before each agent turn | the server's MCP `instructions`, plus a compact version in the `relay_probe` and `relay_acquire` descriptions for clients that do not surface `instructions` |
 | `/relay-status` command | `/mcp-vm-relay-status` in pi, `/mcp-vm-relay:status` in Claude Code; it asks the assistant to call `relay_status` |
 | prompt-composed enclosure | the `vm-relay-operator` agent definition (Claude Code only), limited to the relay's tools and read-only file tools |
@@ -68,7 +68,7 @@ Or add this repository as a marketplace and install the plugin from it:
 /plugin install mcp-vm-relay@mcp-vm-relay
 ```
 
-Once loaded, the model sees the eighteen tools as
+Once loaded, the model sees the nineteen tools as
 `mcp__plugin_mcp-vm-relay_relay__relay_search`,
 `mcp__plugin_mcp-vm-relay_relay__relay_probe`, and so on through
 `mcp__plugin_mcp-vm-relay_relay__relay_status` (see "The tools" below for

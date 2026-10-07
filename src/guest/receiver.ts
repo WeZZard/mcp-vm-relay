@@ -1,6 +1,6 @@
 import { spawn, execFile } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, open, readFile, rename, rm, stat, realpath } from "node:fs/promises";
+import { link, mkdir, open, readFile, rename, rm, stat, realpath, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { FramedRequest, FramedResponse } from "@wezzard/relay-driver-host-sdk";
@@ -19,6 +19,7 @@ export const MAX_OUTPUT_BYTES = 64 * 1024;
 const MAX_INTERVAL_MS = 300_000;
 const MAX_TIMEOUT_MS = 3_600_000;
 const MAX_SCRIPT_BYTES = 8 * 1024 * 1024;
+export const MAX_HOLD_MS = 300_000;
 
 export interface DispatchResult {
   exitStatus: { code: number | null; signal: string | null };
@@ -49,7 +50,10 @@ export type GuestResponse = FramedResponse & {
   stderr?: string;
   timedOut?: boolean;
   outputTruncated?: boolean;
+  /** A held request: the decision that ended the hold and how long the input waited. */
+  hold?: HoldDecision;
 };
+export interface HoldDecision { decision: string; waitedMs: number }
 interface GroupState {
   active?: { groupId: string; sessionId: string; attemptId: string };
   used: string[];
@@ -102,6 +106,8 @@ function validate(request: GuestRequest): void {
   if (request.kind !== "code" && (!Array.isArray(request.argv) || request.argv.length === 0 || request.argv.length > 256 || !request.argv.every((arg, index) => typeof arg === "string" && !arg.includes("\0") && (index > 0 || arg.length > 0)))) throw new Error("argv must be a nonempty string vector without NULs (maximum 256 entries)");
   if (request.kind !== "exec" && !["javascript", "typescript", "python"].includes(request.language ?? "")) throw new Error("script/code language is required");
   if (request.kind === "code" && (typeof request.code !== "string" || !/^[a-f0-9]{64}$/.test(request.codeSha256 ?? ""))) throw new Error("code and its SHA-256 are required");
+  if (request.hold !== undefined && (!request.hold || typeof request.hold !== "object" || !safeId(request.hold.id) || !Number.isInteger(request.hold.timeoutMs) || request.hold.timeoutMs < 1 || request.hold.timeoutMs > MAX_HOLD_MS)) throw new Error(`invalid hold: a safe id and timeoutMs from 1 to ${MAX_HOLD_MS} are required`);
+  if (request.hold !== undefined && request.diagnostic === true) throw new Error("a diagnostic request cannot be held");
   if (request.kind === "script" && (!text(request.remotePath) || !isAbsolute(request.remotePath) || !/^[a-f0-9]{64}$/.test(request.scriptSha256 ?? ""))) throw new Error("absolute remotePath and script SHA-256 are required");
 }
 
@@ -191,6 +197,40 @@ async function runArgv(argv: readonly string[], options: { cwd?: string; env: No
   });
 }
 
+/**
+ * Writes a hold's decision unless one is already there: the file appears whole
+ * through a hard link, so the first writer wins. The host's relay_gate writes
+ * the same way (src/manager.ts, DECIDE). Returns the decision that stands.
+ */
+export async function decideHold(dir: string, id: string, decision: string): Promise<string> {
+  await mkdir(dir, { recursive: true });
+  const path = join(dir, id), temporary = `${path}.${randomUUID()}.tmp`;
+  await writeFile(temporary, decision, { mode: 0o600 });
+  try { await link(temporary, path); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
+  finally { await rm(temporary, { force: true }); }
+  return (await readFile(path, "utf8")).trim();
+}
+
+/**
+ * Waits until the host decides a held request: `go` releases it; anything else
+ * withholds it. At the limit the receiver itself writes `expired`, unless the
+ * host's decision got there first, so a hold never ends without a decision.
+ */
+export async function awaitHold(dir: string, id: string, timeoutMs: number, options: { clock?: () => number; pause?: (ms: number) => Promise<void>; pollMs?: number } = {}): Promise<HoldDecision> {
+  const clock = options.clock ?? Date.now;
+  const pause = options.pause ?? ((ms: number) => new Promise<void>(done => setTimeout(done, ms)));
+  const started = clock(), path = join(dir, id);
+  for (;;) {
+    let decision: string | undefined;
+    try { decision = (await readFile(path, "utf8")).trim(); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+    if (!decision && clock() - started >= timeoutMs) decision = await decideHold(dir, id, "expired");
+    if (decision) return { decision, waitedMs: clock() - started };
+    await pause(options.pollMs ?? 20);
+  }
+}
+
 async function captureWithDriver(outFile: string, driver: string, dispatch: typeof runArgv = runArgv): Promise<void> {
   const result = await dispatch([driver, "call", "get_desktop_state", "--json", JSON.stringify({ screenshot_out_file: outFile })], { env: process.env, timeoutMs: 60_000 });
   if (result.exitStatus.code !== 0 || result.timedOut || result.outputTruncated || result.spawnError || result.terminationConfirmed !== true) throw new Error(`display capture unavailable: ${JSON.stringify({ exitStatus: result.exitStatus, timedOut: result.timedOut, outputTruncated: result.outputTruncated, spawnError: result.spawnError, terminationConfirmed: result.terminationConfirmed, terminationDiagnostic: result.terminationDiagnostic, stdout: result.stdout?.slice(0, 1500), stderr: result.stderr?.slice(0, 1500) })}`);
@@ -237,6 +277,7 @@ export async function receive(input: unknown, options: ReceiveOptions = {}): Pro
     return result;
   };
   let reconcileGroup: ((diagnostic: string) => Promise<void>) | undefined;
+  let hold: HoldDecision | undefined;
   let dispatchResult: DispatchResult | undefined;
   const output = (): Partial<GuestResponse> => dispatchResult ? { stdout: bounded(dispatchResult.stdout), stderr: bounded(dispatchResult.stderr), timedOut: !!dispatchResult.timedOut, outputTruncated: !!dispatchResult.outputTruncated, terminationConfirmed: dispatchResult.terminationConfirmed } : {};
   try {
@@ -313,7 +354,7 @@ export async function receive(input: unknown, options: ReceiveOptions = {}): Pro
       validateImageEvidence(candidate, request);
       imageEvidence = candidate;
       // Match receipt JSON exactly, including omission of unknown fields.
-      result = JSON.parse(JSON.stringify({ ...result, imageEvidence, evidenceMode, timeoutMs, ...output() })) as GuestResponse;
+      result = JSON.parse(JSON.stringify({ ...result, imageEvidence, evidenceMode, timeoutMs, ...output(), ...(hold ? { hold } : {}) })) as GuestResponse;
       if (result.outcome.kind !== "completed" || result.outcome.exitStatus.code !== 0) await reconcileGroup?.("operation failed or incomplete");
       await store!.putExecution({ executionId, ...ids, state: result.outcome.kind === "completed" ? "recorded" : result.outcome.kind, argv: request.argv, scriptId: request.scriptId, exitStatus: result.outcome.kind === "completed" ? result.outcome.exitStatus : undefined });
       await store!.appendJournal({ kind: "execution-completion", ...ids, executionId, state: result.outcome.kind === "completed" ? "recorded" : result.outcome.kind, response: result }, { durable: true });
@@ -361,6 +402,14 @@ export async function receive(input: unknown, options: ReceiveOptions = {}): Pro
         argv = [request.language === "python" ? "python3" : request.language === "typescript" ? "tsx" : process.execPath, path];
       }
     } catch (error) { return await refuse(message(error)); }
+    // A held request waits here, before its before snapshot and before any
+    // input, until the host releases it; otherwise it is refused, never sent.
+    if (request.hold) {
+      await store.appendJournal({ kind: "annotation", annotationType: "input-hold", ...ids, executionId, state: "pending", hold: request.hold }, { durable: true });
+      hold = await awaitHold(join(root, "holds"), request.hold.id, request.hold.timeoutMs);
+      await store.appendJournal({ kind: "annotation", annotationType: "input-hold-decided", ...ids, executionId, state: hold.decision === "go" ? "released" : "withheld", hold: { ...request.hold, ...hold } }, { durable: true });
+      if (hold.decision !== "go") return await refuse(`input held and not released (${hold.decision}); nothing was sent`);
+    }
     await store.appendJournal({ kind: "execution-start", ...ids, executionId, state: "admitted", argv, cwd: request.cwd, step: request.step, evidenceMode, timeoutMs, scriptIdentity: request.kind === "exec" ? undefined : { sha256: request.kind === "code" ? request.codeSha256 : request.scriptSha256, language: request.language, remotePath: argv.at(-1) } }, { durable: true });
     if (group?.phase === "first") {
       groups.active = { groupId: group.groupId, ...ids }; groups.used.push(group.groupId);

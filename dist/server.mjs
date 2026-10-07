@@ -20142,6 +20142,8 @@ var VmTransport = class {
   because = "";
   timeoutMs = 12e4;
   diagnostic = false;
+  /** The current run's hold: the guest waits for relay_gate before its before snapshot and any input. */
+  hold;
   /** The current run's cancellation: a cancelled dispatch stops waiting for the receiver and is reported as uncertain. */
   signal;
   response;
@@ -20149,7 +20151,7 @@ var VmTransport = class {
     if (!this.because.trim()) throw new Error("Run execution intent is required");
     if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,159}$/.test(request.executionId)) throw new Error("Invalid execution identity");
     this.response = void 0;
-    const payload = { ...request, because: this.because, timeoutMs: this.timeoutMs, ...this.diagnostic ? { diagnostic: true } : {} };
+    const payload = { ...request, because: this.because, timeoutMs: this.timeoutMs, ...this.diagnostic ? { diagnostic: true } : {}, ...this.hold ? { hold: this.hold } : {} };
     const local = join8(this.hostRoot, "requests", `${request.executionId}.json`);
     const remote = join8(this.guestRoot, "requests", `${request.executionId}.json`);
     await assertHostPath(this.hostRoot, local, true);
@@ -20168,7 +20170,7 @@ var VmTransport = class {
         INVOKE,
         join8(this.guestRoot, "receiver.mjs"),
         remote
-      ], this.timeoutMs + 18e4 + wait, { signal: this.signal });
+      ], this.timeoutMs + 18e4 + wait + (this.hold?.timeoutMs ?? 0), { signal: this.signal });
       if (result2.code !== 0) throw new Error(`Receiver exit ${result2.code}: ${result2.stderr.slice(0, 1e3)}`);
       const guestReceipt = join8(this.guestRoot, "state", "receiver", "receipts", `${request.executionId}.json`);
       const originalReceipt = join8(this.hostRoot, "receiver-receipts", `${request.executionId}.json`);
@@ -29895,11 +29897,13 @@ var RENEWAL_WINDOW_MS = 15 * 6e4;
 var MIN_RENEWAL_MS = 0.1 * 36e5;
 var RELAY_RUN_OUTPUTS = "relay-run";
 var MCP_START_ALLOWANCE_MS = 6e4;
+var DEFAULT_HOLD_MS = 6e4;
+var DECIDE = `const fs=require('fs'),p=require('path');const [dir,id,want]=process.argv.slice(1);fs.mkdirSync(dir,{recursive:true});const f=p.join(dir,id),t=f+'.'+process.pid+'.'+Date.now()+'.tmp';fs.writeFileSync(t,want,{mode:0o600});try{fs.linkSync(t,f)}catch(e){if(e.code!=='EEXIST')throw e}finally{fs.rmSync(t,{force:true})}console.log(fs.readFileSync(f,'utf8').trim());`;
 var MAX_TOOL_IMAGES = 4;
 var DOWNLOAD_BOUND = 64;
 var DOWNLOAD_RETRY_DELAYS_MS = [1e3, 3e3];
 var downloadKey = (target2) => `${target2.sessionId}/${target2.executionId}/${target2.phase}`;
-var instructions = "This server offers eighteen tools for one interruptive VM enclosure: relay_search, relay_probe, relay_acquisition_capabilities, relay_acquire, relay_stage, relay_run, relay_tools, the command tools relay_exec/relay_script/relay_code, relay_image, relay_extract, relay_finish, relay_release, relay_console_resolve, relay_console_open, relay_console_cancel and relay_status. relay_run sends the cua-driver, Playwright MCP or Chrome DevTools MCP tool calls you already know to that server inside the VM; evidence is automatic, and its after-image is returned as pending and downloaded in the background, so call relay_image with the imageId when you need to see it. Relay only interruptive computer-use or browser-use that would otherwise take over a real desktop or browser, judged for yourself from relay_probe facts; unknown is not idle, and non-disruptive or headless work stays with local tools. One task gets one enclosure: call relay_acquire once per task, never reused for a second task. Work an enclosure in order: relay_probe, then relay_acquire, then relay_stage, then relay_run or the command tools, then relay_image or relay_extract as needed, then relay_finish or relay_release. Always call relay_finish or relay_release explicitly before you return an answer; ending the session only pauses lease renewal, it does not destroy the VM, and the backend's own expiry is the last-resort safeguard. A refused, uncertain or nonzero operation keeps the VM so you can diagnose and submit a corrected operation; never replay input whose effect is uncertain. A tool result, an attached image or a verified evidence package, is evidence for a human reviewer, never the review itself. The relay never targets a physical or local display and offers no video or spawn API. Every tool's text result is capped at 50 KiB / 2000 lines; a larger result is retained whole in a local file the result names.";
+var instructions = "This server offers nineteen tools for one interruptive VM enclosure: relay_search, relay_probe, relay_acquisition_capabilities, relay_acquire, relay_stage, relay_run, relay_gate, relay_tools, the command tools relay_exec/relay_script/relay_code, relay_image, relay_extract, relay_finish, relay_release, relay_console_resolve, relay_console_open, relay_console_cancel and relay_status. relay_run sends the cua-driver, Playwright MCP or Chrome DevTools MCP tool calls you already know to that server inside the VM; evidence is automatic, and its after-image is returned as pending and downloaded in the background, so call relay_image with the imageId when you need to see it. Relay only interruptive computer-use or browser-use that would otherwise take over a real desktop or browser, judged for yourself from relay_probe facts; unknown is not idle, and non-disruptive or headless work stays with local tools. One task gets one enclosure: call relay_acquire once per task, never reused for a second task. Work an enclosure in order: relay_probe, then relay_acquire, then relay_stage, then relay_run or the command tools, then relay_image or relay_extract as needed, then relay_finish or relay_release. Always call relay_finish or relay_release explicitly before you return an answer; ending the session only pauses lease renewal, it does not destroy the VM, and the backend's own expiry is the last-resort safeguard. A refused, uncertain or nonzero operation keeps the VM so you can diagnose and submit a corrected operation; never replay input whose effect is uncertain. A tool result, an attached image or a verified evidence package, is evidence for a human reviewer, never the review itself. The relay never targets a physical or local display and offers no video or spawn API. Every tool's text result is capped at 50 KiB / 2000 lines; a larger result is retained whole in a local file the result names.";
 var NO_OWNED_LEASE = "This session owns no lease, so nothing was released. Each server process has its own session identity (a new random one unless MCP_VM_RELAY_SESSION sets it); a lease acquired under another identity is not visible here. Restart the server with that MCP_VM_RELAY_SESSION to reconcile and release it, or let the backend TTL expire it.";
 var RelayManager = class {
   constructor(options2) {
@@ -29940,6 +29944,8 @@ var RelayManager = class {
   shuttingDown = false;
   /** After-image downloads, outside the serialized section (docs/screenshot-delivery.md §10). */
   downloads;
+  /** Holds named by relay_run, and the decision each ended with once its receipt is in (docs/relay-run.md, Held input). */
+  holds = /* @__PURE__ */ new Map();
   serialized(fn) {
     const next = this.queue.then(fn, fn);
     this.queue = next.catch(() => {
@@ -30420,6 +30426,11 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
     }));
   }
   run(input, signal) {
+    const hold2 = input.kind === "mcp" ? input.hold : void 0;
+    if (hold2) {
+      if (this.holds.has(hold2.id)) return Promise.reject(new Error(`Hold ${hold2.id} was already used; name each hold once`));
+      this.holds.set(hold2.id, {});
+    }
     return this.serialized(() => {
       if (input.because !== void 0) this.reason(input.because);
       return this.guarded(signal, async () => {
@@ -30444,6 +30455,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
         this.transport.because = record3.because;
         this.transport.timeoutMs = input.kind === "mcp" ? callTimeoutMs + MCP_START_ALLOWANCE_MS + 15e3 : timeoutMs2;
         this.transport.diagnostic = false;
+        this.transport.hold = hold2 ? { id: hold2.id, timeoutMs: hold2.timeoutMs ?? DEFAULT_HOLD_MS } : void 0;
         this.transport.signal = signal;
         const options2 = { step: record3.step, snapshots: record3.snapshots, cwd: join14(e.guestRoot, "workspace") };
         let result2;
@@ -30460,7 +30472,10 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
           result2 = await this.session.runCode(input.code, input.language, options2);
         } else throw new Error("Unknown operation kind");
         const outcome = result2.outcome;
-        if (outcome.kind !== "completed" || outcome.exitStatus.code !== 0 || outcome.exitStatus.signal) {
+        const held = hold2 ? this.transport.response?.hold : void 0;
+        if (hold2 && held) this.holds.set(hold2.id, { decided: held.decision });
+        if (held && held.decision !== "go") await this.log("hold-withheld", record3.because, { hold: hold2.id, ...held, outcome });
+        else if (outcome.kind !== "completed" || outcome.exitStatus.code !== 0 || outcome.exitStatus.signal) {
           await this.log("execution-failed", record3.because, result2);
           await this.fail(new Error(`Execution ${result2.executionId}: ${JSON.stringify(outcome)}`));
         }
@@ -30469,10 +30484,28 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
         const imageDelivery = await store.pending(target2);
         if (imageDelivery.status === "pending") await this.queueDownload(store, target2, imageDelivery.image);
         const common2 = { step: record3.step, snapshots: record3.snapshots, timeoutMs: timeoutMs2, evidencePath: e.hostRoot, leaseReleased: !this.enclosure, owned: this.status(), imageDelivery };
-        if (input.kind === "mcp") return { ...result2, ...await this.mcpResult(e, input.target, input.tool, outcome, signal), ...common2 };
+        if (input.kind === "mcp") return { ...result2, ...await this.mcpResult(e, input.target, input.tool, outcome, signal), ...common2, ...held ? { hold: { id: hold2.id, ...held } } : {} };
         return { ...result2, ...this.transport?.response, ...common2 };
       });
     });
+  }
+  /**
+   * Decides a held relay_run call: `go` lets the guest send it, `cancel`
+   * refuses it. Not serialized, since the held run occupies the queue. The
+   * first decision written wins, the guest's own `expired` included; the
+   * result says which one stands.
+   */
+  async gate(id2, decision, signal) {
+    const known2 = this.holds.get(id2);
+    if (!known2) throw new Error(`No relay_run in this session named hold ${id2}`);
+    if (known2.decided) return { hold: id2, requested: decision, decision: known2.decided, applied: known2.decided === decision };
+    const e = this.current();
+    if (!e.node) throw new Error("Stage runtime first");
+    const result2 = await this.channel.exec(e.lease.vm, [e.node, "-e", DECIDE, join14(e.guestRoot, "holds"), id2, decision], 3e4, { signal });
+    const stands = result2.code === 0 ? result2.stdout.trim().split("\n").at(-1)?.trim() : void 0;
+    await this.log("hold-gate", void 0, { hold: id2, requested: decision, decision: stands, code: result2.code });
+    if (!stands) throw new Error(`relay_gate could not write hold ${id2} (exit ${result2.code}): ${result2.stdout.slice(0, 1e3)}`);
+    return { hold: id2, requested: decision, decision: stands, applied: stands === decision };
   }
   /**
    * The step record for a run, from the call itself: a title such as
@@ -31115,6 +31148,10 @@ var imageTarget = typebox_exports.Union([
   typebox_exports.Object({ source: typebox_exports.Literal("application"), name: typebox_exports.String({ minLength: 1, maxLength: 101 }), path: typebox_exports.Optional(typebox_exports.String({ minLength: 1, maxLength: 4096 })) }, closed2),
   typebox_exports.Object({ source: typebox_exports.Literal("reference"), imageId: typebox_exports.String({ pattern: "^image-[a-f0-9]{64}$" }) }, closed2)
 ]);
+var hold = typebox_exports.Object({
+  id: typebox_exports.String({ pattern: "^[A-Za-z0-9][A-Za-z0-9_.-]{0,119}$", description: "A new identity for this hold, named again in relay_gate." }),
+  timeoutMs: typebox_exports.Optional(typebox_exports.Integer({ minimum: 1, maximum: 3e5, description: "How long the guest waits for relay_gate, default 60000. When it passes, the call is refused and nothing is sent." }))
+}, { ...closed2, description: "Optional. Deliver the call but hold it in the guest, before its before-snapshot and any input, until relay_gate decides it: go sends it, anything else refuses it." });
 var argv = typebox_exports.Array(typebox_exports.String(), { minItems: 1, maxItems: 256 });
 var language = StringEnum(["javascript", "typescript", "python"]);
 var timeoutMs = typebox_exports.Optional(typebox_exports.Integer({ minimum: 1, maximum: 36e5, description: "Execution timeout in milliseconds, default 120000, maximum 3600000. Independent of snapshot delay and lease TTL." }));
@@ -31158,8 +31195,10 @@ var relayContract = typebox_exports.Union([
     reason: optionalReason,
     expected: typebox_exports.Optional(typebox_exports.String({ minLength: 1, maxLength: 4e3, description: "Optional expected result for the step record." })),
     afterIntervalMs: typebox_exports.Optional(interval),
-    timeoutMs
+    timeoutMs,
+    hold: typebox_exports.Optional(hold)
   }, closed2),
+  typebox_exports.Object({ action: typebox_exports.Literal("gate"), hold: id, decision: StringEnum(["go", "cancel"], { description: "go sends the held call; cancel refuses it with nothing sent." }) }, closed2),
   typebox_exports.Object({ action: typebox_exports.Literal("tools"), target, tool: typebox_exports.Optional(typebox_exports.String({ minLength: 1, maxLength: 200, description: "Optional: return only this tool." })) }, closed2),
   typebox_exports.Object({ action: typebox_exports.Literal("image"), target: imageTarget }, closed2),
   typebox_exports.Object({ action: typebox_exports.Literal("extract"), names: typebox_exports.Array(typebox_exports.String()) }, closed2),
@@ -31175,7 +31214,7 @@ for (const branch of relayContract.anyOf) {
   }
 }
 var parameterObject = typebox_exports.Object({
-  action: StringEnum(["search", "probe", "acquire", "stage", "run", "tools", "image", "extract", "finish", "release", "acquisition-capabilities", "console-resolve", "console-open", "console-cancel"]),
+  action: StringEnum(["search", "probe", "acquire", "stage", "run", "gate", "tools", "image", "extract", "finish", "release", "acquisition-capabilities", "console-resolve", "console-open", "console-cancel"]),
   ...projected
 }, { ...closed2, anyOf: relayContract.anyOf, description: "Select exactly one action. Each closed branch defines allowed fields. Run selects a kind; console-open requires reason, expected and userRequested=true. No default action." });
 var relayParameters = typebox_exports.Unsafe(parameterObject);
@@ -31273,7 +31312,14 @@ var relayTools = [
     kind: "mcp",
     title: "Run an MCP tool call in the VM",
     annotations: acts(true),
-    description: "Send one tool call to an MCP server inside the VM. `target` is `cua` (cua-driver), `playwright` (Playwright MCP) or `chrome-devtools` (Chrome DevTools MCP); `tool` and `args` are that server's own tool name and arguments, forwarded unchanged. Use relay_tools to see a target's exact tools. Evidence is automatic: snapshots before and after, and a step record; `reason`, `expected` and `afterIntervalMs` are optional overrides. The result names the after-snapshot as `pending` with its `imageId` and does not wait for it: the image downloads in the background, relay_image with that `imageId` shows it, and relay_finish and relay_release wait for the downloads. Images the target tool itself returns stay inline. Never replay an uncertain call."
+    description: "Send one tool call to an MCP server inside the VM. `target` is `cua` (cua-driver), `playwright` (Playwright MCP) or `chrome-devtools` (Chrome DevTools MCP); `tool` and `args` are that server's own tool name and arguments, forwarded unchanged. Use relay_tools to see a target's exact tools. Evidence is automatic: snapshots before and after, and a step record; `reason`, `expected` and `afterIntervalMs` are optional overrides. The result names the after-snapshot as `pending` with its `imageId` and does not wait for it: the image downloads in the background, relay_image with that `imageId` shows it, and relay_finish and relay_release wait for the downloads. Images the target tool itself returns stay inline. Never replay an uncertain call. With `hold`, the call is delivered but waits in the guest, before its before-snapshot and any input, until relay_gate decides it; a call not released is refused with nothing sent, and the result's `hold` says which decision ended it."
+  },
+  {
+    name: "relay_gate",
+    action: "gate",
+    title: "Release or cancel a held call",
+    annotations: acts(false),
+    description: "Decide a relay_run call made with `hold`, while that call is still waiting for its answer: `go` lets its input be sent; `cancel` refuses it with nothing sent. The first decision wins, including the guest's own `expired` when the hold's limit passes, and the result's `decision` and `applied` say which decision stands. Send relay_run first; this tool does not wait for the queue."
   },
   {
     name: "relay_tools",
@@ -31411,6 +31457,9 @@ async function relayCall(host, raw, options2 = {}) {
       const rendered = await renderRelayResult(execution);
       return { ...rendered, isError: failed };
     }
+    case "gate":
+      value = await manager.gate(raw.hold, raw.decision, signal);
+      break;
     case "tools": {
       const listed = await manager.tools(raw.target, raw.tool, signal);
       return { ...await renderRelayResult(listed, void 0, void 0), isError: false };

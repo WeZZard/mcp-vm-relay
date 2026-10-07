@@ -945,6 +945,39 @@ test('relay_run forwards unchanged tool calls through the receiver and the guest
   await f.assertClean();
 });
 
+test('relay_run with a hold is delivered and waits; relay_gate go sends it, cancel refuses it with nothing sent', { timeout: 60000 }, async t => {
+  const f = await fixture(t);
+  const call = (raw: unknown) => relayCall(f.manager, raw);
+  const acquired = await f.manager.acquire(acquireInput()); await f.stage();
+  // Released while it waits in the guest: the call completes and says how it was decided.
+  const held = call({ action: 'run', kind: 'mcp', target: 'playwright', tool: 'increment', args: { by: 2 }, hold: { id: 'h-go', timeoutMs: 20000 } });
+  await until(() => f.service.receiverCalls === 1, 'the held run to reach the guest');
+  assert.deepEqual(await f.mcpCalls(), [], 'nothing is sent while held');
+  const gate = relayJson((await call({ action: 'gate', hold: 'h-go', decision: 'go' })).text);
+  assert.deepEqual(gate, { hold: 'h-go', requested: 'go', decision: 'go', applied: true });
+  const released = await held;
+  assert.equal(released.isError, false, released.text);
+  assert.match((released.content![0] as { text: string }).text, /^count=2 /);
+  assert.equal(relayJson(released.text).hold.decision, 'go');
+  // Cancelled: refused, with no MCP call, and the VM is not marked failed.
+  const cancelled = call({ action: 'run', kind: 'mcp', target: 'playwright', tool: 'increment', hold: { id: 'h-cancel' } });
+  await until(() => f.service.receiverCalls === 2, 'the second held run to reach the guest');
+  assert.equal(relayJson((await call({ action: 'gate', hold: 'h-cancel', decision: 'cancel' })).text).applied, true);
+  const refused = await cancelled;
+  assert.equal(refused.isError, true);
+  const body = relayJson(refused.text);
+  assert.equal(body.outcome.kind, 'refused'); assert.match(body.outcome.diagnostic, /not released \(cancel\); nothing was sent/);
+  assert.equal(body.hold.decision, 'cancel');
+  assert.equal(f.manager.status().lastError, undefined, 'a withheld call is not a failure of the VM');
+  assert.deepEqual((await f.mcpCalls()).map(entry => entry.tool), ['increment']);
+  // A decided hold answers from its receipt; a hold is named once; an unknown hold is an error.
+  assert.deepEqual(relayJson((await call({ action: 'gate', hold: 'h-cancel', decision: 'go' })).text), { hold: 'h-cancel', requested: 'go', decision: 'cancel', applied: false });
+  await assert.rejects(f.manager.run({ kind: 'mcp', target: 'playwright', tool: 'increment', hold: { id: 'h-go' } }), /already used/);
+  await assert.rejects(call({ action: 'gate', hold: 'h-none', decision: 'go' }), /No relay_run in this session named hold h-none/);
+  await f.assertRetained(acquired.vm);
+  await f.manager.release(); await f.assertClean();
+});
+
 test('relay_run: a server crash mid-call is uncertain, keeps the VM and is never replayed', { timeout: 60000 }, async t => {
   const f = await fixture(t);
   const acquired = await f.manager.acquire(acquireInput()); await f.stage();

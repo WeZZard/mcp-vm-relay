@@ -58,7 +58,11 @@ export const relayTools: readonly RelayTool[] = [
   },
   {
     name: 'relay_run', action: 'run', kind: 'mcp', title: 'Run an MCP tool call in the VM', annotations: acts(true),
-    description: 'Send one tool call to an MCP server inside the VM. `target` is `cua` (cua-driver), `playwright` (Playwright MCP) or `chrome-devtools` (Chrome DevTools MCP); `tool` and `args` are that server\'s own tool name and arguments, forwarded unchanged. Use relay_tools to see a target\'s exact tools. Evidence is automatic: snapshots before and after, and a step record; `reason`, `expected` and `afterIntervalMs` are optional overrides. The result names the after-snapshot as `pending` with its `imageId` and does not wait for it: the image downloads in the background, relay_image with that `imageId` shows it, and relay_finish and relay_release wait for the downloads. Images the target tool itself returns stay inline. Never replay an uncertain call.',
+    description: 'Send one tool call to an MCP server inside the VM. `target` is `cua` (cua-driver), `playwright` (Playwright MCP) or `chrome-devtools` (Chrome DevTools MCP); `tool` and `args` are that server\'s own tool name and arguments, forwarded unchanged. Use relay_tools to see a target\'s exact tools. Evidence is automatic: snapshots before and after, and a step record; `reason`, `expected` and `afterIntervalMs` are optional overrides. The result names the after-snapshot as `pending` with its `imageId` and does not wait for it: the image downloads in the background, relay_image with that `imageId` shows it, and relay_finish and relay_release wait for the downloads. Images the target tool itself returns stay inline. Never replay an uncertain call. With `hold`, the call is delivered but waits in the guest, before its before-snapshot and any input, until relay_gate decides it; a call not released is refused with nothing sent, and the result\'s `hold` says which decision ended it.',
+  },
+  {
+    name: 'relay_gate', action: 'gate', title: 'Release or cancel a held call', annotations: acts(false),
+    description: 'Decide a relay_run call made with `hold`, while that call is still waiting for its answer: `go` lets its input be sent; `cancel` refuses it with nothing sent. The first decision wins, including the guest\'s own `expired` when the hold\'s limit passes, and the result\'s `decision` and `applied` say which decision stands. Send relay_run first; this tool does not wait for the queue.',
   },
   {
     name: 'relay_tools', action: 'tools', title: 'List a target\'s tools', annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
@@ -193,6 +197,7 @@ export async function relayCall(host: RelayManager | (() => RelayManager), raw: 
       const rendered = await renderRelayResult(execution);
       return { ...rendered, isError: failed };
     }
+    case 'gate': value = await manager.gate(raw.hold, raw.decision, signal); break;
     case 'tools': {
       // Compact JSON keeps a long tool list within the text bound; a larger one is kept whole in a file the result names.
       const listed = await manager.tools(raw.target, raw.tool, signal);

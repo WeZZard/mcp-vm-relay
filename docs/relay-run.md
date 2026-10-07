@@ -128,6 +128,7 @@ call.
 | What happened | Receiver outcome | `relayOutcome` | Result |
 |---|---|---|---|
 | The host refused (unknown tool, schema mismatch, arguments over 64 KiB) | none: nothing was sent | `refused` | error; no snapshot |
+| A held call was cancelled or its hold expired | `refused` | `refused` | error; no snapshot; no `lastError` |
 | The guest never sent it: no host, host busy, server failed to start, server had already exited, guest schema check | `refused` | `refused` | error; snapshots kept |
 | cua-driver's structured `desktop_escalation_required` | `refused` | `refused` | error |
 | The server answered | `completed`, exit 0 | `completed` | success |
@@ -162,6 +163,43 @@ The MCP content of a relay result comes in this order:
    `relay-run` extraction under the usual image bounds, and retrievable later
    with `relay_image`.
 4. The relay's after-snapshot.
+
+## Held input
+
+A caller that must still decide whether a call may go can deliver it first
+and decide while it travels. `relay_run` with `hold: {id, timeoutMs?}`
+delivers the call to the guest receiver, which waits before its
+before-snapshot and before any input. `relay_gate {hold, decision}` decides
+it while the `relay_run` call is still waiting for its answer.
+
+```
+relay_run {target, tool, args, hold: {id}}      relay_gate {hold: id, decision}
+  host: register the hold, then queue the run     host: not queued; one guest exec
+  guest receiver: validate, routing journal,        writes <guestRoot>/holds/<id>
+    input-hold journal entry, wait for the file
+    go:   before-snapshot, dispatch, after-snapshot as usual
+    else: refused, with no snapshot and no input
+```
+
+- The decision is a file, `<guestRoot>/holds/<id>`, written whole through a
+  hard link, so the first writer wins. The receiver polls it about every
+  20 ms.
+- At the hold's limit, 60 s unless `timeoutMs` (at most 300 s) says
+  otherwise, the receiver writes `expired` itself. A late `go` then finds
+  `expired` in place, and the call is refused.
+- `relay_gate` answers with the decision that stands and whether its own
+  decision applied. Once the held run's receipt is in, it answers from the
+  receipt and does not reach the guest.
+- A hold id is used once per relay session. `relay_gate` on an id that no
+  `relay_run` named is an error.
+- The result of a held run carries `hold: {id, decision, waitedMs}`. A call
+  not released is `refused` with "nothing was sent". It leaves a
+  `hold-withheld` host event and does not record `lastError`, since the
+  caller withheld it and the VM did not fail.
+- The receiver's dispatch bound grows by the hold's limit.
+- The journal records `input-hold` before the wait and `input-hold-decided`
+  after it, with the decision and the wait.
+- Only `relay_run` can be held. A command tool cannot.
 
 ## Default waits
 

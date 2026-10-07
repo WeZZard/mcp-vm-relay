@@ -37,7 +37,7 @@ export interface StageInput { resetRecording?: boolean; workspace?: string; file
  * `target`, `tool` and `args` name one tool call on an in-guest MCP server;
  * `expected` and `afterIntervalMs` are its record overrides.
  */
-export interface RunInput { because?: string; timeoutMs?: number; diagnostic?: boolean; kind: 'exec' | 'script' | 'code' | 'mcp'; step?: Partial<StepDescription>; snapshots?: SnapshotsRequest; argv?: string[]; localPath?: string; language?: 'javascript' | 'typescript' | 'python'; code?: string; target?: Target; tool?: string; args?: Record<string, unknown>; expected?: string; afterIntervalMs?: number }
+export interface RunInput { because?: string; timeoutMs?: number; diagnostic?: boolean; kind: 'exec' | 'script' | 'code' | 'mcp'; step?: Partial<StepDescription>; snapshots?: SnapshotsRequest; argv?: string[]; localPath?: string; language?: 'javascript' | 'typescript' | 'python'; code?: string; target?: Target; tool?: string; args?: Record<string, unknown>; expected?: string; afterIntervalMs?: number; hold?: { id: string; timeoutMs?: number } }
 interface BackendBinding { endpoint: string; tartHome: string; environmentFingerprint?: string }
 interface Enclosure {
   backend?: BackendBinding;
@@ -98,6 +98,14 @@ const MIN_RENEWAL_MS = 0.1 * 3600000;
 export const RELAY_RUN_OUTPUTS = 'relay-run';
 /** How long the guest MCP host may take to start a target server, on top of a call's own timeout. */
 export const MCP_START_ALLOWANCE_MS = 60000;
+/** How long a held relay_run waits for relay_gate when the call names no limit. */
+export const DEFAULT_HOLD_MS = 60000;
+/**
+ * relay_gate's guest side: write the decision whole through a hard link, so
+ * the first writer wins, then print the decision that stands. The receiver
+ * writes its own `expired` the same way (src/guest/receiver.ts, decideHold).
+ */
+const DECIDE = `const fs=require('fs'),p=require('path');const [dir,id,want]=process.argv.slice(1);fs.mkdirSync(dir,{recursive:true});const f=p.join(dir,id),t=f+'.'+process.pid+'.'+Date.now()+'.tmp';fs.writeFileSync(t,want,{mode:0o600});try{fs.linkSync(t,f)}catch(e){if(e.code!=='EEXIST')throw e}finally{fs.rmSync(t,{force:true})}console.log(fs.readFileSync(f,'utf8').trim());`;
 /** At most this many of a call's own images are delivered inline; the rest stay retrievable with relay_image. */
 export const MAX_TOOL_IMAGES = 4;
 /** Background after-image downloads a run may leave queued before it waits for the oldest (DC-4). */
@@ -107,13 +115,13 @@ export const DOWNLOAD_RETRY_DELAYS_MS = [1000, 3000] as const;
 type DisplayTarget = Extract<ImageTarget, { source: 'display' }>;
 const downloadKey = (target: DisplayTarget) => `${target.sessionId}/${target.executionId}/${target.phase}`;
 /**
- * The server's MCP `instructions`: the rules that cut across all eighteen
+ * The server's MCP `instructions`: the rules that cut across all nineteen
  * tools rather than belonging to one of them (see each tool's own
  * description for its specific contract). A compact version of the same
  * rules also lives in the `relay_probe` and `relay_acquire` descriptions,
  * because not every MCP client surfaces server instructions to the model.
  */
-export const instructions = 'This server offers eighteen tools for one interruptive VM enclosure: relay_search, relay_probe, relay_acquisition_capabilities, relay_acquire, relay_stage, relay_run, relay_tools, the command tools relay_exec/relay_script/relay_code, relay_image, relay_extract, relay_finish, relay_release, relay_console_resolve, relay_console_open, relay_console_cancel and relay_status. relay_run sends the cua-driver, Playwright MCP or Chrome DevTools MCP tool calls you already know to that server inside the VM; evidence is automatic, and its after-image is returned as pending and downloaded in the background, so call relay_image with the imageId when you need to see it. Relay only interruptive computer-use or browser-use that would otherwise take over a real desktop or browser, judged for yourself from relay_probe facts; unknown is not idle, and non-disruptive or headless work stays with local tools. One task gets one enclosure: call relay_acquire once per task, never reused for a second task. Work an enclosure in order: relay_probe, then relay_acquire, then relay_stage, then relay_run or the command tools, then relay_image or relay_extract as needed, then relay_finish or relay_release. Always call relay_finish or relay_release explicitly before you return an answer; ending the session only pauses lease renewal, it does not destroy the VM, and the backend\'s own expiry is the last-resort safeguard. A refused, uncertain or nonzero operation keeps the VM so you can diagnose and submit a corrected operation; never replay input whose effect is uncertain. A tool result, an attached image or a verified evidence package, is evidence for a human reviewer, never the review itself. The relay never targets a physical or local display and offers no video or spawn API. Every tool\'s text result is capped at 50 KiB / 2000 lines; a larger result is retained whole in a local file the result names.';
+export const instructions = 'This server offers nineteen tools for one interruptive VM enclosure: relay_search, relay_probe, relay_acquisition_capabilities, relay_acquire, relay_stage, relay_run, relay_gate, relay_tools, the command tools relay_exec/relay_script/relay_code, relay_image, relay_extract, relay_finish, relay_release, relay_console_resolve, relay_console_open, relay_console_cancel and relay_status. relay_run sends the cua-driver, Playwright MCP or Chrome DevTools MCP tool calls you already know to that server inside the VM; evidence is automatic, and its after-image is returned as pending and downloaded in the background, so call relay_image with the imageId when you need to see it. Relay only interruptive computer-use or browser-use that would otherwise take over a real desktop or browser, judged for yourself from relay_probe facts; unknown is not idle, and non-disruptive or headless work stays with local tools. One task gets one enclosure: call relay_acquire once per task, never reused for a second task. Work an enclosure in order: relay_probe, then relay_acquire, then relay_stage, then relay_run or the command tools, then relay_image or relay_extract as needed, then relay_finish or relay_release. Always call relay_finish or relay_release explicitly before you return an answer; ending the session only pauses lease renewal, it does not destroy the VM, and the backend\'s own expiry is the last-resort safeguard. A refused, uncertain or nonzero operation keeps the VM so you can diagnose and submit a corrected operation; never replay input whose effect is uncertain. A tool result, an attached image or a verified evidence package, is evidence for a human reviewer, never the review itself. The relay never targets a physical or local display and offers no video or spawn API. Every tool\'s text result is capped at 50 KiB / 2000 lines; a larger result is retained whole in a local file the result names.';
 
 /** relay_release's diagnostic when this session owns no lease. */
 export const NO_OWNED_LEASE = 'This session owns no lease, so nothing was released. Each server process has its own session identity (a new random one unless MCP_VM_RELAY_SESSION sets it); a lease acquired under another identity is not visible here. Restart the server with that MCP_VM_RELAY_SESSION to reconcile and release it, or let the backend TTL expire it.';
@@ -138,6 +146,8 @@ export class RelayManager {
   private shuttingDown = false;
   /** After-image downloads, outside the serialized section (docs/screenshot-delivery.md §10). */
   private readonly downloads: DownloadQueue;
+  /** Holds named by relay_run, and the decision each ended with once its receipt is in (docs/relay-run.md, Held input). */
+  private readonly holds = new Map<string, { decided?: string }>();
   constructor(readonly options: ManagerOptions) {
     this.environment = options.environment ?? selectedEnvironment();
     this.tartHome = this.environment?.profile.tartHome ?? canonicalPath(options.tartHome ?? process.env.TART_HOME ?? join(process.env.HOME ?? homedir(), '.tart'));
@@ -510,7 +520,14 @@ export class RelayManager {
     e.sessionId = this.session.sessionId; e.staged = true; await this.save();
     return { staged: true, workspace: join(e.guestRoot, 'workspace'), files: staged, extractions: e.extractions, capabilities: { image: imageCapability } };
   })); }
-  run(input: RunInput, signal?: AbortSignal): Promise<RunResult> { return this.serialized(() => {
+  run(input: RunInput, signal?: AbortSignal): Promise<RunResult> {
+    // A hold is known before the run waits its turn, so relay_gate can decide it while the run is queued or delivered.
+    const hold = input.kind === 'mcp' ? input.hold : undefined;
+    if (hold) {
+      if (this.holds.has(hold.id)) return Promise.reject(new Error(`Hold ${hold.id} was already used; name each hold once`));
+      this.holds.set(hold.id, {});
+    }
+    return this.serialized(() => {
     if (input.because !== undefined) this.reason(input.because);
     return this.guarded<RunResult>(signal, async () => {
     const e = this.current();
@@ -536,6 +553,7 @@ export class RelayManager {
     this.transport.because = record.because;
     this.transport.timeoutMs = input.kind === 'mcp' ? callTimeoutMs + MCP_START_ALLOWANCE_MS + 15000 : timeoutMs;
     this.transport.diagnostic = false;
+    this.transport.hold = hold ? { id: hold.id, timeoutMs: hold.timeoutMs ?? DEFAULT_HOLD_MS } : undefined;
     // A cancelled run stops waiting for the receiver's answer; its outcome is then uncertain, never replayed.
     this.transport.signal = signal;
     const options = { step: record.step, snapshots: record.snapshots, cwd: join(e.guestRoot, 'workspace') };
@@ -553,7 +571,11 @@ export class RelayManager {
       result = await this.session.runCode(input.code, input.language, options);
     } else throw new Error('Unknown operation kind');
     const outcome = result.outcome;
-    if (outcome.kind !== 'completed' || outcome.exitStatus.code !== 0 || outcome.exitStatus.signal) {
+    const held = hold ? this.transport.response?.hold : undefined;
+    if (hold && held) this.holds.set(hold.id, { decided: held.decision });
+    // A hold that was not released sent nothing: that is the caller's decision, not a failure of the VM.
+    if (held && held.decision !== 'go') await this.log('hold-withheld', record.because, { hold: hold!.id, ...held, outcome });
+    else if (outcome.kind !== 'completed' || outcome.exitStatus.code !== 0 || outcome.exitStatus.signal) {
       await this.log('execution-failed', record.because, result);
       await this.fail(new Error(`Execution ${result.executionId}: ${JSON.stringify(outcome)}`));
     }
@@ -563,11 +585,29 @@ export class RelayManager {
     const imageDelivery = await store.pending(target);
     if (imageDelivery.status === 'pending') await this.queueDownload(store, target, imageDelivery.image);
     const common = { step: record.step, snapshots: record.snapshots, timeoutMs, evidencePath: e.hostRoot, leaseReleased: !this.enclosure, owned: this.status(), imageDelivery };
-    if (input.kind === 'mcp') return { ...result, ...await this.mcpResult(e, input.target!, input.tool!, outcome, signal), ...common };
+    if (input.kind === 'mcp') return { ...result, ...await this.mcpResult(e, input.target!, input.tool!, outcome, signal), ...common, ...(held ? { hold: { id: hold!.id, ...held } } : {}) };
     // The guest's bounded output rides along in the receipt the transport filed.
     return { ...result, ...this.transport?.response, ...common };
     });
   }); }
+  /**
+   * Decides a held relay_run call: `go` lets the guest send it, `cancel`
+   * refuses it. Not serialized, since the held run occupies the queue. The
+   * first decision written wins, the guest's own `expired` included; the
+   * result says which one stands.
+   */
+  async gate(id: string, decision: 'go' | 'cancel', signal?: AbortSignal) {
+    const known = this.holds.get(id);
+    if (!known) throw new Error(`No relay_run in this session named hold ${id}`);
+    if (known.decided) return { hold: id, requested: decision, decision: known.decided, applied: known.decided === decision };
+    const e = this.current();
+    if (!e.node) throw new Error('Stage runtime first');
+    const result = await this.channel.exec(e.lease!.vm, [e.node, '-e', DECIDE, join(e.guestRoot, 'holds'), id, decision], 30000, { signal });
+    const stands = result.code === 0 ? result.stdout.trim().split('\n').at(-1)?.trim() : undefined;
+    await this.log('hold-gate', undefined, { hold: id, requested: decision, decision: stands, code: result.code });
+    if (!stands) throw new Error(`relay_gate could not write hold ${id} (exit ${result.code}): ${result.stdout.slice(0, 1000)}`);
+    return { hold: id, requested: decision, decision: stands, applied: stands === decision };
+  }
   /**
    * The step record for a run, from the call itself: a title such as
    * `playwright.browser_click`, an expected result, an input mode, a default

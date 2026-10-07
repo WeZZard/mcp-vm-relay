@@ -20,15 +20,17 @@ export class VmTransport implements SessionTransport {
   because = '';
   timeoutMs = 120000;
   diagnostic = false;
+  /** The current run's hold: the guest waits for relay_gate before its before snapshot and any input. */
+  hold?: { id: string; timeoutMs: number };
   /** The current run's cancellation: a cancelled dispatch stops waiting for the receiver and is reported as uncertain. */
   signal?: AbortSignal;
-  response?: FramedResponse & { stdout?: string; stderr?: string; timeoutMs?: number; evidenceMode?: string; terminationConfirmed?: boolean };
+  response?: FramedResponse & { stdout?: string; stderr?: string; timeoutMs?: number; evidenceMode?: string; terminationConfirmed?: boolean; hold?: { decision: string; waitedMs: number } };
   constructor(readonly transfer: Transfer, readonly guestRoot: string, readonly hostRoot: string, readonly cuaDriver: string) {}
   async send(request: FramedRequest): Promise<FramedResponse> {
     if (!this.because.trim()) throw new Error('Run execution intent is required');
     if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,159}$/.test(request.executionId)) throw new Error('Invalid execution identity');
     this.response = undefined;
-    const payload = { ...request, because: this.because, timeoutMs: this.timeoutMs, ...(this.diagnostic ? { diagnostic: true } : {}) };
+    const payload = { ...request, because: this.because, timeoutMs: this.timeoutMs, ...(this.diagnostic ? { diagnostic: true } : {}), ...(this.hold ? { hold: this.hold } : {}) };
     const local = join(this.hostRoot, 'requests', `${request.executionId}.json`);
     const remote = join(this.guestRoot, 'requests', `${request.executionId}.json`);
     await assertHostPath(this.hostRoot, local, true);
@@ -40,7 +42,7 @@ export class VmTransport implements SessionTransport {
       const result = await this.transfer.vm.exec(this.transfer.name, [
         '/usr/bin/env', `RELAY_RUNTIME_ROOT=${this.guestRoot}`, `RELAY_CUA_DRIVER=${this.cuaDriver}`, `RELAY_MCP_HOST=${join(this.guestRoot, 'mcp-host.mjs')}`,
         this.transfer.node, '-e', INVOKE, join(this.guestRoot, 'receiver.mjs'), remote,
-      ], this.timeoutMs + 180000 + wait, { signal: this.signal });
+      ], this.timeoutMs + 180000 + wait + (this.hold?.timeoutMs ?? 0), { signal: this.signal });
       if (result.code !== 0) throw new Error(`Receiver exit ${result.code}: ${result.stderr.slice(0, 1000)}`);
       const guestReceipt = join(this.guestRoot, 'state', 'receiver', 'receipts', `${request.executionId}.json`);
       const originalReceipt = join(this.hostRoot, 'receiver-receipts', `${request.executionId}.json`);

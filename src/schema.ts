@@ -18,6 +18,10 @@ const imageTarget = Type.Union([
   Type.Object({ source: Type.Literal('application'), name: Type.String({ minLength: 1, maxLength: 101 }), path: Type.Optional(Type.String({ minLength: 1, maxLength: 4096 })) }, closed),
   Type.Object({ source: Type.Literal('reference'), imageId: Type.String({ pattern: '^image-[a-f0-9]{64}$' }) }, closed),
 ]);
+const hold = Type.Object({
+  id: Type.String({ pattern: '^[A-Za-z0-9][A-Za-z0-9_.-]{0,119}$', description: 'A new identity for this hold, named again in relay_gate.' }),
+  timeoutMs: Type.Optional(Type.Integer({ minimum: 1, maximum: 300000, description: 'How long the guest waits for relay_gate, default 60000. When it passes, the call is refused and nothing is sent.' })),
+}, { ...closed, description: 'Optional. Deliver the call but hold it in the guest, before its before-snapshot and any input, until relay_gate decides it: go sends it, anything else refuses it.' });
 const argv = Type.Array(Type.String(), { minItems: 1, maxItems: 256 });
 const language = StringEnum(['javascript', 'typescript', 'python'] as const);
 const timeoutMs = Type.Optional(Type.Integer({ minimum: 1, maximum: 3600000, description: 'Execution timeout in milliseconds, default 120000, maximum 3600000. Independent of snapshot delay and lease TTL.' }));
@@ -61,7 +65,9 @@ export const relayContract = Type.Union([
     expected: Type.Optional(Type.String({ minLength: 1, maxLength: 4000, description: 'Optional expected result for the step record.' })),
     afterIntervalMs: Type.Optional(interval),
     timeoutMs,
+    hold: Type.Optional(hold),
   }, closed),
+  Type.Object({ action: Type.Literal('gate'), hold: id, decision: StringEnum(['go', 'cancel'] as const, { description: 'go sends the held call; cancel refuses it with nothing sent.' }) }, closed),
   Type.Object({ action: Type.Literal('tools'), target, tool: Type.Optional(Type.String({ minLength: 1, maxLength: 200, description: 'Optional: return only this tool.' })) }, closed),
   Type.Object({ action: Type.Literal('image'), target: imageTarget }, closed),
   Type.Object({ action: Type.Literal('extract'), names: Type.Array(Type.String()) }, closed),
@@ -81,14 +87,14 @@ for (const branch of relayContract.anyOf) {
   }
 }
 const parameterObject = Type.Object({
-  action: StringEnum(['search', 'probe', 'acquire', 'stage', 'run', 'tools', 'image', 'extract', 'finish', 'release', 'acquisition-capabilities', 'console-resolve', 'console-open', 'console-cancel'] as const),
+  action: StringEnum(['search', 'probe', 'acquire', 'stage', 'run', 'gate', 'tools', 'image', 'extract', 'finish', 'release', 'acquisition-capabilities', 'console-resolve', 'console-open', 'console-cancel'] as const),
   ...projected,
 }, { ...closed, anyOf: relayContract.anyOf, description: 'Select exactly one action. Each closed branch defines allowed fields. Run selects a kind; console-open requires reason, expected and userRequested=true. No default action.' });
 
 export type RelayInput = Static<typeof relayContract>;
 export const relayParameters = Type.Unsafe<RelayInput>(parameterObject);
 export type RelayAction = RelayInput['action'];
-export const relayActions = ['search', 'probe', 'acquire', 'stage', 'run', 'tools', 'image', 'extract', 'finish', 'release', 'acquisition-capabilities', 'console-resolve', 'console-open', 'console-cancel'] as const;
+export const relayActions = ['search', 'probe', 'acquire', 'stage', 'run', 'gate', 'tools', 'image', 'extract', 'finish', 'release', 'acquisition-capabilities', 'console-resolve', 'console-open', 'console-cancel'] as const;
 export type RunKind = 'exec' | 'script' | 'code' | 'mcp';
 export type RunTarget = typeof runTargets[number];
 
