@@ -30,7 +30,7 @@ test('one worker takes downloads in order and records each as it ends', async ()
   assert.equal(b.gate.started, true);
   b.gate.end({ status: 'integrity-failed', diagnostic: 'hash mismatch' }); await b.job.done;
   assert.deepEqual(records, [{ key: 'a', end: 'downloaded' }, { key: 'b', end: 'failed' }]);
-  assert.deepEqual(q.counts(), { queued: 0, inFlight: 0, downloaded: 1, failed: 1, cancelled: 0, paused: false, state: 'open' });
+  assert.deepEqual(q.counts(), { queued: 0, inFlight: 0, downloaded: 1, failed: 1, cancelled: 0, coalesced: 0, paused: false, state: 'open' });
 });
 
 test('a lasting failure does not pause the worker; a transient one does, until an operation completes (AD-4)', async () => {
@@ -76,22 +76,24 @@ test('over the bound a run waits for the oldest download, but not while the work
   await paused.withinBound();
 });
 
-test('drain lifts the pause, waits for every download, and reopens; while closing a transient failure cancels the rest (AD-5, DC-7)', async () => {
+test('drain waits for the download in flight and ends the queued ones as coalesced, then reopens (AD-5, DC-11)', async () => {
   const { q, records, add } = queue();
   const a = add('a'), b = add('b');
   a.gate.end(transient); await a.job.done; await tick();
   assert.equal(q.paused, true);
-  let drained = false; const draining = q.drain().then(() => { drained = true; });
-  assert.equal(q.state, 'closing'); assert.equal(b.gate.started, true, 'the operation needs the guest, so it lifts the pause');
+  await q.drain();
+  assert.equal(q.state, 'closing'); assert.equal(q.paused, false);
+  assert.equal(b.gate.started, false, 'a queued step is left to the lifecycle operation\'s archive');
   assert.throws(() => q.enqueue({ key: 'late', recordPath: '/unused' }, async () => downloaded), /closing/);
-  b.gate.end(downloaded); await draining; assert.equal(drained, true);
+  assert.deepEqual(records, [{ key: 'a', end: 'failed' }, { key: 'b', end: 'coalesced' }], 'each coalesced step is recorded before drain returns');
   q.reopen(); assert.equal(q.state, 'open');
   const c = add('c'), d = add('d'), e = add('e');
-  const second = q.drain();
-  c.gate.end(transient); await second;
+  let drained = false; const second = q.drain().then(() => { drained = true; });
+  await tick(); assert.equal(drained, false, 'drain waits for the step in flight');
+  c.gate.end(downloaded); await second;
   assert.equal(d.gate.started, false); assert.equal(e.gate.started, false);
-  assert.deepEqual(records.slice(-3), [{ key: 'c', end: 'failed' }, { key: 'd', end: 'cancelled' }, { key: 'e', end: 'cancelled' }], 'each cancelled download is recorded before drain returns');
-  assert.equal(q.counts().cancelled, 2);
+  assert.deepEqual(records.slice(-3), [{ key: 'd', end: 'coalesced' }, { key: 'e', end: 'coalesced' }, { key: 'c', end: 'downloaded' }]);
+  assert.equal(q.counts().coalesced, 3); assert.equal(q.counts().cancelled, 0);
   q.reopen();
 });
 

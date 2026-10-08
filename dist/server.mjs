@@ -410,11 +410,11 @@ var require_codegen = __commonJS({
         const rhs = this.rhs === void 0 ? "" : ` = ${this.rhs}`;
         return `${varKind} ${this.name}${rhs};` + _n;
       }
-      optimizeNames(names, constants6) {
+      optimizeNames(names, constants7) {
         if (!names[this.name.str])
           return;
         if (this.rhs)
-          this.rhs = optimizeExpr(this.rhs, names, constants6);
+          this.rhs = optimizeExpr(this.rhs, names, constants7);
         return this;
       }
       get names() {
@@ -431,10 +431,10 @@ var require_codegen = __commonJS({
       render({ _n }) {
         return `${this.lhs} = ${this.rhs};` + _n;
       }
-      optimizeNames(names, constants6) {
+      optimizeNames(names, constants7) {
         if (this.lhs instanceof code_1.Name && !names[this.lhs.str] && !this.sideEffects)
           return;
-        this.rhs = optimizeExpr(this.rhs, names, constants6);
+        this.rhs = optimizeExpr(this.rhs, names, constants7);
         return this;
       }
       get names() {
@@ -495,8 +495,8 @@ var require_codegen = __commonJS({
       optimizeNodes() {
         return `${this.code}` ? this : void 0;
       }
-      optimizeNames(names, constants6) {
-        this.code = optimizeExpr(this.code, names, constants6);
+      optimizeNames(names, constants7) {
+        this.code = optimizeExpr(this.code, names, constants7);
         return this;
       }
       get names() {
@@ -525,12 +525,12 @@ var require_codegen = __commonJS({
         }
         return nodes.length > 0 ? this : void 0;
       }
-      optimizeNames(names, constants6) {
+      optimizeNames(names, constants7) {
         const { nodes } = this;
         let i = nodes.length;
         while (i--) {
           const n = nodes[i];
-          if (n.optimizeNames(names, constants6))
+          if (n.optimizeNames(names, constants7))
             continue;
           subtractNames(names, n.names);
           nodes.splice(i, 1);
@@ -583,12 +583,12 @@ var require_codegen = __commonJS({
           return void 0;
         return this;
       }
-      optimizeNames(names, constants6) {
+      optimizeNames(names, constants7) {
         var _a3;
-        this.else = (_a3 = this.else) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants6);
-        if (!(super.optimizeNames(names, constants6) || this.else))
+        this.else = (_a3 = this.else) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants7);
+        if (!(super.optimizeNames(names, constants7) || this.else))
           return;
-        this.condition = optimizeExpr(this.condition, names, constants6);
+        this.condition = optimizeExpr(this.condition, names, constants7);
         return this;
       }
       get names() {
@@ -611,10 +611,10 @@ var require_codegen = __commonJS({
       render(opts) {
         return `for(${this.iteration})` + super.render(opts);
       }
-      optimizeNames(names, constants6) {
-        if (!super.optimizeNames(names, constants6))
+      optimizeNames(names, constants7) {
+        if (!super.optimizeNames(names, constants7))
           return;
-        this.iteration = optimizeExpr(this.iteration, names, constants6);
+        this.iteration = optimizeExpr(this.iteration, names, constants7);
         return this;
       }
       get names() {
@@ -650,10 +650,10 @@ var require_codegen = __commonJS({
       render(opts) {
         return `for(${this.varKind} ${this.name} ${this.loop} ${this.iterable})` + super.render(opts);
       }
-      optimizeNames(names, constants6) {
-        if (!super.optimizeNames(names, constants6))
+      optimizeNames(names, constants7) {
+        if (!super.optimizeNames(names, constants7))
           return;
-        this.iterable = optimizeExpr(this.iterable, names, constants6);
+        this.iterable = optimizeExpr(this.iterable, names, constants7);
         return this;
       }
       get names() {
@@ -695,11 +695,11 @@ var require_codegen = __commonJS({
         (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNodes();
         return this;
       }
-      optimizeNames(names, constants6) {
+      optimizeNames(names, constants7) {
         var _a3, _b;
-        super.optimizeNames(names, constants6);
-        (_a3 = this.catch) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants6);
-        (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNames(names, constants6);
+        super.optimizeNames(names, constants7);
+        (_a3 = this.catch) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants7);
+        (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNames(names, constants7);
         return this;
       }
       get names() {
@@ -1000,7 +1000,7 @@ var require_codegen = __commonJS({
     function addExprNames(names, from) {
       return from instanceof code_1._CodeOrName ? addNames(names, from.names) : names;
     }
-    function optimizeExpr(expr, names, constants6) {
+    function optimizeExpr(expr, names, constants7) {
       if (expr instanceof code_1.Name)
         return replaceName(expr);
       if (!canOptimize(expr))
@@ -1015,14 +1015,14 @@ var require_codegen = __commonJS({
         return items;
       }, []));
       function replaceName(n) {
-        const c = constants6[n.str];
+        const c = constants7[n.str];
         if (c === void 0 || names[n.str] !== 1)
           return n;
         delete names[n.str];
         return c;
       }
       function canOptimize(e) {
-        return e instanceof code_1._Code && e._items.some((c) => c instanceof code_1.Name && names[c.str] === 1 && constants6[c.str] !== void 0);
+        return e instanceof code_1._Code && e._items.some((c) => c instanceof code_1.Name && names[c.str] === 1 && constants7[c.str] !== void 0);
       }
     }
     function subtractNames(names, from) {
@@ -7338,8 +7338,8 @@ async function verifyPackage(manifest, rootDir) {
     return true;
   };
   for (const m of manifest.media) {
-    const present = await checkArtifact(m.path, m.sha256);
-    if (!present) {
+    const present2 = await checkArtifact(m.path, m.sha256);
+    if (!present2) {
       accepted = false;
       continue;
     }
@@ -10841,10 +10841,10 @@ function isValidJWT(token2, algorithm = null) {
     const tokensParts = token2.split(".");
     if (tokensParts.length !== 3)
       return false;
-    const [header] = tokensParts;
-    if (!header)
+    const [header2] = tokensParts;
+    if (!header2)
       return false;
-    const parsedHeader = JSON.parse(atob(header));
+    const parsedHeader = JSON.parse(atob(header2));
     if ("typ" in parsedHeader && parsedHeader?.typ !== "JWT")
       return false;
     if (!parsedHeader.alg)
@@ -18458,8 +18458,8 @@ var StdioServerTransport = class {
 
 // src/manager.ts
 import { randomUUID as randomUUID7 } from "node:crypto";
-import { mkdir as mkdir10, readFile as readFile10, cp, access, statfs } from "node:fs/promises";
-import { dirname as dirname9, join as join14, resolve as resolve9 } from "node:path";
+import { mkdir as mkdir11, readFile as readFile10, readdir as readdir7, rm as rm4, cp, access, statfs } from "node:fs/promises";
+import { dirname as dirname10, join as join14, resolve as resolve9 } from "node:path";
 
 // src/config.ts
 import { homedir as homedir2 } from "node:os";
@@ -18850,10 +18850,10 @@ var Session = class {
    * transmission; the same outcome states as exec() apply (D14/D17).
    */
   async runScript(localPath, remotePath, language2, options2 = {}) {
-    const { createHash: createHash7 } = await import("node:crypto");
+    const { createHash: createHash8 } = await import("node:crypto");
     const { readFile: readFile11 } = await import("node:fs/promises");
     const bytes = await readFile11(localPath);
-    const scriptSha256 = createHash7("sha256").update(bytes).digest("hex");
+    const scriptSha256 = createHash8("sha256").update(bytes).digest("hex");
     const upload = await this.transport.upload(localPath, { remotePath });
     const executionId = formatId(allocateId("execution"));
     const interpreter = language2 === "python" ? "python3" : language2 === "typescript" ? "tsx" : "node";
@@ -18901,8 +18901,8 @@ var Session = class {
    * remote after receipt. Same outcome states as exec() (D14/D17).
    */
   async runCode(code, language2, options2 = {}) {
-    const { createHash: createHash7 } = await import("node:crypto");
-    const codeSha256 = createHash7("sha256").update(code, "utf8").digest("hex");
+    const { createHash: createHash8 } = await import("node:crypto");
+    const codeSha256 = createHash8("sha256").update(code, "utf8").digest("hex");
     const executionId = formatId(allocateId("execution"));
     const interpreter = language2 === "python" ? "python3" : language2 === "typescript" ? "tsx" : "node";
     const submission = {
@@ -19218,14 +19218,14 @@ function table(text4) {
   if (end < 0) end = lines.length;
   const headers = lines.map((line, index) => index > begin && index < end && JSON.stringify(parse3(line.text)) === JSON.stringify(["Machine", "OS", "Task Name", "Agent", "Project", "Start Date"]) ? index : -1).filter((index) => index >= 0);
   if (headers.length !== 1) throw new RegistryError("Expected exactly one VM task registry table");
-  const header = headers[0];
-  const separator = lines[header + 1];
+  const header2 = headers[0];
+  const separator = lines[header2 + 1];
   const separatorCells = separator && parse3(separator.text);
   if (!separatorCells || separatorCells.length !== 6 || !separatorCells.every((cell) => /^:?-{2,}:?$/.test(cell))) {
     throw new RegistryError("Malformed VM task registry separator");
   }
   const rows = [];
-  for (let i = header + 2; i < end && lines[i].text.trim().startsWith("|"); i++) {
+  for (let i = header2 + 2; i < end && lines[i].text.trim().startsWith("|"); i++) {
     const line = lines[i];
     if (parse3(line.text)?.length !== 6) throw new RegistryError("Malformed VM task registry row");
     rows.push(line);
@@ -19488,9 +19488,9 @@ var Registry = class {
 };
 
 // src/transfer.ts
-import { copyFile, mkdir as mkdir4, readFile as readFile5, lstat as lstat3, mkdtemp, rm, open as open4 } from "node:fs/promises";
-import { constants as constants2, linkSync } from "node:fs";
-import { dirname as dirname5, join as join7, resolve as resolve5, relative as relative4, isAbsolute as isAbsolute4 } from "node:path";
+import { copyFile, mkdir as mkdir5, readFile as readFile5, lstat as lstat3, mkdtemp, rm, open as open5, link as link2 } from "node:fs/promises";
+import { constants as constants3, linkSync } from "node:fs";
+import { dirname as dirname6, join as join7, resolve as resolve5, relative as relative4, isAbsolute as isAbsolute4 } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID as randomUUID3 } from "node:crypto";
 
@@ -19590,6 +19590,112 @@ async function command(argv2, options2 = {}) {
   });
 }
 
+// src/archive.ts
+import { open as open4, mkdir as mkdir4 } from "node:fs/promises";
+import { constants as constants2 } from "node:fs";
+import { createHash as createHash4 } from "node:crypto";
+import { dirname as dirname5 } from "node:path";
+var MAX_LINE_BYTES = 64 * 1024;
+var header = (path, bytes) => `${JSON.stringify({ path, bytes })}
+`;
+var trailer = (sha256) => `${JSON.stringify({ sha256 })}
+`;
+function archiveBytes(files) {
+  return files.reduce((sum, file) => sum + Buffer.byteLength(header(file.path, file.bytes)) + file.bytes + Buffer.byteLength(trailer(file.sha256)), 0);
+}
+function archiveChunks(files, maxArgvBytes = 64 * 1024) {
+  const chunks = [];
+  let chunk = [], size = 0;
+  for (const file of files) {
+    const bytes = Buffer.byteLength(file.path) + 1;
+    if (chunk.length && size + bytes > maxArgvBytes) {
+      chunks.push(chunk);
+      chunk = [];
+      size = 0;
+    }
+    chunk.push(file);
+    size += bytes;
+  }
+  if (chunk.length) chunks.push(chunk);
+  return chunks;
+}
+async function unpackArchive(archive, directory2, requested, options2 = {}) {
+  const input = await open4(archive, constants2.O_RDONLY | constants2.O_NOFOLLOW);
+  const unpacked = [];
+  try {
+    const buffer = Buffer.alloc(8 * 1024 * 1024);
+    let start = 0, end = 0, eof = false;
+    const fill = async () => {
+      if (start > 0) {
+        buffer.copy(buffer, 0, start, end);
+        end -= start;
+        start = 0;
+      }
+      const { bytesRead } = await input.read(buffer, end, buffer.length - end, null);
+      if (!bytesRead) eof = true;
+      end += bytesRead;
+    };
+    const atEnd = async () => {
+      if (start === end && !eof) await fill();
+      return start === end;
+    };
+    const line = async () => {
+      for (; ; ) {
+        const at = buffer.indexOf(10, start);
+        if (at >= 0 && at < end) {
+          const text4 = buffer.toString("utf8", start, at);
+          start = at + 1;
+          const value = JSON.parse(text4);
+          if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid archive line");
+          return value;
+        }
+        if (end - start > MAX_LINE_BYTES) throw new Error("Archive line too long");
+        if (eof) throw new Error("Archive truncated");
+        await fill();
+      }
+    };
+    let next = 0;
+    while (next < requested.length) {
+      if (options2.skipMissing && await atEnd()) break;
+      const head = await line();
+      let index = requested.findIndex((file, at) => at >= next && file.path === head.path);
+      if (index < 0 || !options2.skipMissing && index !== next) throw new Error(`Unexpected archive entry: ${String(head.path)}`);
+      const fact = requested[index];
+      next = index + 1;
+      if (!Number.isSafeInteger(head.bytes) || head.bytes < 0 || fact.bytes !== void 0 && head.bytes !== fact.bytes || Object.keys(head).length !== 2) throw new Error(`Unexpected archive entry: ${fact.path}`);
+      const bytes = head.bytes;
+      const target2 = within(directory2, fact.path);
+      await mkdir4(dirname5(target2), { recursive: true, mode: 448 });
+      const output = await open4(target2, constants2.O_WRONLY | constants2.O_CREAT | constants2.O_EXCL | constants2.O_NOFOLLOW, 384);
+      const digest = createHash4("sha256");
+      try {
+        for (let left = bytes; left > 0; ) {
+          if (start === end) {
+            if (eof) throw new Error("Archive truncated");
+            await fill();
+            continue;
+          }
+          const chunk = buffer.subarray(start, start + Math.min(left, end - start));
+          digest.update(chunk);
+          for (let written = 0; written < chunk.length; ) written += (await output.write(chunk, written, chunk.length - written)).bytesWritten;
+          start += chunk.length;
+          left -= chunk.length;
+        }
+      } finally {
+        await output.close();
+      }
+      const sha256 = digest.digest("hex"), tail = await line();
+      if (tail.sha256 !== sha256 || Object.keys(tail).length !== 1) throw new Error(`Archive entry checksum mismatch: ${fact.path}`);
+      if (fact.sha256 !== void 0 && sha256 !== fact.sha256) throw new Error(`Extraction checksum mismatch: ${fact.path}`);
+      unpacked.push({ path: fact.path, bytes, sha256 });
+    }
+    if (!await atEnd()) throw new Error("Archive has trailing bytes");
+    return unpacked;
+  } finally {
+    await input.close();
+  }
+}
+
 // src/transfer.ts
 var STAGING_MAX_BYTES = 512 * 1024 * 1024;
 var STAGING_MAX_FILES = 1e4;
@@ -19612,7 +19718,7 @@ function imagePath(root, target2) {
 function imageFormat(bytes) {
   return bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) || bytes.length >= 3 && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255 || ["GIF87a", "GIF89a"].includes(bytes.subarray(0, 6).toString("ascii")) || bytes.length >= 12 && bytes.subarray(0, 4).toString("ascii") === "RIFF" && bytes.subarray(8, 12).toString("ascii") === "WEBP";
 }
-function retryableImageCopy(error2) {
+function transientTransfer(error2) {
   if (error2 instanceof ImageTransferError) return false;
   const diagnostic = String(error2);
   const status = error2?.status;
@@ -19623,6 +19729,13 @@ function retryableImageCopy(error2) {
 function validImageFact(value, maxBytes = MAX_IMAGE_BYTES) {
   const f = value;
   return !!f && /^[a-f0-9]{64}$/.test(f.sha256) && Number.isSafeInteger(f.bytes) && f.bytes > 0 && f.bytes <= maxBytes;
+}
+async function present(path) {
+  try {
+    return (await lstat3(path)).isFile();
+  } catch {
+    return false;
+  }
 }
 async function assertHostPath(root, target2, allowMissing = false) {
   root = resolve5(root);
@@ -19646,6 +19759,7 @@ var PREPARE = `const fs=require('fs'),p=require('path');${GUEST_PATH}const [root
 var SCAN = `const fs=require('fs'),p=require('path'),c=require('crypto');${GUEST_PATH}${GUEST_DIGEST}const [root,approved,frame,frameRoot]=process.argv.slice(1),out=[];check(approved,root);function walk(f){let s=fs.lstatSync(f);if(s.isSymbolicLink())throw Error('symlink '+f);if(s.isDirectory()){for(const n of fs.readdirSync(f).sort())walk(p.join(f,n));}else if(s.isFile()){out.push({path:p.relative(root,f),sha256:digest(f,s.size),bytes:s.size});}else throw Error('special file '+f);}walk(root);check(approved,root);check(frameRoot,frame,true);fs.mkdirSync(p.dirname(frame),{recursive:true,mode:448});check(frameRoot,frame,true);const b=Buffer.from(JSON.stringify(out));fs.writeFileSync(frame,b,{flag:'wx',mode:384});console.log(JSON.stringify({path:frame,sha256:c.createHash('sha256').update(b).digest('hex'),bytes:b.length}));`;
 var FILE_FACT = `const fs=require('fs'),p=require('path'),c=require('crypto');${GUEST_PATH}${GUEST_DIGEST}const [root,file]=process.argv.slice(1);check(root,file);const s=fs.lstatSync(file);if(!s.isFile())throw Error('Invalid frame file');const sha256=digest(file,s.size);check(root,file);console.log(JSON.stringify({path:file,sha256,bytes:s.size}));`;
 var SIZE = `const fs=require('fs'),p=require('path');${GUEST_PATH}const [root,approved]=process.argv.slice(1);check(approved,root);let bytes=0,files=0;function walk(f){const s=fs.lstatSync(f);if(s.isSymbolicLink())throw Error('symlink '+f);if(s.isDirectory()){for(const n of fs.readdirSync(f))walk(p.join(f,n));}else if(s.isFile()){bytes+=s.size;files++;}else throw Error('special file '+f);}walk(root);console.log(JSON.stringify({bytes,files}));`;
+var ARCHIVE = `const fs=require('fs'),p=require('path'),c=require('crypto');${GUEST_PATH}const [root,approved,archive,archiveRoot,mode,...paths]=process.argv.slice(1);check(approved,root);check(archiveRoot,archive,true);const files=[];let need=0;for(const rel of paths){if(!rel||p.isAbsolute(rel)||rel.includes('\\\\')||rel.includes('\\0')||rel.split('/').some(x=>!x||x==='.'||x==='..'))throw Error('Invalid archive path '+rel);const f=p.join(root,rel);let s;try{check(approved,f);s=fs.lstatSync(f);}catch(e){if(mode==='present'&&e.code==='ENOENT')continue;throw e;}if(!s.isFile())throw Error('Not a regular file: '+rel);files.push([rel,f,s]);need+=s.size+Buffer.byteLength(rel)+128;}if(typeof fs.statfsSync==='function'){const s=fs.statfsSync(p.dirname(archive));if(Number(s.bavail)*Number(s.bsize)<need)throw Error('Not enough guest space for a '+need+'-byte archive');}const out=fs.openSync(archive,'wx',384);let total=0;function put(b){for(let o=0;o<b.length;)o+=fs.writeSync(out,b,o,b.length-o);total+=b.length;}try{const b=Buffer.alloc(8388608);for(const [rel,f] of files){check(approved,f);const s=fs.lstatSync(f);if(!s.isFile())throw Error('Not a regular file: '+rel);const fd=fs.openSync(f,fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW);try{put(Buffer.from(JSON.stringify({path:rel,bytes:s.size})+'\\n'));const h=c.createHash('sha256');let n=0,r;while(n<s.size&&(r=fs.readSync(fd,b,0,Math.min(b.length,s.size-n),null))>0){h.update(b.subarray(0,r));put(b.subarray(0,r));n+=r;}if(n!==s.size||fs.readSync(fd,b,0,1,null)!==0)throw Error('Source changed during archive: '+rel);put(Buffer.from(JSON.stringify({sha256:h.digest('hex')})+'\\n'));}finally{fs.closeSync(fd);}}fs.closeSync(out);}catch(e){try{fs.closeSync(out);}catch{}fs.rmSync(archive,{force:true});throw e;}check(archiveRoot,archive);console.log(JSON.stringify({path:archive,bytes:total}));`;
 var REMOVE_FRAME = `const fs=require('fs'),p=require('path');${GUEST_PATH}const [root,file]=process.argv.slice(1);check(root,file,true);fs.rmSync(file,{force:true});`;
 var IMAGE_FACT = `const fs=require('fs'),p=require('path'),c=require('crypto');${GUEST_PATH}
 const [root,file,limit='67108864',kind='image']=process.argv.slice(1);
@@ -19702,10 +19816,10 @@ var Transfer = class {
       }
     }
   }
-  async checked(argv2, timeoutMs2) {
+  async checked(argv2, timeoutMs2, signal) {
     const framed = argv2[0] === this.node && argv2[1] === "-e" ? [argv2[0], argv2[1], `try { ${argv2[2]} } catch(error) { console.error(error instanceof Error ? error.message : String(error)); process.exitCode=1; }`, ...argv2.slice(3)] : argv2;
     for (let attempt = 1; ; attempt++) {
-      const result2 = await this.vm.exec(this.name, framed, timeoutMs2);
+      const result2 = await (signal ? this.vm.exec(this.name, framed, timeoutMs2, { signal, ...timeoutMs2 ? { timeoutMs: timeoutMs2 } : {} }) : this.vm.exec(this.name, framed, timeoutMs2));
       if (result2.code === 0) return result2.stdout;
       const diagnostic = `Guest setup/transfer command failed (${result2.code}): ${result2.stderr.slice(0, 1e3)}`;
       if (attempt >= 3 || result2.code !== 255 || !/Permission denied \((?:publickey,)?password(?:,keyboard-interactive)?\)/.test(result2.stderr)) throw new Error(diagnostic);
@@ -19713,13 +19827,13 @@ var Transfer = class {
       await new Promise((resolve11) => setTimeout(resolve11, attempt * 250));
     }
   }
-  async pushFile(local, remote, approvedLocalRoot = dirname5(local)) {
+  async pushFile(local, remote, approvedLocalRoot = dirname6(local)) {
     await assertHostPath(approvedLocalRoot, local);
     const info = await lstat3(local);
     if (!info.isFile()) throw new Error(`Expected regular file: ${local}`);
     if (info.size > STAGING_MAX_BYTES) throw new Error("Staging exceeds 512 MiB");
     const bytes = await readFile5(local), before = hash(bytes);
-    const guestRoot = this.options.guestRoot ?? dirname5(remote);
+    const guestRoot = this.options.guestRoot ?? dirname6(remote);
     await this.checked([this.node, "-e", PREPARE, guestRoot, remote]);
     await this.copy("push", () => this.vm.push(this.name, resolve5(local), remote), async () => {
       await assertHostPath(approvedLocalRoot, local);
@@ -19757,11 +19871,11 @@ var Transfer = class {
   }
   /** Pull one bounded frame, compare its bytes, then recheck guest hashes and
    * ancestors. Retains the original host bytes for receipt provenance. */
-  async pullFrame(remote, local, approvedRoot, approvedLocalRoot = dirname5(local), expected) {
+  async pullFrame(remote, local, approvedRoot, approvedLocalRoot = dirname6(local), expected) {
     const before = expected ?? await this.fileFact(remote, approvedRoot);
     if (!validFact(before) || before.path !== remote) throw new Error("Invalid remote frame fact");
     await assertHostPath(approvedLocalRoot, local, true);
-    await mkdir4(dirname5(local), { recursive: true, mode: 448 });
+    await mkdir5(dirname6(local), { recursive: true, mode: 448 });
     await assertHostPath(approvedLocalRoot, local, true);
     await this.guestPath(approvedRoot, remote);
     await this.copy("pull", () => this.vm.pull(this.name, remote, local), async () => {
@@ -19869,7 +19983,7 @@ var Transfer = class {
       const info = await lstat3(path);
       if (!info.isFile()) throw new ImageTransferError("unsafe-path", "Expected a regular local image");
       if (info.size !== identity.bytes) throw new ImageTransferError("integrity-failed", "Local image size conflicts with original");
-      const fd = await open4(path, constants2.O_RDONLY | constants2.O_NOFOLLOW | constants2.O_NONBLOCK);
+      const fd = await open5(path, constants3.O_RDONLY | constants3.O_NOFOLLOW | constants3.O_NONBLOCK);
       try {
         const same = (s) => s.isFile() && s.dev === info.dev && s.ino === info.ino && s.size === info.size && s.mtimeMs === info.mtimeMs && s.ctimeMs === info.ctimeMs;
         if (!same(await fd.stat())) throw new ImageTransferError("integrity-failed", "Local image changed before verification");
@@ -19937,13 +20051,13 @@ var Transfer = class {
         }
       }
       await hostPath2(local, true);
-      await mkdir4(dirname5(local), { recursive: true, mode: 448 });
+      await mkdir5(dirname6(local), { recursive: true, mode: 448 });
       await hostPath2(local, true);
       for (let attempt = 1; attempt <= 3; attempt++) {
         guard2();
         await unchanged();
         await hostPath2(local, true);
-        const staging = await mkdtemp(join7(dirname5(local), ".relay-image-"));
+        const staging = await mkdtemp(join7(dirname6(local), ".relay-image-"));
         const staged = join7(staging, "original");
         let pending;
         const clean = async () => {
@@ -19967,7 +20081,7 @@ var Transfer = class {
             guard2();
             const diagnostic = String(cause);
             if (cause instanceof ImageTransferError) throw cause;
-            if (attempt >= 3 || attemptBudget.remaining <= 0 || !retryableImageCopy(cause)) throw new ImageTransferError("transfer-failed", `Image byte transfer failed: ${diagnostic}`, { cause });
+            if (attempt >= 3 || attemptBudget.remaining <= 0 || !transientTransfer(cause)) throw new ImageTransferError("transfer-failed", `Image byte transfer failed: ${diagnostic}`, { cause });
             await bounded3(async () => {
               await this.options.onRetry?.({ operation: "pull", attempt, diagnostic });
             });
@@ -20021,12 +20135,12 @@ var Transfer = class {
   /** `expectedBytes`, when the caller knows the size (a staged file, or the inventory
    * before a pull), sets the timeout without the stat-only size walk. */
   async scan(remote, approvedRoot = remote, expectedBytes) {
-    const guestRoot = this.options.guestRoot ?? dirname5(remote);
+    const guestRoot = this.options.guestRoot ?? dirname6(remote);
     const timeoutMs2 = scanTimeoutMs(expectedBytes ?? await this.size(remote, approvedRoot));
     const frame = join7(guestRoot, `.inventory-${randomUUID3()}.json`);
     const tempRoot = this.options.hostTempRoot ?? tmpdir();
     await assertHostPath(tempRoot, tempRoot, true);
-    await mkdir4(tempRoot, { recursive: true, mode: 448 });
+    await mkdir5(tempRoot, { recursive: true, mode: 448 });
     await assertHostPath(tempRoot, tempRoot);
     const hostDirectory = await mkdtemp(join7(tempRoot, "relay-inventory-"));
     try {
@@ -20060,7 +20174,7 @@ var Transfer = class {
         const info = await lstat3(candidate);
         if (!info.isFile() || info.size !== file.bytes) continue;
         await assertHostPath(localRoot, path, true);
-        await copyFile(candidate, path, constants2.COPYFILE_EXCL);
+        await copyFile(candidate, path, constants3.COPYFILE_EXCL);
         written = true;
         await assertHostPath(localRoot, path);
         const copied = await hashFile(path);
@@ -20077,33 +20191,109 @@ var Transfer = class {
     }
     return false;
   }
+  /**
+   * Pull the named files of the guest tree `remote` into the host directory `local` through archives, one per
+   * bounded chunk of paths (AD-8, AD-9). Each archive is unpacked in a host staging directory and checked whole
+   * before any file is linked into place. With `present`, files the guest does not hold are left out. With
+   * `once`, each archive gets one copy attempt, for a caller that waits between its own retries (DC-5).
+   */
+  async pullArchive(remote, approvedRoot, files, local, localRoot, options2 = {}) {
+    const guestRoot = this.options.guestRoot ?? dirname6(remote), unpacked = [];
+    const known2 = files.every((file) => file.bytes !== void 0 && file.sha256 !== void 0);
+    await assertHostPath(localRoot, local, true);
+    await mkdir5(local, { recursive: true, mode: 448 });
+    for (const chunk of archiveChunks(files)) {
+      options2.signal?.throwIfAborted();
+      const archive = join7(guestRoot, `.archive-${randomUUID3()}`), bytes = known2 ? archiveBytes(chunk) : void 0;
+      await assertHostPath(localRoot, local);
+      const staging = await mkdtemp(join7(local, ".relay-archive-"));
+      try {
+        const argv2 = [this.node, "-e", ARCHIVE, remote, approvedRoot, archive, guestRoot, options2.present ? "present" : "all", ...chunk.map((file) => file.path)];
+        const fact = JSON.parse(await this.checked(argv2, scanTimeoutMs(2 * (bytes ?? 0)), options2.signal));
+        const size = fact?.bytes;
+        if (fact?.path !== archive || !Number.isSafeInteger(size) || bytes !== void 0 && size !== bytes) throw new Error("Invalid remote archive fact");
+        const staged = join7(staging, "archive");
+        const pull = () => this.vm.pull(this.name, archive, staged, options2.signal ? { signal: options2.signal } : void 0);
+        const validate2 = async () => {
+          options2.signal?.throwIfAborted();
+          await this.guestPath(guestRoot, archive);
+          await assertHostPath(localRoot, staged, true);
+        };
+        if (options2.once) {
+          await validate2();
+          await pull();
+        } else await this.copy("pull", pull, validate2);
+        await assertHostPath(localRoot, staged);
+        const info = await lstat3(staged);
+        if (!info.isFile() || info.size !== size) throw new Error(`Archive size mismatch: ${remote}`);
+        const directory2 = join7(staging, "files");
+        const entries = await unpackArchive(staged, directory2, chunk, { skipMissing: !!options2.present });
+        options2.signal?.throwIfAborted();
+        for (const file of entries) {
+          const path = within(local, file.path);
+          await assertHostPath(localRoot, path, true);
+          await mkdir5(dirname6(path), { recursive: true, mode: 448 });
+          await assertHostPath(localRoot, path, true);
+          await link2(within(directory2, file.path), path);
+        }
+        unpacked.push(...entries);
+      } finally {
+        try {
+          await this.checked([this.node, "-e", REMOVE_FRAME, guestRoot, archive]);
+        } finally {
+          await assertHostPath(localRoot, staging);
+          await rm(staging, { recursive: true, force: true });
+        }
+      }
+    }
+    return unpacked;
+  }
   /** Capture source hashes before pull, compare host bytes, then source inventory again.
    * `beforePull` sees the source inventory before any byte is pulled and may refuse the pull. */
-  async pullVerified(remote, local, approvedRoot = remote, localRoot = dirname5(local), options2 = {}) {
+  async pullVerified(remote, local, approvedRoot = remote, localRoot = dirname6(local), options2 = {}) {
     const before = await this.scan(remote, approvedRoot);
     await options2.beforePull?.(before);
     await assertHostPath(localRoot, local, true);
-    await mkdir4(dirname5(local), { recursive: true, mode: 448 });
+    await mkdir5(dirname6(local), { recursive: true, mode: 448 });
     await assertHostPath(localRoot, local, true);
     if (before.length === 1 && before[0].path === "") {
-      await this.guestPath(approvedRoot, remote);
-      await this.copy("pull", () => this.vm.pull(this.name, remote, local), async () => {
+      if (!options2.reuse || !await this.reuseLocal(before[0], local, localRoot, options2.reuse)) {
         await this.guestPath(approvedRoot, remote);
-        await assertHostPath(localRoot, local, true);
-      });
-      await this.guestPath(approvedRoot, remote);
-      await assertHostPath(localRoot, local);
-      if (!(await lstat3(local)).isFile()) throw new Error("Invalid extraction file");
-      const pulled = await hashFile(local);
-      if (pulled.sha256 !== before[0].sha256 || pulled.bytes !== before[0].bytes) throw new Error(`Extraction checksum mismatch: ${remote}`);
+        await this.copy("pull", () => this.vm.pull(this.name, remote, local), async () => {
+          await this.guestPath(approvedRoot, remote);
+          await assertHostPath(localRoot, local, true);
+        });
+        await this.guestPath(approvedRoot, remote);
+        await assertHostPath(localRoot, local);
+        if (!(await lstat3(local)).isFile()) throw new Error("Invalid extraction file");
+        const pulled = await hashFile(local);
+        if (pulled.sha256 !== before[0].sha256 || pulled.bytes !== before[0].bytes) throw new Error(`Extraction checksum mismatch: ${remote}`);
+      }
     } else {
-      await mkdir4(local, { recursive: true, mode: 448 });
+      await mkdir5(local, { recursive: true, mode: 448 });
+      const missing = [];
       for (const file of before) {
         const path = within(local, file.path);
         await assertHostPath(localRoot, path, true);
-        await mkdir4(dirname5(path), { recursive: true, mode: 448 });
+        await mkdir5(dirname6(path), { recursive: true, mode: 448 });
         await assertHostPath(localRoot, path, true);
         if (options2.reuse && await this.reuseLocal(file, path, localRoot, options2.reuse)) continue;
+        missing.push(file);
+      }
+      let left = missing;
+      if (missing.length) {
+        try {
+          await this.pullArchive(remote, approvedRoot, missing, local, localRoot);
+          left = [];
+        } catch (error2) {
+          await this.options.onArchiveFallback?.({ remote, files: missing.length, diagnostic: String(error2) });
+          left = [];
+          for (const file of missing) if (!await present(within(local, file.path))) left.push(file);
+        }
+      }
+      for (const file of left) {
+        const path = within(local, file.path);
+        await assertHostPath(localRoot, path, true);
         const guestPath = within(remote, file.path);
         await this.guestPath(approvedRoot, guestPath);
         await this.copy("pull", () => this.vm.pull(this.name, guestPath, path), async () => {
@@ -20200,11 +20390,11 @@ var VmTransport = class {
 };
 
 // src/package.ts
-import { createHash as createHash4 } from "node:crypto";
-import { lstat as lstat4, readFile as readFile6, readdir as readdir3, mkdir as mkdir5, writeFile as writeFile3, rm as rm2 } from "node:fs/promises";
-import { dirname as dirname6, join as join9, resolve as resolve6, parse as parse4 } from "node:path";
+import { createHash as createHash5 } from "node:crypto";
+import { lstat as lstat4, readFile as readFile6, readdir as readdir3, mkdir as mkdir6, writeFile as writeFile3, rm as rm2 } from "node:fs/promises";
+import { dirname as dirname7, join as join9, resolve as resolve6, parse as parse4 } from "node:path";
 var generated = ["OPENING.txt", "manifest.json"];
-var hash2 = (bytes) => createHash4("sha256").update(bytes).digest("hex");
+var hash2 = (bytes) => createHash5("sha256").update(bytes).digest("hex");
 var json = (value) => JSON.stringify(value, null, 2) + "\n";
 function object3(value, label) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`invalid ${label}`);
@@ -20432,10 +20622,10 @@ async function analyze(root, options2, files) {
     let execution2 = outcomeOf(completions.get(id2), !!refusal || record3?.state === "refused");
     if (execution2 === "completed" && (missingPair || !record3 || record3.state !== "recorded")) execution2 = "uncertain";
     const rawId = source.stepId ?? record3?.stepId ?? id2;
-    let stepId = text(rawId, "step id");
-    if (used.has(stepId)) stepId = `${stepId}@${id2}`;
-    if (used.has(stepId)) throw new Error(`duplicate review step id: ${stepId}`);
-    used.add(stepId);
+    let stepId2 = text(rawId, "step id");
+    if (used.has(stepId2)) stepId2 = `${stepId2}@${id2}`;
+    if (used.has(stepId2)) throw new Error(`duplicate review step id: ${stepId2}`);
+    used.add(stepId2);
     const executionId = source.executionId ?? record3?.executionId;
     const exactHost = routingRecords.find((h) => h.actionId === id2 || executionId && (h.executionId === executionId || h.request?.executionId === executionId));
     const fallback = routingRecords.filter((h) => source.stepId && (h.stepId === source.stepId || h.step?.id === source.stepId || h.request?.step?.id === source.stepId));
@@ -20447,7 +20637,7 @@ async function analyze(root, options2, files) {
     execution2 = reconcileOutcome(execution2, actionReceipts);
     const completion = completions.get(id2);
     const argv2 = events.find((e) => e.kind === "execution-start" && executionId && e.executionId === executionId && Array.isArray(e.argv))?.argv;
-    details.set(stepId, {
+    details.set(stepId2, {
       at: source.writtenAt ?? before?.capturedAt,
       beforeAt: before?.capturedAt,
       afterAt: after?.capturedAt,
@@ -20457,9 +20647,9 @@ async function analyze(root, options2, files) {
     const originalObserved = refusal?.diagnostic ?? completion?.diagnostic ?? (completion?.toolOutcome ? JSON.stringify(completion.toolOutcome) : void 0);
     const observed = actionReceipts.length ? `Authoritative receipt outcomes: ${JSON.stringify(actionReceipts.map((r) => ({ executionId: r.executionId, actionId: r.actionId, execution: receiptOutcome(r), outcome: r.outcome })))}
 Original subprocess/action evidence (not an authoritative input-success verdict): ${JSON.stringify({ refusal: refusal?.diagnostic, state: completion?.state, diagnostic: completion?.diagnostic, toolOutcome: completion?.toolOutcome })}` : originalObserved;
-    if (executionId) stepsByExecution.set(executionId, [...stepsByExecution.get(executionId) ?? [], stepId]);
+    if (executionId) stepsByExecution.set(executionId, [...stepsByExecution.get(executionId) ?? [], stepId2]);
     steps.push({
-      id: stepId,
+      id: stepId2,
       actionId: id2,
       inputMode: source.inputMode ?? record3?.inputMode ?? "unknown",
       attemptId: source.attemptId ?? "unknown-attempt",
@@ -20476,17 +20666,17 @@ Original subprocess/action evidence (not an authoritative input-success verdict)
   for (const receipt of receipts.filter((r) => r.evidenceMode === "diagnostic")) diagnostics.set(text(receipt.executionId, "diagnostic execution id"), receipt);
   for (const [executionId, receipt] of diagnostics) {
     const request = hostRecords.find((h) => h.executionId === executionId && (h.diagnostic === true || h.evidenceMode === "diagnostic") && h.argv);
-    const stepId = `diagnostic-${executionId}`;
-    if (used.has(stepId)) throw new Error(`duplicate diagnostic review step: ${stepId}`);
-    used.add(stepId);
-    details.set(stepId, {
+    const stepId2 = `diagnostic-${executionId}`;
+    if (used.has(stepId2)) throw new Error(`duplicate diagnostic review step: ${stepId2}`);
+    used.add(stepId2);
+    details.set(stepId2, {
       at: typeof request?.at === "string" ? request.at : void 0,
       ...Array.isArray(request?.argv) && request.argv.every((w) => typeof w === "string") ? { argv: request.argv } : {},
       output: commandOutput(receipt)
     });
-    stepsByExecution.set(executionId, [...stepsByExecution.get(executionId) ?? [], stepId]);
+    stepsByExecution.set(executionId, [...stepsByExecution.get(executionId) ?? [], stepId2]);
     steps.push({
-      id: stepId,
+      id: stepId2,
       actionId: executionId,
       inputMode: "diagnostic",
       attemptId: request?.attemptId ?? executionId,
@@ -20575,7 +20765,7 @@ async function deliverPackage(rootDir, options2) {
   const a = await analyze(root, options2, files);
   const created = [];
   const save = async (path, contents) => {
-    await mkdir5(dirname6(join9(root, path)), { recursive: true });
+    await mkdir6(dirname7(join9(root, path)), { recursive: true });
     await writeFile3(join9(root, path), contents, { flag: "wx" });
     created.push(path);
   };
@@ -20672,8 +20862,8 @@ async function probeLocal(run = command, platform = process.platform) {
 
 // src/owner-lock.ts
 import { spawn as spawn4 } from "node:child_process";
-import { constants as constants3 } from "node:fs";
-import { open as open5 } from "node:fs/promises";
+import { constants as constants4 } from "node:fs";
+import { open as open6 } from "node:fs/promises";
 var OwnerLockError = class extends Error {
   constructor(message2, options2) {
     super(message2, options2);
@@ -20698,7 +20888,7 @@ async function acquireOwnerLock(path, options2 = {}) {
   const executable = options2.pythonExecutable === void 0 ? pythonExecutable() : nonblank(options2.pythonExecutable, "pythonExecutable");
   const signal = options2.signal;
   signal?.throwIfAborted();
-  const file = await open5(path, constants3.O_RDWR | constants3.O_CREAT | constants3.O_NOFOLLOW, 384);
+  const file = await open6(path, constants4.O_RDWR | constants4.O_CREAT | constants4.O_NOFOLLOW, 384);
   try {
     if (!(await file.stat()).isFile()) throw new OwnerLockError("Owner lock must be a regular file");
     signal?.throwIfAborted();
@@ -28469,7 +28659,7 @@ function searchCatalog(value, query) {
 
 // src/search-diagnostics.ts
 import { randomUUID as randomUUID4 } from "node:crypto";
-import { lstat as lstat5, mkdir as mkdir6, readdir as readdir4, readFile as readFile7, unlink as unlink2 } from "node:fs/promises";
+import { lstat as lstat5, mkdir as mkdir7, readdir as readdir4, readFile as readFile7, unlink as unlink2 } from "node:fs/promises";
 import { join as join10, resolve as resolve7, parse as parse5 } from "node:path";
 var common = {
   schemaVersion: typebox_exports.Literal(1),
@@ -28503,7 +28693,7 @@ async function privateDirectory(path) {
   for (const part of absolute2.slice(current.length).split("/").filter(Boolean)) {
     current = join10(current, part);
     try {
-      await mkdir6(current, { mode: 448 });
+      await mkdir7(current, { mode: 448 });
     } catch (e) {
       if (e.code !== "EEXIST") throw e;
     }
@@ -28614,13 +28804,13 @@ function acquisitionCapabilities(value) {
 }
 
 // src/images.ts
-import { mkdir as mkdir7, lstat as lstat6, open as open6, readdir as readdir5, rm as rm3 } from "node:fs/promises";
-import { constants as constants4, linkSync as linkSync2 } from "node:fs";
-import { join as join11, dirname as dirname7, extname } from "node:path";
+import { mkdir as mkdir8, lstat as lstat6, open as open7, readdir as readdir5, rm as rm3 } from "node:fs/promises";
+import { constants as constants5, linkSync as linkSync2 } from "node:fs";
+import { join as join11, dirname as dirname8, extname } from "node:path";
 import { randomUUID as randomUUID5 } from "node:crypto";
 
 // src/image-presentation.ts
-import { createHash as createHash5 } from "node:crypto";
+import { createHash as createHash6 } from "node:crypto";
 import { deflateSync, inflateSync } from "node:zlib";
 var IMAGE_PRESENTATION_POLICY = Object.freeze({
   version: 1,
@@ -28989,12 +29179,12 @@ async function prepareImage(bytes, mimeType) {
       "Image must contain between 1 byte and 64 MiB"
     );
     const original = Buffer.from(bytes);
-    const header = inspect(original, mimeType);
-    let presented = original, size = header, presentedType = mimeType;
-    const raster = mimeType === "image/png" ? decodePng(original, header) : void 0;
-    if (header.width > policy.maxWidth || header.height > policy.maxHeight || base64Length(original.length) > policy.maxBytes) {
+    const header2 = inspect(original, mimeType);
+    let presented = original, size = header2, presentedType = mimeType;
+    const raster = mimeType === "image/png" ? decodePng(original, header2) : void 0;
+    if (header2.width > policy.maxWidth || header2.height > policy.maxHeight || base64Length(original.length) > policy.maxBytes) {
       requireImage(raster, `${mimeType} original exceeds the preview bounds and only PNG originals are resampled here; retrieve the original with the host read tool`);
-      let width = header.width, height = header.height;
+      let width = header2.width, height = header2.height;
       if (width > policy.maxWidth) {
         height = Math.round(height * policy.maxWidth / width);
         width = policy.maxWidth;
@@ -29021,12 +29211,12 @@ async function prepareImage(bytes, mimeType) {
     return {
       content: { type: "image", data, mimeType: presentedType },
       presentation: {
-        originalWidth: header.width,
-        originalHeight: header.height,
+        originalWidth: header2.width,
+        originalHeight: header2.height,
         width: size.width,
         height: size.height,
         mimeType: presentedType,
-        sha256: createHash5("sha256").update(presented).digest("hex"),
+        sha256: createHash6("sha256").update(presented).digest("hex"),
         bytes: presented.length,
         transformed: presentedType !== mimeType || !original.equals(presented),
         policy
@@ -29124,7 +29314,7 @@ async function readBounded(root, path, limit, signal) {
   const before = await lstat6(path);
   if (!before.isFile()) fail("unsafe-path", "Image evidence must be a regular file.");
   if (before.size < 1 || before.size > limit) fail("integrity-failed", "Image evidence exceeds its size bound.");
-  const fd = await open6(path, constants4.O_RDONLY | constants4.O_NOFOLLOW | constants4.O_NONBLOCK);
+  const fd = await open7(path, constants5.O_RDONLY | constants5.O_NOFOLLOW | constants5.O_NONBLOCK);
   try {
     const same = (s) => s.isFile() && s.dev === before.dev && s.ino === before.ino && s.size === before.size && s.mtimeMs === before.mtimeMs && s.ctimeMs === before.ctimeMs;
     if (!same(await fd.stat())) fail("integrity-failed", "Image evidence changed before reading.");
@@ -29166,11 +29356,11 @@ async function optional2(read) {
 async function publish(root, path, bytes, signal) {
   guard(signal);
   await hostPath(root, path, true);
-  await mkdir7(dirname7(path), { recursive: true, mode: 448 });
+  await mkdir8(dirname8(path), { recursive: true, mode: 448 });
   await hostPath(root, path, true);
   guard(signal);
-  const temporary = join11(dirname7(path), `.image-${randomUUID5()}.tmp`);
-  const fd = await open6(temporary, "wx", 384);
+  const temporary = join11(dirname8(path), `.image-${randomUUID5()}.tmp`);
+  const fd = await open7(temporary, "wx", 384);
   try {
     try {
       await fd.writeFile(bytes);
@@ -29191,7 +29381,7 @@ async function publish(root, path, bytes, signal) {
     await hostPath(root, temporary, true);
     await rm3(temporary, { force: true });
   }
-  const directory2 = await open6(dirname7(path), "r");
+  const directory2 = await open7(dirname8(path), "r");
   try {
     await directory2.sync();
   } finally {
@@ -29202,6 +29392,7 @@ async function publish(root, path, bytes, signal) {
 function verifyOriginal(bytes, descriptor) {
   if (bytes.length !== descriptor.bytes || hash(bytes) !== descriptor.sha256) fail("integrity-failed", "Original bytes conflict with their image reference.");
 }
+var stepCopy = (recording, executionId, ...relative6) => join11(recording, "host", "steps", executionId, "state", ...relative6);
 var ImageStore = class {
   constructor(options2) {
     this.options = options2;
@@ -29345,7 +29536,7 @@ var ImageStore = class {
     const group = request.snapshots?.group;
     const requested = !request.diagnostic && (target2.phase === "before" ? !group || group.phase === "first" : !group || group.phase === "last");
     if (!requested) return { status: "not-requested", diagnostic: "The declared snapshot plan does not capture this phase." };
-    const receipt = await this.metadata(join11("receiver", "receipts", `${target2.executionId}.json`), recording, options2, [join11(recording.path, "host", "receiver-receipts", `${target2.executionId}.json`)], hostOnly);
+    const receipt = await this.metadata(join11("receiver", "receipts", `${target2.executionId}.json`), recording, options2, [join11(recording.path, "host", "receiver-receipts", `${target2.executionId}.json`), stepCopy(recording.path, target2.executionId, "receiver", "receipts", `${target2.executionId}.json`)], hostOnly);
     if (receipt === void 0) return void 0;
     if (receipt?.executionId !== request.executionId) fail("integrity-failed", "Receipt execution identity mismatch.");
     const evidence = receipt.imageEvidence;
@@ -29369,7 +29560,7 @@ var ImageStore = class {
     const group = request.snapshots?.group;
     let action;
     try {
-      action = await this.metadata(join11("records", "action", `${sn.actionId}.json`), recording, options2);
+      action = await this.metadata(join11("records", "action", `${sn.actionId}.json`), recording, options2, [stepCopy(recording.path, sn.executionId, "records", "action", `${sn.actionId}.json`)]);
     } catch (error2) {
       if (error2.code === "image-missing") fail("integrity-failed", "Receipt cites a missing authoritative action.");
       throw error2;
@@ -29404,12 +29595,13 @@ var ImageStore = class {
       return bytes;
     }
     if (record3.descriptor.source === "display") {
-      const path = join11(record3.recording, "state", "snapshots", record3.descriptor.sessionId, record3.fileName);
-      bytes = await optional2(() => readBounded(record3.recording, path, MAX_IMAGE, options2.signal));
-      if (bytes) {
-        verifyOriginal(bytes, record3.descriptor);
-        await publish(record3.recording, record3.local, bytes, options2.signal);
-        return bytes;
+      for (const path of [join11(record3.recording, "state", "snapshots", record3.descriptor.sessionId, record3.fileName), stepCopy(record3.recording, record3.descriptor.executionId, "snapshots", record3.descriptor.sessionId, record3.fileName)]) {
+        bytes = await optional2(() => readBounded(record3.recording, path, MAX_IMAGE, options2.signal));
+        if (bytes) {
+          verifyOriginal(bytes, record3.descriptor);
+          await publish(record3.recording, record3.local, bytes, options2.signal);
+          return bytes;
+        }
       }
       if (!this.recordings.find((r) => r.path === record3.recording && r.sessionId === record3.descriptor.sessionId)?.guestState) fail("stale-reference", "The original is unavailable in retained host evidence and its guest recording is no longer addressable.");
     }
@@ -29444,7 +29636,7 @@ var ImageStore = class {
   async download(target2, signal, options2 = {}) {
     return this.deliver(target2, false, signal, Date.now() + imageCapability.deadlineMs, options2.retryDelaysMs);
   }
-  async deliver(target2, present, signal, requestedDeadline, retryDelaysMs) {
+  async deliver(target2, present2, signal, requestedDeadline, retryDelaysMs) {
     const deadline = Math.min(requestedDeadline, Date.now() + imageCapability.deadlineMs);
     if (!Number.isFinite(deadline)) return imageFailure(new ImageError("transfer-failed", "Invalid image deadline."));
     if (Date.now() >= deadline) return imageFailure(new ImageError("transfer-failed", "Image delivery deadline exceeded."));
@@ -29459,7 +29651,7 @@ var ImageStore = class {
         record3 = selected;
         const bytes = await this.original(record3, options2);
         guard(boundedSignal);
-        if (!present) {
+        if (!present2) {
           const image2 = { ...record3.descriptor, originalPath: record3.local };
           await publish(record3.recording, join11(record3.recording, "host", "images", record3.descriptor.imageId, `delivery-${randomUUID5()}.json`), Buffer.from(canonical({ image: image2, at: (/* @__PURE__ */ new Date()).toISOString(), status: "downloaded" })), boundedSignal);
           guard(boundedSignal);
@@ -29536,7 +29728,7 @@ var DownloadQueue = class {
   paused = false;
   queued = [];
   current;
-  ended = { downloaded: 0, failed: 0, cancelled: 0 };
+  ended = { downloaded: 0, failed: 0, cancelled: 0, coalesced: 0 };
   enqueue(input, run) {
     if (this.state !== "open") throw new Error(`The download queue is ${this.state}`);
     let resolve11;
@@ -29582,16 +29774,24 @@ var DownloadQueue = class {
     while (this.pending > this.options.bound && !this.paused && this.state === "open") await (this.current ?? this.queued[0]).done;
   }
   /**
-   * AD-5: close to new downloads, lift the pause and wait until every download
-   * has ended. While closing, the first transient failure cancels the rest.
+   * AD-5: close to new downloads, end every download that has not started as
+   * `coalesced` (DC-11), and wait for the one in flight. The lifecycle
+   * operation fetches the coalesced steps' files in its own archive (AD-9).
    * Call `reopen` when the lifecycle operation ends.
    */
   async drain() {
     if (this.state === "closed") return;
     this.state = "closing";
     this.paused = false;
-    this.kick();
-    while (this.current || this.queued.length) await (this.current ?? this.queued[0]).done;
+    for (const job of this.queued.splice(0)) {
+      job.end = "coalesced";
+      job.endedAt = (/* @__PURE__ */ new Date()).toISOString();
+      this.ended.coalesced++;
+      await this.options.record(job).catch(() => {
+      });
+      job.resolve();
+    }
+    await this.current?.done;
   }
   reopen() {
     if (this.state === "closing") {
@@ -29653,9 +29853,9 @@ var DownloadQueue = class {
 };
 
 // src/evidence-merge.ts
-import { constants as constants5 } from "node:fs";
-import { copyFile as copyFile2, lstat as lstat7, mkdir as mkdir8, mkdtemp as mkdtemp2, readFile as readFile8, readdir as readdir6, rename as rename4 } from "node:fs/promises";
-import { dirname as dirname8, isAbsolute as isAbsolute5, join as join12, parse as parse6, relative as relative5, resolve as resolve8 } from "node:path";
+import { constants as constants6 } from "node:fs";
+import { copyFile as copyFile2, lstat as lstat7, mkdir as mkdir9, mkdtemp as mkdtemp2, readFile as readFile8, readdir as readdir6, rename as rename4 } from "node:fs/promises";
+import { dirname as dirname9, isAbsolute as isAbsolute5, join as join12, parse as parse6, relative as relative5, resolve as resolve8 } from "node:path";
 function safePath(value) {
   if (!value || /[\\\x00-\x1f\x7f:#?]/.test(value) || value.split("/").some((p) => p === "." || p === "..")) {
     throw new Error(`unsafe evidence path: ${value}`);
@@ -29676,7 +29876,7 @@ async function directory(path, create = false) {
     current = join12(current, part);
     let info = await statIfPresent(current);
     if (!info && create) {
-      await mkdir8(current);
+      await mkdir9(current);
       info = await lstat7(current);
     }
     if (!info) return false;
@@ -29718,7 +29918,7 @@ async function refreshEvidenceState(incoming, destination, archiveRoot, options2
   if (!await directory(incoming)) throw new Error("missing incoming evidence state");
   const existing = await directory(destination);
   await directory(archiveRoot);
-  if (await statIfPresent(join12(dirname8(destination), "manifest.json"))) throw new Error("cannot refresh sealed evidence package");
+  if (await statIfPresent(join12(dirname9(destination), "manifest.json"))) throw new Error("cannot refresh sealed evidence package");
   const fresh = await inventory2(incoming), prior = await inventory2(destination);
   const retained = /* @__PURE__ */ new Map();
   for (const [path, kind] of prior) {
@@ -29737,14 +29937,14 @@ async function refreshEvidenceState(incoming, destination, archiveRoot, options2
     archived = join12(attempt, "state");
     await rename4(destination, archived);
   }
-  await directory(dirname8(destination), true);
+  await directory(dirname9(destination), true);
   const copy = async (source, tree) => {
     for (const [path, kind] of tree) {
       const target2 = join12(destination, path);
       if (kind === "directory") await directory(target2, true);
       else {
-        await directory(dirname8(target2), true);
-        await copyFile2(join12(source, path), target2, constants5.COPYFILE_EXCL);
+        await directory(dirname9(target2), true);
+        await copyFile2(join12(source, path), target2, constants6.COPYFILE_EXCL);
       }
     }
   };
@@ -29756,15 +29956,15 @@ async function refreshEvidenceState(incoming, destination, archiveRoot, options2
     if (error2.code !== "EXDEV") throw error2;
   }
   if (!moved) {
-    await mkdir8(destination);
+    await mkdir9(destination);
     await copy(incoming, fresh);
   }
   if (archived) await copy(archived, retained);
 }
 
 // src/targets.ts
-import { createHash as createHash6 } from "node:crypto";
-import { mkdir as mkdir9, readFile as readFile9, rename as rename5, writeFile as writeFile4 } from "node:fs/promises";
+import { createHash as createHash7 } from "node:crypto";
+import { mkdir as mkdir10, readFile as readFile9, rename as rename5, writeFile as writeFile4 } from "node:fs/promises";
 import { join as join13 } from "node:path";
 import { randomUUID as randomUUID6 } from "node:crypto";
 var TARGETS = ["cua", "playwright", "chrome-devtools"];
@@ -29816,7 +30016,7 @@ function tarballUrl(pin, registry2 = process.env.MCP_VM_RELAY_NPM_REGISTRY ?? "h
 }
 function integrityMatches(bytes, integrity) {
   const [algorithm, expected] = integrity.split("-", 2);
-  return algorithm === "sha512" && !!expected && createHash6("sha512").update(bytes).digest("base64") === expected;
+  return algorithm === "sha512" && !!expected && createHash7("sha512").update(bytes).digest("base64") === expected;
 }
 var registrySource = async (pin, signal) => {
   const response = await fetch(tarballUrl(pin), { signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(12e4)]) : AbortSignal.timeout(12e4) });
@@ -29827,17 +30027,17 @@ async function cachedTarball(cacheRoot, pin, source = registrySource, signal) {
   const path = join13(cacheRoot, tarballName(pin));
   try {
     const bytes2 = await readFile9(path);
-    if (integrityMatches(bytes2, pin.integrity)) return { path, sha256: createHash6("sha256").update(bytes2).digest("hex") };
+    if (integrityMatches(bytes2, pin.integrity)) return { path, sha256: createHash7("sha256").update(bytes2).digest("hex") };
   } catch (error2) {
     if (error2.code !== "ENOENT") throw error2;
   }
   const bytes = await source(pin, signal);
   if (!integrityMatches(bytes, pin.integrity)) throw new Error(`${pin.name}@${pin.version} does not match its pinned integrity; nothing was staged`);
-  await mkdir9(cacheRoot, { recursive: true, mode: 448 });
+  await mkdir10(cacheRoot, { recursive: true, mode: 448 });
   const temporary = `${path}.${randomUUID6()}.tmp`;
   await writeFile4(temporary, bytes, { mode: 384 });
   await rename5(temporary, path);
-  return { path, sha256: createHash6("sha256").update(bytes).digest("hex") };
+  return { path, sha256: createHash7("sha256").update(bytes).digest("hex") };
 }
 
 // src/json-schema.ts
@@ -29902,7 +30102,8 @@ var DECIDE = `const fs=require('fs'),p=require('path');const [dir,id,want]=proce
 var MAX_TOOL_IMAGES = 4;
 var DOWNLOAD_BOUND = 64;
 var DOWNLOAD_RETRY_DELAYS_MS = [1e3, 3e3];
-var downloadKey = (target2) => `${target2.sessionId}/${target2.executionId}/${target2.phase}`;
+var downloadKey = (target2) => `${target2.sessionId}/${target2.executionId}`;
+var stepId = (value) => typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9_.-]{0,159}$/.test(value);
 var instructions = "This server offers nineteen tools for one interruptive VM enclosure: relay_search, relay_probe, relay_acquisition_capabilities, relay_acquire, relay_stage, relay_run, relay_gate, relay_tools, the command tools relay_exec/relay_script/relay_code, relay_image, relay_extract, relay_finish, relay_release, relay_console_resolve, relay_console_open, relay_console_cancel and relay_status. relay_run sends the cua-driver, Playwright MCP or Chrome DevTools MCP tool calls you already know to that server inside the VM; evidence is automatic, and its after-image is returned as pending and downloaded in the background, so call relay_image with the imageId when you need to see it. Relay only interruptive computer-use or browser-use that would otherwise take over a real desktop or browser, judged for yourself from relay_probe facts; unknown is not idle, and non-disruptive or headless work stays with local tools. One task gets one enclosure: call relay_acquire once per task, never reused for a second task. Work an enclosure in order: relay_probe, then relay_acquire, then relay_stage, then relay_run or the command tools, then relay_image or relay_extract as needed, then relay_finish or relay_release. Always call relay_finish or relay_release explicitly before you return an answer; ending the session only pauses lease renewal, it does not destroy the VM, and the backend's own expiry is the last-resort safeguard. A refused, uncertain or nonzero operation keeps the VM so you can diagnose and submit a corrected operation; never replay input whose effect is uncertain. A tool result, an attached image or a verified evidence package, is evidence for a human reviewer, never the review itself. The relay never targets a physical or local display and offers no video or spawn API. Every tool's text result is capped at 50 KiB / 2000 lines; a larger result is retained whole in a local file the result names.";
 var NO_OWNED_LEASE = "This session owns no lease, so nothing was released. Each server process has its own session identity (a new random one unless MCP_VM_RELAY_SESSION sets it); a lease acquired under another identity is not visible here. Restart the server with that MCP_VM_RELAY_SESSION to reconcile and release it, or let the backend TTL expire it.";
 var RelayManager = class {
@@ -29957,7 +30158,7 @@ var RelayManager = class {
   }
   async init(hostOnly = false) {
     if (this.initialized) return;
-    await mkdir10(this.root, { recursive: true, mode: 448 });
+    await mkdir11(this.root, { recursive: true, mode: 448 });
     if (!this.ownerLock) {
       this.ownerLock = await acquireOwnerLock(join14(this.root, "owner.lock"));
       try {
@@ -30220,7 +30421,7 @@ var RelayManager = class {
   transfer() {
     const e = this.current();
     if (!e.node) throw new Error("Stage runtime first");
-    return new Transfer(this.channel, e.lease.vm, e.node, { guestRoot: e.guestRoot, hostTempRoot: join14(this.root, "transfer-tmp"), onRetry: (event) => this.log("transfer-retry", void 0, event) });
+    return new Transfer(this.channel, e.lease.vm, e.node, { guestRoot: e.guestRoot, hostTempRoot: join14(this.root, "transfer-tmp"), onRetry: (event) => this.log("transfer-retry", void 0, event), onArchiveFallback: (event) => this.log("archive-fallback", void 0, event) });
   }
   async log(kind, because, details = {}) {
     if (because !== void 0) this.reason(because);
@@ -30397,7 +30598,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
       const bundle = this.options.runtimeBundle ?? fileURLToPath(new URL("../dist/receiver.mjs", import.meta.url));
       await access(bundle);
       const node2 = input.nodePath ?? e.node ?? "node";
-      const transfer = new Transfer(this.channel, e.lease.vm, node2, { guestRoot: e.guestRoot, hostTempRoot: join14(this.root, "transfer-tmp"), onRetry: (event) => this.log("transfer-retry", void 0, event) });
+      const transfer = new Transfer(this.channel, e.lease.vm, node2, { guestRoot: e.guestRoot, hostTempRoot: join14(this.root, "transfer-tmp"), onRetry: (event) => this.log("transfer-retry", void 0, event), onArchiveFallback: (event) => this.log("archive-fallback", void 0, event) });
       await transfer.checked([node2, "--version"]);
       const launchChanged = e.mcpHost && (input.nodePath !== void 0 && input.nodePath !== e.node || input.cuaDriver !== void 0 && input.cuaDriver !== e.cuaDriver || input.browserExecutable !== void 0 && input.browserExecutable !== e.browserExecutable);
       e.node = node2;
@@ -30412,7 +30613,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
       }
       await transfer.checked(["/bin/mkdir", "-p", join14(e.guestRoot, "workspace"), join14(e.guestRoot, "state")]);
       const staged = [await transfer.pushFile(bundle, join14(e.guestRoot, "receiver.mjs"))];
-      for (const file of input.files ?? []) staged.push(await transfer.pushFile(resolve9(this.options.project, file.local), within(join14(e.guestRoot, "support"), file.path), file.local.startsWith("/") ? dirname9(resolve9(file.local)) : resolve9(this.options.project)));
+      for (const file of input.files ?? []) staged.push(await transfer.pushFile(resolve9(this.options.project, file.local), within(join14(e.guestRoot, "support"), file.path), file.local.startsWith("/") ? dirname10(resolve9(file.local)) : resolve9(this.options.project)));
       if (input.workspace) staged.push(...await transfer.pushTree(resolve9(this.options.project, input.workspace), join14(e.guestRoot, "workspace"), input.workspace.startsWith("/") ? resolve9(input.workspace) : resolve9(this.options.project)));
       await this.log("stage", void 0, { files: staged, extractions: e.extractions });
       const relay = Relay.open(join14(e.hostRoot, "host", "submissions"));
@@ -30465,7 +30666,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
           result2 = await this.session.exec(argv2, options2);
         } else if (input.kind === "script") {
           if (!input.localPath || !input.language) throw new Error("script requires localPath and language");
-          await assertHostPath(input.localPath.startsWith("/") ? dirname9(input.localPath) : resolve9(this.options.project), resolve9(this.options.project, input.localPath));
+          await assertHostPath(input.localPath.startsWith("/") ? dirname10(input.localPath) : resolve9(this.options.project), resolve9(this.options.project, input.localPath));
           result2 = await this.session.runScript(resolve9(this.options.project, input.localPath), join14(e.guestRoot, "scripts", `${randomUUID7()}.${input.language === "python" ? "py" : input.language === "typescript" ? "ts" : "js"}`), input.language, options2);
         } else if (input.kind === "code") {
           if (typeof input.code !== "string" || !input.language) throw new Error("code requires code and language");
@@ -30482,7 +30683,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
         const target2 = { source: "display", sessionId: e.sessionId, executionId: result2.executionId, phase: "after" };
         const store = this.imageStore();
         const imageDelivery = await store.pending(target2);
-        if (imageDelivery.status === "pending") await this.queueDownload(store, target2, imageDelivery.image);
+        await this.queueDownload(store, target2, imageDelivery.status === "pending", imageDelivery.image);
         const common2 = { step: record3.step, snapshots: record3.snapshots, timeoutMs: timeoutMs2, evidencePath: e.hostRoot, leaseReleased: !this.enclosure, owned: this.status(), imageDelivery };
         if (input.kind === "mcp") return { ...result2, ...await this.mcpResult(e, input.target, input.tool, outcome, signal), ...common2, ...held ? { hold: { id: hold2.id, ...held } } : {} };
         return { ...result2, ...this.transport?.response, ...common2 };
@@ -30514,14 +30715,14 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
    */
   derive(e, input) {
     const seq = e.runSeq = (e.runSeq ?? 0) + 1;
-    const stepId = (prefix) => `${prefix.replace(/[^A-Za-z0-9_.-]+/g, "-").replace(/^[^A-Za-z0-9]+/, "").slice(0, 100) || "run"}-${seq}`;
+    const stepId2 = (prefix) => `${prefix.replace(/[^A-Za-z0-9_.-]+/g, "-").replace(/^[^A-Za-z0-9]+/, "").slice(0, 100) || "run"}-${seq}`;
     if (input.kind === "mcp") {
       const title2 = `${input.target}.${input.tool}`.slice(0, 500);
       const args = input.args ?? {};
       const accessibility = input.target === "cua" && (input.tool === "set_value" || e.lease.image_kind === "macos" && input.tool === "type_text" || ["click", "double_click", "right_click", "press_key"].includes(input.tool) && args.element_index !== void 0);
       return {
         because: input.because ?? `Relay ${title2} (no reason given)`,
-        step: { id: stepId(title2), title: title2, expected: input.expected ?? `${title2} returns without a tool error`, inputMode: accessibility ? "accessibility" : "ordinary" },
+        step: { id: stepId2(title2), title: title2, expected: input.expected ?? `${title2} returns without a tool error`, inputMode: accessibility ? "accessibility" : "ordinary" },
         snapshots: { afterIntervalMs: input.afterIntervalMs ?? DEFAULT_AFTER_INTERVAL_MS[input.target] }
       };
     }
@@ -30531,7 +30732,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
     if (!group ? snapshots2.afterIntervalMs === void 0 : group.phase === "last" && group.afterIntervalMs === void 0 && snapshots2.afterIntervalMs === void 0) Object.assign(snapshots2, { afterIntervalMs: DEFAULT_AFTER_INTERVAL_MS.command });
     return {
       because: input.because ?? `Relay ${title} (no reason given)`.slice(0, 4e3),
-      step: { id: input.step?.id ?? stepId(input.kind), title: title || input.kind, expected: input.step?.expected ?? "Exits with status 0", inputMode: input.step?.inputMode ?? "ordinary" },
+      step: { id: input.step?.id ?? stepId2(input.kind), title: title || input.kind, expected: input.step?.expected ?? "Exits with status 0", inputMode: input.step?.inputMode ?? "ordinary" },
       snapshots: snapshots2
     };
   }
@@ -30640,7 +30841,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
   async ensureTargetPackages(e, target2, transfer, signal) {
     if (target2 === "cua" || e.mcpPackages?.includes(target2)) return;
     const closure = this.options.targetPackages?.[target2] ?? TARGET_PACKAGES[target2];
-    const cache = this.options.packageCache ?? join14(dirname9(this.root), "mcp-packages");
+    const cache = this.options.packageCache ?? join14(dirname10(this.root), "mcp-packages");
     const specs = [], staged = [];
     for (const pin of closure.packages) {
       const local = await cachedTarball(cache, pin, this.options.tarballSource, signal);
@@ -30776,26 +30977,147 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
         }
         if (bounded3.aborted) return { status: "transfer-failed", ...job.image ? { image: job.image } : {}, diagnostic: "Image delivery cancelled or deadline exceeded while its background download was still running." };
       }
-      return this.imageStore().get(target2, bounded3, deadline);
+      const store = this.imageStore(), result2 = await store.get(target2, bounded3, deadline);
+      if (result2.status !== "unauthorized-reference" || target2.source !== "reference") return result2;
+      const named = job?.image ?? await this.namedImage(target2.imageId);
+      if (named?.source !== "display") return result2;
+      const resolved = await store.get({ source: "display", sessionId: named.sessionId, executionId: named.executionId, phase: named.phase }, bounded3, deadline);
+      return resolved.image && resolved.image.imageId !== target2.imageId ? { status: "integrity-failed", diagnostic: "The display selector no longer names the referenced image." } : resolved;
     });
   }
-  async queueDownload(store, target2, image) {
+  /** The image a run named with this reference, from the step download records. No guest I/O. */
+  async namedImage(imageId) {
+    const records = join14(this.current().hostRoot, "host", "evidence-downloads");
+    for (const name of (await readdir7(records).catch(() => [])).filter((n) => n.endsWith(".json"))) {
+      const image = await readFile10(join14(records, name), "utf8").then((text4) => JSON.parse(text4)?.image, () => void 0);
+      if (image?.imageId === imageId) return image;
+    }
+    return void 0;
+  }
+  /** DC-9: every step whose receipt the host holds queues one download of its evidence. */
+  async queueDownload(store, target2, afterImage, image) {
     if (this.downloads.state !== "open") return;
-    const retryDelaysMs = this.options.downloadRetryDelaysMs ?? DOWNLOAD_RETRY_DELAYS_MS;
+    const e = this.current();
+    const requested = await this.stepFiles(e.hostRoot, target2.executionId);
+    if (!requested) return;
     this.downloads.enqueue(
-      { key: downloadKey(target2), ...image ? { image } : {}, recordPath: join14(this.current().hostRoot, "host", "image-downloads", `${target2.executionId}-${target2.phase}.json`) },
-      (signal) => store.download(target2, signal, { retryDelaysMs })
+      { key: downloadKey(target2), ...image ? { image } : {}, recordPath: join14(e.hostRoot, "host", "evidence-downloads", `${target2.executionId}.json`) },
+      (signal) => this.downloadStep(store, target2, requested, afterImage, signal)
     );
     await this.downloads.withinBound();
   }
+  /**
+   * AD-2: the step's files, relative to the guest root, from the receipt the
+   * transport filed on the host. No guest I/O. Undefined without the receipt.
+   */
+  async stepFiles(hostRoot, executionId) {
+    if (!stepId(executionId)) return void 0;
+    let receipt;
+    try {
+      receipt = JSON.parse(await readFile10(join14(hostRoot, "host", "receiver-receipts", `${executionId}.json`), "utf8"));
+    } catch {
+      return void 0;
+    }
+    if (receipt?.executionId !== executionId) return void 0;
+    const paths2 = /* @__PURE__ */ new Set([`state/receiver/started/${executionId}.json`, `state/receiver/receipts/${executionId}.json`, `state/records/execution/${executionId}.json`]);
+    for (const sn of Array.isArray(receipt.imageEvidence?.snapshots) ? receipt.imageEvidence.snapshots : []) {
+      if (stepId(sn?.actionId)) paths2.add(`state/records/action/${sn.actionId}.json`);
+      if (stepId(sn?.sessionId) && stepId(sn?.fileName)) paths2.add(`state/snapshots/${sn.sessionId}/${sn.fileName}`);
+    }
+    let resultFile;
+    try {
+      resultFile = JSON.parse(receipt.stdout)?.resultFile;
+    } catch {
+    }
+    if (typeof resultFile === "string") {
+      try {
+        within("/", resultFile);
+        paths2.add(`workspace/${RELAY_RUN_OUTPUTS}/${resultFile}`);
+      } catch {
+      }
+    }
+    return [...paths2].map((path) => ({ path }));
+  }
+  /**
+   * One step download (AD-2, AD-7, AD-8): the step's files in one archive into
+   * `host/steps/<executionId>/`, then the after-image filed from there.
+   */
+  async downloadStep(store, target2, requested, afterImage, signal) {
+    const e = this.current(), retryDelaysMs = this.options.downloadRetryDelaysMs ?? DOWNLOAD_RETRY_DELAYS_MS;
+    const bounded3 = AbortSignal.any([signal, AbortSignal.timeout(imageCapability.deadlineMs)]);
+    const folder = join14(e.hostRoot, "host", "steps", target2.executionId);
+    let files;
+    for (let attempt = 1; !files; attempt++) {
+      try {
+        await assertHostPath(e.hostRoot, folder, true);
+        await rm4(folder, { recursive: true, force: true });
+        files = await this.transfer().pullArchive(e.guestRoot, e.guestRoot, requested, folder, e.hostRoot, { present: true, once: true, signal: bounded3 });
+      } catch (error2) {
+        const transient2 = !bounded3.aborted && transientTransfer(error2);
+        if (attempt >= 3 || !transient2) return { status: transient2 || bounded3.aborted ? "transfer-failed" : "integrity-failed", diagnostic: `Step evidence download failed: ${String(error2)}` };
+        const wait = retryDelaysMs[attempt - 1] ?? 0;
+        await new Promise((done) => {
+          const timer = setTimeout(done, wait);
+          bounded3.addEventListener("abort", () => {
+            clearTimeout(timer);
+            done();
+          }, { once: true });
+        });
+      }
+    }
+    const missing = requested.map((file) => file.path).filter((path) => !files.some((file) => file.path === path));
+    const result2 = afterImage ? await store.download(target2, signal, { retryDelaysMs }) : { status: "downloaded" };
+    return { ...result2, files, missing };
+  }
   async recordDownload(job) {
     const image = job.result?.image ?? job.image;
-    await jsonFile(job.recordPath, { status: job.end, key: job.key, ...image ? { image } : {}, ...job.result?.diagnostic ? { diagnostic: job.result.diagnostic } : {}, ...job.result && job.end === "failed" ? { failure: job.result.status } : {}, queuedAt: job.queuedAt, startedAt: job.startedAt, endedAt: job.endedAt });
+    await jsonFile(job.recordPath, { status: job.end, key: job.key, ...image ? { image } : {}, ...job.result?.files ? { files: job.result.files } : {}, ...job.result?.missing?.length ? { missing: job.result.missing } : {}, ...job.result?.diagnostic ? { diagnostic: job.result.diagnostic } : {}, ...job.result && job.end === "failed" ? { failure: job.result.status } : {}, queuedAt: job.queuedAt, startedAt: job.startedAt, endedAt: job.endedAt });
+  }
+  /** AD-6: the files the step downloads brought into step folders, by `sha256:bytes`. No guest I/O. */
+  async stepCopies(recording, prefix) {
+    const copies = /* @__PURE__ */ new Map();
+    const records = join14(recording, "host", "evidence-downloads");
+    for (const name of (await readdir7(records).catch(() => [])).filter((n) => n.endsWith(".json"))) {
+      const executionId = name.slice(0, -5);
+      if (!stepId(executionId)) continue;
+      let record3;
+      try {
+        record3 = JSON.parse(await readFile10(join14(records, name), "utf8"));
+      } catch {
+        continue;
+      }
+      for (const file of Array.isArray(record3?.files) ? record3.files : []) {
+        if (typeof file?.path !== "string" || !file.path.startsWith(prefix) || typeof file.sha256 !== "string" || !Number.isSafeInteger(file.bytes)) continue;
+        let path;
+        try {
+          path = within(join14(recording, "host", "steps", executionId), file.path);
+        } catch {
+          continue;
+        }
+        const key = `${file.sha256}:${file.bytes}`;
+        copies.set(key, [...copies.get(key) ?? [], path]);
+      }
+    }
+    return copies;
   }
   /** AD-6: the host files that may already hold a guest state file's bytes. */
   async localState(recording) {
-    const held = await this.imageStore().heldOriginals(recording);
-    return { root: recording, candidates: (file) => [join14(recording, "state", file.path), ...held.get(`${file.sha256}:${file.bytes}`) ?? []] };
+    const held = await this.imageStore().heldOriginals(recording), steps = await this.stepCopies(recording, "state/");
+    return { root: recording, candidates: (file) => {
+      const key = `${file.sha256}:${file.bytes}`, receipt = /^receiver\/receipts\/([^/]+\.json)$/.exec(file.path)?.[1];
+      return [join14(recording, "state", file.path), ...steps.get(key) ?? [], ...receipt ? [join14(recording, "host", "receiver-receipts", receipt)] : [], ...held.get(key) ?? []];
+    } };
+  }
+  /** AD-9: an extraction takes the files the step downloads already brought, such as `relay-run` results. */
+  async localWorkspace(recording) {
+    const steps = await this.stepCopies(recording, "workspace/");
+    return { root: recording, candidates: (file) => steps.get(`${file.sha256}:${file.bytes}`) ?? [] };
+  }
+  /** AD-7: the step folders are a staging area; once their files are in the recording's state they go. */
+  async removeStepFolders(recording) {
+    const steps = join14(recording, "host", "steps");
+    await assertHostPath(recording, steps, true);
+    await rm4(steps, { recursive: true, force: true });
   }
   /** A lifecycle operation's gate (AD-5): every download ends before the guest state is touched; the queue opens again after. */
   async drained(fn) {
@@ -30828,6 +31150,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
     if (reuse.reused) await this.log("state-reused", void 0, { files: reuse.reused });
     await this.imageStore().materializeDisplayOriginals(reset.from);
     await refreshEvidenceState(incoming, join14(reset.from, "state"), join14(attempts, "previous"));
+    await this.removeStepFolders(reset.from);
     await this.log("recording-reset-intent", void 0, reset);
     await transfer.checked([e.node, "-e", `const fs=require('fs'),p=require('path');const [root,id]=process.argv.slice(1);if(fs.existsSync(p.join(root,'.receiver-lock')))throw Error('Receiver lock exists; diagnose active execution before recording reset');const state=p.join(root,'state'),archive=p.join(root,'recordings',id),marker=p.join(root,'.recording-reset-'+id+'.json');if(!fs.existsSync(marker)){fs.mkdirSync(p.dirname(archive),{recursive:true});if(!fs.existsSync(archive))fs.renameSync(state,archive);else if(fs.existsSync(state)&&fs.readdirSync(state).length)throw Error('Reset destination is not empty');fs.mkdirSync(state,{recursive:true});fs.writeFileSync(marker,JSON.stringify({id,archive}),{flag:'wx'});}console.log('recording archived');`, e.guestRoot, reset.id]);
     await this.session?.close();
@@ -30848,7 +31171,9 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
       const declaration = e.extractions.find((item) => item.name === name);
       if (!declaration) throw new Error(`Undeclared extraction: ${name}`);
       const destination = join14(e.hostRoot, "extractions", name, randomUUID7());
-      const facts = await transfer.pullVerified(within(join14(e.guestRoot, "workspace"), declaration.path), destination, join14(e.guestRoot, "workspace"), e.hostRoot);
+      const reuse = await this.localWorkspace(e.hostRoot);
+      const facts = await transfer.pullVerified(within(join14(e.guestRoot, "workspace"), declaration.path), destination, join14(e.guestRoot, "workspace"), e.hostRoot, { reuse });
+      if (reuse.reused) await this.log("extraction-reused", void 0, { name, files: reuse.reused });
       results.push({ ...declaration, destination, facts });
     }
     await jsonFile(join14(e.hostRoot, "host", "extractions", `${randomUUID7()}.json`), { extractions: results });
@@ -30926,6 +31251,7 @@ VM state: ${JSON.stringify(this.status())}`, { cause: error2 });
     if (reuse.reused) await this.log("state-reused", void 0, { files: reuse.reused });
     await this.imageStore().materializeDisplayOriginals(e.hostRoot);
     await refreshEvidenceState(incoming, join14(e.hostRoot, "state"), join14(attempts, "previous"));
+    await this.removeStepFolders(e.hostRoot);
     const result2 = await deliverPackage(e.hostRoot, { packageId: `pkg-${e.purpose}`, sessionId: e.sessionId, taskId: e.purpose });
     e.delivered = result2;
     await this.save();
@@ -31239,7 +31565,7 @@ function validateRelayInput(value) {
 }
 
 // src/surface.ts
-import { mkdir as mkdir11, writeFile as writeFile6 } from "node:fs/promises";
+import { mkdir as mkdir12, writeFile as writeFile6 } from "node:fs/promises";
 import { join as join15 } from "node:path";
 import { tmpdir as tmpdir2 } from "node:os";
 import { randomUUID as randomUUID8 } from "node:crypto";
@@ -31391,7 +31717,7 @@ async function renderRelayResult(value, resultRoot = join15(tmpdir2(), "mcp-vm-r
   const full = JSON.stringify(value, null, indent);
   const text4 = new TextDecoder().decode(Buffer.from(full.split("\n").slice(0, 2e3).join("\n")).subarray(0, 50 * 1024), { stream: true });
   if (text4 !== full) {
-    await mkdir11(resultRoot, { recursive: true, mode: 448 });
+    await mkdir12(resultRoot, { recursive: true, mode: 448 });
     const path = join15(resultRoot, `${randomUUID8()}.json`);
     await writeFile6(path, full, { mode: 384 });
     return { text: `${text4}

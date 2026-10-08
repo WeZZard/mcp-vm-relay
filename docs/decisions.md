@@ -4,7 +4,7 @@ Decisions are the person's own. A decision marked "on the agent's recommendation
 
 ## Screenshot delivery
 
-The design is [screenshot-delivery.md §10](screenshot-delivery.md#10-background-download-of-after-images).
+The design is [screenshot-delivery.md §10](screenshot-delivery.md#10-background-download-of-step-evidence).
 
 | ID | Decision | Owner |
 |---|---|---|
@@ -23,3 +23,13 @@ The design is [relay-run.md, Held input](relay-run.md#held-input).
 | ID | Decision | Owner |
 |---|---|---|
 | DC-8 | `relay_run` can deliver a call and hold it in the guest until `relay_gate` releases it, so a caller's check runs while the call travels. A call not released is refused with nothing sent. The hold sits before the before-snapshot; the decision is a file in the guest, and the first writer wins; the limit defaults to 60 s, at most 300 s; a withheld call is not a VM failure. | The person (2026-10-04), for pi-secretary's guardian (its decision PS-D45). The placement, the file signal, the limits and the failure rule are the agent's defaults. |
+
+## Evidence download
+
+The design is [screenshot-delivery.md §10](screenshot-delivery.md#10-background-download-of-step-evidence).
+
+| ID | Decision | Owner |
+|---|---|---|
+| DC-9 | The host downloads each step's evidence in the background while the agent uses the VM: its screenshots, its records and its tool result. Each step queues one download. | The person (2026-10-08). |
+| DC-10 | The host keeps each step's downloaded evidence in a folder of its own. | The person (2026-10-08). |
+| DC-11 | `relay_finish` and `relay_release` coalesce the downloads still pending into one: they put what the host lacks into a single archive in the guest, download it, and unpack it on the host. | The person (2026-10-08). |

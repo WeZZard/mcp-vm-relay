@@ -1,9 +1,10 @@
-import { copyFile, mkdir, readFile, lstat, mkdtemp, rm, open } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, lstat, mkdtemp, rm, open, link } from 'node:fs/promises';
 import { constants, linkSync } from 'node:fs';
 import { dirname, join, resolve, relative, isAbsolute } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { hash, hashFile, inventory, within } from './util.js';
+import { archiveBytes, archiveChunks, unpackArchive, type ArchiveEntry, type ArchiveRequest } from './archive.js';
 
 /** vm-service is the sole guest communication channel. */
 export interface VmChannel {
@@ -17,6 +18,8 @@ export interface TransferOptions {
   /** Temporary inventory frames, outside the delivered state/package. */
   hostTempRoot?: string;
   onRetry?: (event: { operation: 'push' | 'pull' | 'metadata'; attempt: number; diagnostic: string }) => Promise<void>;
+  /** A verified pull fell back from the archive to the per-file pull (AD-10). */
+  onArchiveFallback?: (event: { remote: string; files: number; diagnostic: string }) => Promise<void>;
 }
 export interface FileFact { path: string; sha256: string; bytes: number }
 // Relay evidence has no size limit (owner decision PS-D12, docs/lifecycle-fixes.md):
@@ -65,7 +68,8 @@ function imageFormat(bytes: Buffer): boolean {
     || ['GIF87a', 'GIF89a'].includes(bytes.subarray(0, 6).toString('ascii'))
     || (bytes.length >= 12 && bytes.subarray(0, 4).toString('ascii') === 'RIFF' && bytes.subarray(8, 12).toString('ascii') === 'WEBP');
 }
-function retryableImageCopy(error: unknown): boolean {
+/** A failure that copying the same bytes again might fix: the guest or the channel was not reachable in time. */
+export function transientTransfer(error: unknown): boolean {
   if (error instanceof ImageTransferError) return false;
   const diagnostic = String(error);
   const status = (error as { status?: unknown } | null)?.status;
@@ -77,6 +81,8 @@ function validImageFact(value: unknown, maxBytes = MAX_IMAGE_BYTES): value is { 
   const f = value as FileFact | undefined;
   return !!f && /^[a-f0-9]{64}$/.test(f.sha256) && Number.isSafeInteger(f.bytes) && f.bytes > 0 && f.bytes <= maxBytes;
 }
+
+async function present(path: string) { try { return (await lstat(path)).isFile(); } catch { return false; } }
 
 /** Above the approved root OS aliases such as macOS /var -> /private/var are
  * allowed. At and below it every existing component must be non-symlink. */
@@ -99,6 +105,10 @@ const SCAN = `const fs=require('fs'),p=require('path'),c=require('crypto');${GUE
 const FILE_FACT = `const fs=require('fs'),p=require('path'),c=require('crypto');${GUEST_PATH}${GUEST_DIGEST}const [root,file]=process.argv.slice(1);check(root,file);const s=fs.lstatSync(file);if(!s.isFile())throw Error('Invalid frame file');const sha256=digest(file,s.size);check(root,file);console.log(JSON.stringify({path:file,sha256,bytes:s.size}));`;
 // Sizes a tree without hashing it (stat only), so the hashing scan's timeout can follow the bytes it must hash.
 const SIZE = `const fs=require('fs'),p=require('path');${GUEST_PATH}const [root,approved]=process.argv.slice(1);check(approved,root);let bytes=0,files=0;function walk(f){const s=fs.lstatSync(f);if(s.isSymbolicLink())throw Error('symlink '+f);if(s.isDirectory()){for(const n of fs.readdirSync(f))walk(p.join(f,n));}else if(s.isFile()){bytes+=s.size;files++;}else throw Error('special file '+f);}walk(root);console.log(JSON.stringify({bytes,files}));`;
+// Writes the named files of one tree into one archive (AD-8): header line, bytes, hash line. It checks
+// the guest's free space first and removes a partial archive on any failure. In `present` mode a
+// missing file is left out; otherwise it fails the archive.
+const ARCHIVE = `const fs=require('fs'),p=require('path'),c=require('crypto');${GUEST_PATH}const [root,approved,archive,archiveRoot,mode,...paths]=process.argv.slice(1);check(approved,root);check(archiveRoot,archive,true);const files=[];let need=0;for(const rel of paths){if(!rel||p.isAbsolute(rel)||rel.includes('\\\\')||rel.includes('\\0')||rel.split('/').some(x=>!x||x==='.'||x==='..'))throw Error('Invalid archive path '+rel);const f=p.join(root,rel);let s;try{check(approved,f);s=fs.lstatSync(f);}catch(e){if(mode==='present'&&e.code==='ENOENT')continue;throw e;}if(!s.isFile())throw Error('Not a regular file: '+rel);files.push([rel,f,s]);need+=s.size+Buffer.byteLength(rel)+128;}if(typeof fs.statfsSync==='function'){const s=fs.statfsSync(p.dirname(archive));if(Number(s.bavail)*Number(s.bsize)<need)throw Error('Not enough guest space for a '+need+'-byte archive');}const out=fs.openSync(archive,'wx',384);let total=0;function put(b){for(let o=0;o<b.length;)o+=fs.writeSync(out,b,o,b.length-o);total+=b.length;}try{const b=Buffer.alloc(8388608);for(const [rel,f] of files){check(approved,f);const s=fs.lstatSync(f);if(!s.isFile())throw Error('Not a regular file: '+rel);const fd=fs.openSync(f,fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW);try{put(Buffer.from(JSON.stringify({path:rel,bytes:s.size})+'\\n'));const h=c.createHash('sha256');let n=0,r;while(n<s.size&&(r=fs.readSync(fd,b,0,Math.min(b.length,s.size-n),null))>0){h.update(b.subarray(0,r));put(b.subarray(0,r));n+=r;}if(n!==s.size||fs.readSync(fd,b,0,1,null)!==0)throw Error('Source changed during archive: '+rel);put(Buffer.from(JSON.stringify({sha256:h.digest('hex')})+'\\n'));}finally{fs.closeSync(fd);}}fs.closeSync(out);}catch(e){try{fs.closeSync(out);}catch{}fs.rmSync(archive,{force:true});throw e;}check(archiveRoot,archive);console.log(JSON.stringify({path:archive,bytes:total}));`;
 const REMOVE_FRAME = `const fs=require('fs'),p=require('path');${GUEST_PATH}const [root,file]=process.argv.slice(1);check(root,file,true);fs.rmSync(file,{force:true});`;
 
 // Image metadata is one bounded command per check, never an inventory transfer.
@@ -149,7 +159,7 @@ export class Transfer {
       }
     }
   }
-  async checked(argv: string[], timeoutMs?: number) {
+  async checked(argv: string[], timeoutMs?: number, signal?: AbortSignal) {
     const framed = argv[0] === this.node && argv[1] === '-e'
       ? [argv[0], argv[1], `try { ${argv[2]} } catch(error) { console.error(error instanceof Error ? error.message : String(error)); process.exitCode=1; }`, ...argv.slice(3)]
       : argv;
@@ -157,7 +167,7 @@ export class Transfer {
     // only an explicit SSH authentication refusal (before remote dispatch).
     // Network loss and arbitrary nonzero guest outcomes are not replayed.
     for (let attempt = 1; ; attempt++) {
-      const result = await this.vm.exec(this.name, framed, timeoutMs);
+      const result = await (signal ? this.vm.exec(this.name, framed, timeoutMs, { signal, ...(timeoutMs ? { timeoutMs } : {}) }) : this.vm.exec(this.name, framed, timeoutMs));
       if (result.code === 0) return result.stdout;
       const diagnostic = `Guest setup/transfer command failed (${result.code}): ${result.stderr.slice(0, 1000)}`;
       if (attempt >= 3 || result.code !== 255 || !/Permission denied \((?:publickey,)?password(?:,keyboard-interactive)?\)/.test(result.stderr)) throw new Error(diagnostic);
@@ -390,7 +400,7 @@ export class Transfer {
             guard();
             const diagnostic = String(cause);
             if (cause instanceof ImageTransferError) throw cause;
-            if (attempt >= 3 || attemptBudget.remaining <= 0 || !retryableImageCopy(cause)) throw new ImageTransferError('transfer-failed', `Image byte transfer failed: ${diagnostic}`, { cause });
+            if (attempt >= 3 || attemptBudget.remaining <= 0 || !transientTransfer(cause)) throw new ImageTransferError('transfer-failed', `Image byte transfer failed: ${diagnostic}`, { cause });
             await bounded(async () => { await this.options.onRetry?.({ operation: 'pull', attempt, diagnostic }); });
             const wait = options.retryDelaysMs?.[attempt - 1];
             if (wait) await bounded(() => new Promise<void>(done => { const timer = setTimeout(done, wait); controller.signal.addEventListener('abort', () => { clearTimeout(timer); done(); }, { once: true }); }));
@@ -481,6 +491,52 @@ export class Transfer {
     }
     return false;
   }
+  /**
+   * Pull the named files of the guest tree `remote` into the host directory `local` through archives, one per
+   * bounded chunk of paths (AD-8, AD-9). Each archive is unpacked in a host staging directory and checked whole
+   * before any file is linked into place. With `present`, files the guest does not hold are left out. With
+   * `once`, each archive gets one copy attempt, for a caller that waits between its own retries (DC-5).
+   */
+  async pullArchive(remote: string, approvedRoot: string, files: readonly ArchiveRequest[], local: string, localRoot: string, options: { present?: boolean; once?: boolean; signal?: AbortSignal } = {}): Promise<ArchiveEntry[]> {
+    const guestRoot = this.options.guestRoot ?? dirname(remote), unpacked: ArchiveEntry[] = [];
+    const known = files.every((file): file is ArchiveEntry => file.bytes !== undefined && file.sha256 !== undefined);
+    await assertHostPath(localRoot, local, true);
+    await mkdir(local, { recursive: true, mode: 0o700 });
+    for (const chunk of archiveChunks(files)) {
+      options.signal?.throwIfAborted();
+      const archive = join(guestRoot, `.archive-${randomUUID()}`), bytes = known ? archiveBytes(chunk as ArchiveEntry[]) : undefined;
+      await assertHostPath(localRoot, local);
+      const staging = await mkdtemp(join(local, '.relay-archive-'));
+      try {
+        const argv = [this.node, '-e', ARCHIVE, remote, approvedRoot, archive, guestRoot, options.present ? 'present' : 'all', ...chunk.map(file => file.path)];
+        const fact: unknown = JSON.parse(await this.checked(argv, scanTimeoutMs(2 * (bytes ?? 0)), options.signal));
+        const size = (fact as { bytes?: unknown } | null)?.bytes;
+        if ((fact as { path?: unknown } | null)?.path !== archive || !Number.isSafeInteger(size) || (bytes !== undefined && size !== bytes)) throw new Error('Invalid remote archive fact');
+        const staged = join(staging, 'archive');
+        const pull = () => this.vm.pull(this.name, archive, staged, options.signal ? { signal: options.signal } : undefined);
+        const validate = async () => { options.signal?.throwIfAborted(); await this.guestPath(guestRoot, archive); await assertHostPath(localRoot, staged, true); };
+        if (options.once) { await validate(); await pull(); } else await this.copy('pull', pull, validate);
+        await assertHostPath(localRoot, staged);
+        const info = await lstat(staged);
+        if (!info.isFile() || info.size !== size) throw new Error(`Archive size mismatch: ${remote}`);
+        const directory = join(staging, 'files');
+        const entries = await unpackArchive(staged, directory, chunk, { skipMissing: !!options.present });
+        options.signal?.throwIfAborted();
+        for (const file of entries) {
+          const path = within(local, file.path);
+          await assertHostPath(localRoot, path, true);
+          await mkdir(dirname(path), { recursive: true, mode: 0o700 });
+          await assertHostPath(localRoot, path, true);
+          await link(within(directory, file.path), path);
+        }
+        unpacked.push(...entries);
+      } finally {
+        try { await this.checked([this.node, '-e', REMOVE_FRAME, guestRoot, archive]); }
+        finally { await assertHostPath(localRoot, staging); await rm(staging, { recursive: true, force: true }); }
+      }
+    }
+    return unpacked;
+  }
   /** Capture source hashes before pull, compare host bytes, then source inventory again.
    * `beforePull` sees the source inventory before any byte is pulled and may refuse the pull. */
   async pullVerified(remote: string, local: string, approvedRoot = remote, localRoot = dirname(local), options: { beforePull?: (facts: FileFact[]) => Promise<void>; reuse?: LocalSource } = {}) {
@@ -490,21 +546,40 @@ export class Transfer {
     await mkdir(dirname(local), { recursive: true, mode: 0o700 });
     await assertHostPath(localRoot, local, true);
     if (before.length === 1 && before[0].path === '') {
-      await this.guestPath(approvedRoot, remote);
-      await this.copy('pull', () => this.vm.pull(this.name, remote, local), async () => { await this.guestPath(approvedRoot, remote); await assertHostPath(localRoot, local, true); });
-      await this.guestPath(approvedRoot, remote);
-      await assertHostPath(localRoot, local);
-      if (!(await lstat(local)).isFile()) throw new Error('Invalid extraction file');
-      const pulled = await hashFile(local);
-      if (pulled.sha256 !== before[0].sha256 || pulled.bytes !== before[0].bytes) throw new Error(`Extraction checksum mismatch: ${remote}`);
+      // A host copy with the scanned bytes stands in for the pull; the second scan below still checks the source.
+      if (!options.reuse || !await this.reuseLocal(before[0], local, localRoot, options.reuse)) {
+        await this.guestPath(approvedRoot, remote);
+        await this.copy('pull', () => this.vm.pull(this.name, remote, local), async () => { await this.guestPath(approvedRoot, remote); await assertHostPath(localRoot, local, true); });
+        await this.guestPath(approvedRoot, remote);
+        await assertHostPath(localRoot, local);
+        if (!(await lstat(local)).isFile()) throw new Error('Invalid extraction file');
+        const pulled = await hashFile(local);
+        if (pulled.sha256 !== before[0].sha256 || pulled.bytes !== before[0].bytes) throw new Error(`Extraction checksum mismatch: ${remote}`);
+      }
     } else {
       await mkdir(local, { recursive: true, mode: 0o700 });
+      const missing: FileFact[] = [];
       for (const file of before) {
         const path = within(local, file.path);
         await assertHostPath(localRoot, path, true);
         await mkdir(dirname(path), { recursive: true, mode: 0o700 });
         await assertHostPath(localRoot, path, true);
         if (options.reuse && await this.reuseLocal(file, path, localRoot, options.reuse)) continue;
+        missing.push(file);
+      }
+      // What the host lacks comes in one archive (AD-9); the per-file pull is the fallback (AD-10).
+      let left = missing;
+      if (missing.length) {
+        try { await this.pullArchive(remote, approvedRoot, missing, local, localRoot); left = []; }
+        catch (error) {
+          await this.options.onArchiveFallback?.({ remote, files: missing.length, diagnostic: String(error) });
+          left = [];
+          for (const file of missing) if (!await present(within(local, file.path))) left.push(file);
+        }
+      }
+      for (const file of left) {
+        const path = within(local, file.path);
+        await assertHostPath(localRoot, path, true);
         const guestPath = within(remote, file.path);
         await this.guestPath(approvedRoot, guestPath);
         await this.copy('pull', () => this.vm.pull(this.name, guestPath, path), async () => { await this.guestPath(approvedRoot, guestPath); await assertHostPath(localRoot, path, true); });

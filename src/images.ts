@@ -122,6 +122,9 @@ function verifyOriginal(bytes: Buffer, descriptor: ImageDescriptor) {
   if (bytes.length !== descriptor.bytes || hash(bytes) !== descriptor.sha256) fail('integrity-failed', 'Original bytes conflict with their image reference.');
 }
 
+/** Where a step download put a guest state file (AD-7): `host/steps/<executionId>/state/...`. */
+const stepCopy = (recording: string, executionId: string, ...relative: string[]) => join(recording, 'host', 'steps', executionId, 'state', ...relative);
+
 export class ImageStore {
   constructor(readonly options: ImageStoreOptions) {}
   private get binding() { const o = this.options; return hash(JSON.stringify([o.owner, o.enclosure, o.backend])); }
@@ -248,7 +251,7 @@ export class ImageStore {
     const group = request.snapshots?.group;
     const requested = !request.diagnostic && (target.phase === 'before' ? !group || group.phase === 'first' : !group || group.phase === 'last');
     if (!requested) return { status: 'not-requested', diagnostic: 'The declared snapshot plan does not capture this phase.' };
-    const receipt = await this.metadata(join('receiver', 'receipts', `${target.executionId}.json`), recording, options, [join(recording.path, 'host', 'receiver-receipts', `${target.executionId}.json`)], hostOnly);
+    const receipt = await this.metadata(join('receiver', 'receipts', `${target.executionId}.json`), recording, options, [join(recording.path, 'host', 'receiver-receipts', `${target.executionId}.json`), stepCopy(recording.path, target.executionId, 'receiver', 'receipts', `${target.executionId}.json`)], hostOnly);
     if (receipt === undefined) return undefined;
     if (receipt?.executionId !== request.executionId) fail('integrity-failed', 'Receipt execution identity mismatch.');
     const evidence = receipt.imageEvidence;
@@ -267,7 +270,7 @@ export class ImageStore {
     const { recording, request, sn } = selected;
     const group = request.snapshots?.group;
     let action: any;
-    try { action = await this.metadata(join('records', 'action', `${sn.actionId}.json`), recording, options); }
+    try { action = await this.metadata(join('records', 'action', `${sn.actionId}.json`), recording, options, [stepCopy(recording.path, sn.executionId, 'records', 'action', `${sn.actionId}.json`)]); }
     catch (error) { if ((error as { code?: string }).code === 'image-missing') fail('integrity-failed', 'Receipt cites a missing authoritative action.'); throw error; }
     if (!action || action.actionId !== sn.actionId || action.sessionId !== request.sessionId || action.executionId !== request.executionId || action.attemptId !== request.attemptId || action.groupId !== group?.groupId || action.stepId !== request.step?.id || (action.snapshotRole !== undefined && action.snapshotRole !== (group?.phase ?? 'single'))) fail('integrity-failed', 'Saved action identity does not corroborate the image.');
     if (!this.checkReferences(action.snapshots, sn)) await this.corroborateJournal(recording, request, sn, options);
@@ -291,9 +294,11 @@ export class ImageStore {
     let bytes = await optional(() => readBounded(record.recording, record.local, MAX_IMAGE, options.signal));
     if (bytes) { verifyOriginal(bytes, record.descriptor); return bytes; }
     if (record.descriptor.source === 'display') {
-      const path = join(record.recording, 'state', 'snapshots', record.descriptor.sessionId!, record.fileName!);
-      bytes = await optional(() => readBounded(record.recording, path, MAX_IMAGE, options.signal));
-      if (bytes) { verifyOriginal(bytes, record.descriptor); await publish(record.recording, record.local, bytes, options.signal); return bytes; }
+      // The recording's state, then the step download's folder (AD-3), before the guest.
+      for (const path of [join(record.recording, 'state', 'snapshots', record.descriptor.sessionId!, record.fileName!), stepCopy(record.recording, record.descriptor.executionId!, 'snapshots', record.descriptor.sessionId!, record.fileName!)]) {
+        bytes = await optional(() => readBounded(record.recording, path, MAX_IMAGE, options.signal));
+        if (bytes) { verifyOriginal(bytes, record.descriptor); await publish(record.recording, record.local, bytes, options.signal); return bytes; }
+      }
       if (!this.recordings.find(r => r.path === record.recording && r.sessionId === record.descriptor.sessionId)?.guestState) fail('stale-reference', 'The original is unavailable in retained host evidence and its guest recording is no longer addressable.');
     }
     await this.options.ensureGuest(options.signal, options.deadline); guard(options.signal);

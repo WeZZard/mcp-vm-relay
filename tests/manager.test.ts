@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { deflateSync } from 'node:zlib';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { chmod, copyFile, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import { appendFile, chmod, copyFile, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -102,6 +102,10 @@ class FixtureService {
   failPush = false;
   corruptPull = false;
   screenshotPullFailures = 0;
+  /** Fails every archive pull, so a verified pull falls back to the per-file pull (AD-10). */
+  archivePullFails = false;
+  /** Fails the next archive pulls, as a lost session link would (AD-4). */
+  archivePullFailures = 0;
   acquireHook?: () => Promise<void>;
   receiverHook?: () => Promise<void>;
   /** Runs before any pull; a test can hold one open. */
@@ -157,11 +161,13 @@ class FixtureService {
     }
     if (match[2] === 'pull') {
       await this.pullHook?.(body.remote_path);
+      if (body.remote_path.includes('/.archive-') && (this.archivePullFails || this.archivePullFailures-- > 0)) return this.respond(res, 503, { error: 'fixture archive transfer unavailable' });
       if (body.remote_path.endsWith('.png') && this.screenshotPullFailures > 0) {
         this.screenshotPullFailures--; return this.respond(res, 503, { error: 'fixture screenshot transfer unavailable' });
       }
       await copyFile(body.remote_path, body.local_path);
       if (this.corruptPull && body.remote_path.endsWith('artifact.txt')) await writeFile(body.local_path, 'corruption');
+      if (this.corruptPull && body.remote_path.includes('/.archive-')) await appendFile(body.local_path, 'corruption');
       return this.respond(res, 200, { vm, pulled: body.remote_path, to: body.local_path });
     }
     const argv: string[] = body.argv;
@@ -446,17 +452,16 @@ test('production tool boundary: saved source images, bounded recovery and one co
     assert.equal(grouped.result.outcome.kind, 'completed');
     if (phase === 'last') { assert.equal(grouped.imageDelivery.image.groupId, 'text-group'); imageDetails(await invoke({ action: 'image', target: { source: 'reference', imageId: grouped.imageDelivery.image.imageId } }), 'attached'); }
   }
-  // The background download spends one of the shared three attempts on action metadata, so two failed
-  // byte copies fail it; it is not queued again, and relay_image then makes its own attempt with a fresh budget.
-  f.service.screenshotPullFailures = 2;
+  // The step download fails its three archive pulls; it is not queued again, and relay_image then makes its own copy.
+  f.service.archivePullFailures = 3;
   const pullsBefore = f.service.requests.filter(r => r.path.endsWith('/pull') && r.body.remote_path.endsWith('.png')).length;
   const failedTransfer = imageDetails(await run('transfer-failure'), 'pending');
   assert.equal(failedTransfer.result.outcome.kind, 'completed');
   const recoveryBefore = await counters();
   const recovered = imageDetails(await invoke({ action: 'image', target: { source: 'reference', imageId: failedTransfer.imageDelivery.image.imageId } }), 'attached');
-  assert.equal(f.service.screenshotPullFailures, 0);
-  assert.equal(f.service.requests.filter(r => r.path.endsWith('/pull') && r.body.remote_path.endsWith('.png')).length - pullsBefore, 3, 'two failed download copies, then the retrieval\'s own copy');
-  const record = await json(join(acquired.output, 'host/image-downloads', `${failedTransfer.result.executionId}-after.json`));
+  assert.ok(f.service.archivePullFailures <= 0);
+  assert.equal(f.service.requests.filter(r => r.path.endsWith('/pull') && r.body.remote_path.endsWith('.png')).length - pullsBefore, 1, 'the retrieval\'s own copy');
+  const record = await json(join(acquired.output, 'host/evidence-downloads', `${failedTransfer.result.executionId}.json`));
   assert.equal(record.status, 'failed'); assert.equal(record.failure, 'transfer-failed'); assert.equal(record.image.imageId, failedTransfer.imageDelivery.image.imageId);
   assert.deepEqual(recovered.imageDelivery.image, failedTransfer.imageDelivery.image);
   assert.equal((await counters()).receiver, recoveryBefore.receiver); assert.equal((await counters()).captures, recoveryBefore.captures);
@@ -1194,9 +1199,12 @@ test('fullWorkspace retry preserves the first immutable export after package tra
   const acquired = await f.manager.acquire(acquireInput({ fullWorkspace: true }));
   await f.stage(); await writeFile(join(acquired.workspace, 'seed.txt'), 'first workspace');
   // The background download fails after two copies, so the host lacks the original and the state pull fails after three.
-  f.service.screenshotPullFailures = 5;
+  f.service.screenshotPullFailures = 5; f.service.archivePullFails = true;
   await f.manager.run(operation('workspace-retry'));
   await assert.rejects(f.manager.finish(), /fixture screenshot transfer unavailable/);
+  const events = await Promise.all((await readdir(join(acquired.output!, 'host/events'))).map(name => json(join(acquired.output!, 'host/events', name))));
+  assert.ok(events.some(event => event.kind === 'archive-fallback' && /fixture archive transfer unavailable/.test(event.details.diagnostic)), 'the fallback and its reason are logged (AD-10)');
+  f.service.archivePullFails = false;
   await f.assertRetained(acquired.vm);
   const directory = join(acquired.output!, 'extractions/full-workspace');
   const firstVersions = await readdir(directory); assert.equal(firstVersions.length, 1);
@@ -1404,29 +1412,39 @@ for (const pause of ['cleanup', 'settle'] as const) test(`H6: a graceful pause (
   assert.ok(lease.expiresAt >= Date.now() / 1000 + 1.99 * 3600, 'the recorded expiry is the lease\'s own deadline');
 });
 
-// Background after-image downloads (docs/screenshot-delivery.md §10).
+// Background step downloads (docs/screenshot-delivery.md §10).
 const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 async function until(condition: () => boolean | Promise<boolean>, what: string, ms = 10000) {
   const deadline = Date.now() + ms;
   while (!await condition()) { if (Date.now() > deadline) assert.fail(`Timed out waiting for ${what}`); await sleep(10); }
 }
-/** Holds every screenshot pull at the fixture service until released. */
-function holdScreenshots(f: Awaited<ReturnType<typeof fixture>>) {
+/** Holds every archive pull at the fixture service until released. */
+function holdStepDownloads(f: Awaited<ReturnType<typeof fixture>>) {
   const hold = deferred(); let held = 0;
-  f.service.pullHook = async remote => { if (remote.endsWith('.png')) { held++; await hold.promise; } };
+  f.service.pullHook = async remote => { if (remote.includes('/.archive-')) { held++; await hold.promise; } };
   return { release: () => { f.service.pullHook = undefined; hold.resolve(); }, get held() { return held; } };
 }
 const screenshotPulls = (f: Awaited<ReturnType<typeof fixture>>) => f.service.requests.filter(r => r.path.endsWith('/pull') && r.body.remote_path.endsWith('.png')).length;
-const downloadRecord = (hostRoot: string, executionId: string) => json(join(hostRoot, 'host/image-downloads', `${executionId}-after.json`));
+const archivePulls = (f: Awaited<ReturnType<typeof fixture>>) => f.service.requests.filter(r => r.path.endsWith('/pull') && r.body.remote_path.includes('/.archive-')).length;
+const downloadRecord = (hostRoot: string, executionId: string) => json(join(hostRoot, 'host/evidence-downloads', `${executionId}.json`));
+/** The guest paths each archive command asked for (AD-8); the archive script's argv carries them from index 8. */
+function archiveRequests(f: Awaited<ReturnType<typeof fixture>>) {
+  const requests: string[][] = [];
+  f.service.execHook = async argv => { if (argv.length > 7 && String(argv[2]).includes('Not a regular file')) requests.push(argv.slice(8)); };
+  return requests;
+}
+/** The files one step download brings: its receiver and execution records, its action record and both snapshots (AD-2). */
+const stepFiles = (receipt: any) => [`state/receiver/started/${receipt.executionId}.json`, `state/receiver/receipts/${receipt.executionId}.json`, `state/records/execution/${receipt.executionId}.json`,
+  ...receipt.imageEvidence.snapshots.flatMap((sn: any) => [`state/records/action/${sn.actionId}.json`, `state/snapshots/${sn.sessionId}/${sn.fileName}`])].filter((path, at, all) => all.indexOf(path) === at);
 const exists = (path: string) => lstat(path).then(() => true, () => false);
 
-test('a run returns before its after-image downloads; relay_image waits for that one download; over the bound a run waits for the oldest (AD-1 to AD-3)', { timeout: 30000 }, async t => {
+test('a run returns before its step downloads; relay_image waits for that one download; over the bound a run waits for the oldest (AD-1 to AD-3)', { timeout: 30000 }, async t => {
   const f = await fixture(t, { downloadBound: 1 }); const acquired = await f.manager.acquire(acquireInput()); await f.stage();
-  const hold = holdScreenshots(f);
+  const hold = holdStepDownloads(f);
   const first = await f.manager.run(operation('first-download'));
   assert.equal(first.imageDelivery.status, 'pending'); assert.match(first.imageDelivery.image!.imageId, /^image-[a-f0-9]{64}$/);
   assert.equal(await exists(first.imageDelivery.image!.originalPath!), false, 'the run returned before its original reached the host');
-  await until(() => hold.held === 1, 'the first download to reach its byte copy');
+  await until(() => hold.held === 1, 'the first step download to reach its archive pull');
   let returned = false;
   const second = f.manager.run(operation('second-download')).then(result => { returned = true; return result; });
   await until(() => f.service.receiverCalls === 2, 'the second run to reach the guest'); await sleep(200);
@@ -1437,27 +1455,35 @@ test('a run returns before its after-image downloads; relay_image waits for that
   const shownFirst = await image;
   assert.equal(shownFirst.status, 'attached'); assert.deepEqual(shownFirst.image, first.imageDelivery.image);
   await shown(f.manager, await second);
-  assert.equal(screenshotPulls(f), 2, 'one byte copy per image: relay_image waited instead of transferring again');
+  assert.equal(archivePulls(f), 2, 'one archive per step');
+  assert.equal(screenshotPulls(f), 0, 'relay_image waited and filed the original from the step folder instead of transferring again');
   for (const run of [first, await second]) {
     const record = await downloadRecord(acquired.output!, run.executionId!);
-    assert.equal(record.status, 'downloaded'); assert.equal(record.image.imageId, run.imageDelivery.image!.imageId);
+    assert.equal(record.status, 'downloaded'); assert.equal(record.key, `${run.imageDelivery.image!.sessionId}/${run.executionId}`); assert.equal(record.image.imageId, run.imageDelivery.image!.imageId);
     assert.ok(record.queuedAt <= record.startedAt && record.startedAt <= record.endedAt);
+    const receipt = await json(join(acquired.output!, 'host/receiver-receipts', `${run.executionId}.json`));
+    assert.deepEqual(record.files.map((file: any) => file.path), stepFiles(receipt), 'the step folder holds the files derived from the receipt');
+    assert.equal(record.missing, undefined);
+    for (const file of record.files) assert.equal(createHash('sha256').update(await readFile(join(acquired.output!, 'host/steps', run.executionId!, file.path))).digest('hex'), file.sha256);
+    const before = (await f.manager.image({ source: 'display', sessionId: run.imageDelivery.image!.sessionId!, executionId: run.executionId!, phase: 'before' }));
+    assert.equal(before.status, 'attached', 'a before-image is found in the step folder');
   }
+  assert.equal(screenshotPulls(f), 0, 'the before-images came from the step folders');
   const delivered = await f.manager.finish(); assert.equal(delivered.snapshots, 'complete'); await f.assertClean();
 });
 
-test('a transient download failure waits 1 s, then pauses the downloads until the next relay operation completes (AD-4, DC-5)', { timeout: 30000 }, async t => {
+test('a transient download failure waits 1 s, then 3 s, then pauses the downloads until the next relay operation completes (AD-4, DC-5)', { timeout: 30000 }, async t => {
   const f = await fixture(t); const acquired = await f.manager.acquire(acquireInput()); await f.stage();
-  const hold = holdScreenshots(f);
+  const hold = holdStepDownloads(f);
   const a = await f.manager.run(operation('fails-transiently')), b = await f.manager.run(operation('waits-for-resume'));
-  await until(() => hold.held === 1, 'the first download to reach its byte copy');
-  f.service.screenshotPullFailures = 2; hold.release();
+  await until(() => hold.held === 1, 'the first step download to reach its archive pull');
+  f.service.archivePullFailures = 3; hold.release();
   await until(() => f.manager.status().downloads?.failed === 1, 'the first download to fail');
-  const pulls = screenshotPulls(f); await sleep(300);
-  assert.deepEqual({ ...f.manager.status().downloads, pulls: screenshotPulls(f) }, { queued: 1, inFlight: 0, downloaded: 0, failed: 1, cancelled: 0, paused: true, state: 'open', pulls }, 'the worker is paused');
+  const pulls = archivePulls(f); await sleep(300);
+  assert.deepEqual({ ...f.manager.status().downloads, pulls: archivePulls(f) }, { queued: 1, inFlight: 0, downloaded: 0, failed: 1, cancelled: 0, coalesced: 0, paused: true, state: 'open', pulls }, 'the worker is paused');
   const failed = await downloadRecord(acquired.output!, a.executionId!);
   assert.equal(failed.status, 'failed'); assert.equal(failed.failure, 'transfer-failed');
-  assert.ok(Date.parse(failed.endedAt) - Date.parse(failed.startedAt) >= 1000, 'the download waited 1 s before its second byte copy');
+  assert.ok(Date.parse(failed.endedAt) - Date.parse(failed.startedAt) >= 4000, 'the download waited 1 s, then 3 s, between its three archive pulls');
   await f.manager.extract([]);
   await until(() => f.manager.status().downloads?.downloaded === 1, 'the paused download to resume');
   assert.equal((await downloadRecord(acquired.output!, b.executionId!)).status, 'downloaded');
@@ -1465,20 +1491,27 @@ test('a transient download failure waits 1 s, then pauses the downloads until th
   const delivered = await f.manager.finish(); assert.equal(delivered.snapshots, 'complete'); await f.assertClean();
 });
 
-test('finish waits for the downloads; a transient failure while finishing cancels the rest, and the package is still complete (AD-5, DC-3, DC-7)', { timeout: 30000 }, async t => {
+test('finish waits for the download in flight, coalesces the queued steps into its own archive, and the package is complete (AD-5, AD-9, DC-11)', { timeout: 30000 }, async t => {
   const f = await fixture(t, { downloadRetryDelaysMs: [] }); const acquired = await f.manager.acquire(acquireInput()); await f.stage();
-  const hold = holdScreenshots(f);
+  const hold = holdStepDownloads(f);
   const runs = [await f.manager.run(operation('in-flight')), await f.manager.run(operation('queued-1')), await f.manager.run(operation('queued-2'))];
-  await until(() => hold.held === 1, 'the first download to reach its byte copy');
+  await until(() => hold.held === 1, 'the first step download to reach its archive pull');
   let finished = false;
   const finishing = f.manager.finish().then(result => { finished = true; return result; });
   await sleep(300); assert.equal(finished, false, 'finish waits while a download is in flight');
-  assert.equal(f.manager.status().downloads?.state, 'closing');
-  f.service.screenshotPullFailures = 2; hold.release();
+  assert.equal(f.manager.status().downloads?.state, 'closing'); assert.equal(f.manager.status().downloads?.coalesced, 2);
+  const requests = archiveRequests(f);
+  f.service.archivePullFailures = 3; hold.release();
   const delivered = await finishing;
   assert.equal(delivered.deliveryVerified, true); assert.equal(delivered.snapshots, 'complete');
   assert.deepEqual(await verifyDeliveredPackage(acquired.output!), delivered);
-  assert.deepEqual(await Promise.all(runs.map(async run => (await downloadRecord(acquired.output!, run.executionId!)).status)), ['failed', 'cancelled', 'cancelled']);
+  assert.deepEqual(await Promise.all(runs.map(async run => (await downloadRecord(acquired.output!, run.executionId!)).status)), ['failed', 'coalesced', 'coalesced']);
+  const archived = requests.flat();
+  for (const run of runs) {
+    const receipt = await json(join(acquired.output!, 'host/receiver-receipts', `${run.executionId}.json`));
+    for (const path of stepFiles(receipt).filter(path => !path.startsWith('state/receiver/receipts/'))) assert.ok(archived.includes(path.slice('state/'.length)), `the finish archive holds ${path}`);
+  }
+  assert.equal(await exists(join(acquired.output!, 'host/steps')), false, 'the package holds no step folders');
   for (const run of runs) {
     const after = (await json(join(acquired.output!, 'host/receiver-receipts', `${run.executionId}.json`))).imageEvidence.snapshots.find((s: any) => s.phase === 'after');
     assert.deepEqual(await readFile(join(acquired.output!, 'state/snapshots', run.imageDelivery.image!.sessionId!, after.fileName)), Buffer.from(png, 'base64'), 'the state pull fetched what the downloads did not');
@@ -1488,51 +1521,90 @@ test('finish waits for the downloads; a transient failure while finishing cancel
 
 test('release and a recording reset wait for every queued download before touching the guest state (AD-5)', { timeout: 30000 }, async t => {
   const f = await fixture(t); const acquired = await f.manager.acquire(acquireInput()); await f.stage();
-  let hold = holdScreenshots(f);
+  let hold = holdStepDownloads(f);
   const beforeReset = await f.manager.run(operation('before-reset'));
-  await until(() => hold.held === 1, 'the download to reach its byte copy');
+  await until(() => hold.held === 1, 'the step download to reach its archive pull');
   let reset = false;
   const resetting = f.manager.stage({ resetRecording: true }).then(() => { reset = true; });
   await sleep(300); assert.equal(reset, false, 'the reset waits for the download');
   hold.release(); await resetting;
   assert.equal((await downloadRecord(acquired.output!, beforeReset.executionId!)).status, 'downloaded');
+  assert.equal(await exists(join(acquired.output!, 'host/steps')), false, 'the reset recording keeps no step folders');
   assert.notEqual(f.manager.status().output, acquired.output);
-  hold = holdScreenshots(f);
+  hold = holdStepDownloads(f);
   const beforeRelease = await f.manager.run(operation('before-release'));
   const recording = f.manager.status().output!;
-  await until(() => hold.held === 1, 'the download to reach its byte copy');
+  await until(() => hold.held === 1, 'the step download to reach its archive pull');
   let released = false;
   const releasing = f.manager.release().then(() => { released = true; });
   await sleep(300); assert.equal(released, false, 'release waits for the download');
   hold.release(); await releasing;
   assert.equal((await downloadRecord(recording, beforeRelease.executionId!)).status, 'downloaded');
+  assert.equal(await exists(join(recording, 'host/steps')), false, 'the released recording keeps no step folders');
   await f.assertClean();
 });
 
-test('finish copies the originals the host already holds instead of pulling them again (AD-6, DC-6)', { timeout: 30000 }, async t => {
+test('finish takes the files the step downloads brought and archives only the rest (AD-6, AD-9, DC-6)', { timeout: 30000 }, async t => {
   const f = await fixture(t); const acquired = await f.manager.acquire(acquireInput()); await f.stage();
-  for (const id of ['held-1', 'held-2']) await shown(f.manager, await f.manager.run(operation(id)));
-  const pulls = screenshotPulls(f);
+  const runs = [];
+  for (const id of ['held-1', 'held-2']) { const run = await f.manager.run(operation(id)); await shown(f.manager, run); runs.push(run); }
+  const pulls = screenshotPulls(f), requests = archiveRequests(f);
   const delivered = await f.manager.finish();
   assert.equal(delivered.deliveryVerified, true); assert.equal(delivered.snapshots, 'complete');
   assert.deepEqual(await verifyDeliveredPackage(acquired.output!), delivered);
   // The fixture captures one constant PNG, so the held originals match every snapshot, before and after, by hash.
   assert.equal(screenshotPulls(f) - pulls, 0, 'no snapshot is pulled again');
   const events = await Promise.all((await readdir(join(acquired.output!, 'host/events'))).map(name => json(join(acquired.output!, 'host/events', name))));
-  assert.equal(events.find(event => event.kind === 'state-reused')?.details.files, 4, 'two runs, each with a before and an after snapshot');
+  assert.equal(events.find(event => event.kind === 'state-reused')?.details.files, 12, 'two steps, each with its receiver start, receipt, execution and action records and two snapshots');
+  const stepPaths = (await Promise.all(runs.map(async run => stepFiles(await json(join(acquired.output!, 'host/receiver-receipts', `${run.executionId}.json`)))))).flat();
+  assert.deepEqual(requests.flat().filter(path => stepPaths.includes(`state/${path}`)), [], 'the finish archive holds only files no step download brought');
+  assert.equal(await exists(join(acquired.output!, 'host/steps')), false, 'the package holds no step folders');
+  await f.assertClean();
+});
+
+test('a step lists a result file it cannot find as missing, and an extraction takes a result file a step brought (AD-2, AD-4, AD-9)', { timeout: 30000 }, async t => {
+  const f = await fixture(t); const acquired = await f.manager.acquire(acquireInput({ extractions: [{ name: 'result', path: 'relay-run/kept/result.json' }] })); await f.stage();
+  const writes = (dir: string, write: boolean) => [process.execPath, '-e', `${write ? `require('fs').mkdirSync('relay-run/${dir}', { recursive: true }); require('fs').writeFileSync('relay-run/${dir}/result.json', '{"kept":true}');` : ''} console.log(JSON.stringify({ resultFile: '${dir}/result.json' }))`];
+  const kept = await f.manager.run(operation('kept-result', { argv: writes('kept', true) }));
+  const lost = await f.manager.run(operation('lost-result', { argv: writes('lost', false) }));
+  await shown(f.manager, kept); await shown(f.manager, lost);
+  const keptRecord = await downloadRecord(acquired.output!, kept.executionId!), lostRecord = await downloadRecord(acquired.output!, lost.executionId!);
+  assert.equal(keptRecord.status, 'downloaded'); assert.ok(keptRecord.files.some((file: any) => file.path === 'workspace/relay-run/kept/result.json'));
+  assert.equal(lostRecord.status, 'downloaded', 'a missing file does not fail the step');
+  assert.deepEqual(lostRecord.missing, ['workspace/relay-run/lost/result.json']);
+  const pulls = f.service.requests.filter(r => r.path.endsWith('/pull')).length;
+  const delivered = await f.manager.finish();
+  assert.equal(delivered.deliveryVerified, true);
+  const events = await Promise.all((await readdir(join(acquired.output!, 'host/events'))).map(name => json(join(acquired.output!, 'host/events', name))));
+  assert.deepEqual(events.find(event => event.kind === 'extraction-reused')?.details, { name: 'result', files: 1 });
+  assert.ok(!f.service.requests.slice(pulls).some(r => r.path.endsWith('/pull') && r.body.remote_path.endsWith('result.json')), 'the result file is not pulled again');
+  await f.assertClean();
+});
+
+test('a step file that changed after its download comes from the guest at finish (AD-6)', { timeout: 30000 }, async t => {
+  const f = await fixture(t); const acquired = await f.manager.acquire(acquireInput()); await f.stage();
+  const run = await f.manager.run(operation('changed-after-download')); await shown(f.manager, run);
+  const guestRoot = (f.manager as any).current().guestRoot as string;
+  const started = join(guestRoot, 'state/receiver/started', `${run.executionId}.json`);
+  const changed = `${JSON.stringify(await json(started), null, 2)}\n`; await writeFile(started, changed);
+  const requests = archiveRequests(f);
+  const delivered = await f.manager.finish();
+  assert.equal(delivered.deliveryVerified, true);
+  assert.ok(requests.flat().includes(`receiver/started/${run.executionId}.json`), 'the finish archive holds the changed file');
+  assert.equal(await readFile(join(acquired.output!, 'state/receiver/started', `${run.executionId}.json`), 'utf8'), changed);
   await f.assertClean();
 });
 
 test('cleanup aborts the download in flight and releases the owner lock without waiting for the guest (AD-5)', { timeout: 30000 }, async t => {
   const f = await fixture(t); const acquired = await f.manager.acquire(acquireInput()); await f.stage();
-  const hold = holdScreenshots(f);
+  const hold = holdStepDownloads(f);
   const run = await f.manager.run(operation('aborted-download'));
-  await until(() => hold.held === 1, 'the download to reach its byte copy');
+  await until(() => hold.held === 1, 'the step download to reach its archive pull');
   await f.manager.cleanup('shutdown during a download');
   const sibling = new RelayManager(f.options);
   try { await sibling.initialize(); assert.equal(sibling.status().vm, acquired.vm, 'the owner lock was released'); }
   finally { await sibling.cleanup('sibling check'); }
   hold.release(); await sleep(300);
-  assert.equal(await exists(join(acquired.output!, 'host/image-downloads', `${run.executionId}-after.json`)), false, 'a closed queue writes nothing');
+  assert.equal(await exists(join(acquired.output!, 'host/evidence-downloads', `${run.executionId}.json`)), false, 'a closed queue writes nothing');
   assert.equal(await exists(run.imageDelivery.image!.originalPath!), false, 'an aborted download does not publish');
 });

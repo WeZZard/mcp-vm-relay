@@ -185,15 +185,15 @@ relay_image {"target":{"source":"reference","imageId":"<returned-image-reference
 - Build and clean-install checks have passed for the worktree. Before deployment, identify the exact revision and bundle that the target session will load; changing source does not update an already-running installed session.
 - Report automated results, agentic inspection, human review, capture-path mismatches, and consumer archive verification separately. Do not use a live Discord run for acceptance or rewrite historical evidence.
 
-## 10. Background download of after-images
+## 10. Background download of step evidence
 
-The decisions are DC-1 to DC-7 in the [decision record](decisions.md#screenshot-delivery).
+The decisions are DC-1 to DC-7 in the [screenshot delivery record](decisions.md#screenshot-delivery) and DC-9 to DC-11 in the [evidence download record](decisions.md#evidence-download).
 
 ### Problem
 
-- `run` used to deliver its after-image before it returned. The delivery pulled the guest's action record and the original, verified the hash, scaled a preview and wrote a delivery receipt.
-- In a 155-operation run on a 3840 × 2160 macOS display, the after-image delivery took a median of 5.5 s per operation and 860 s in total, half of the 1,713 s run. The consumer in that run discarded the attached image.
-- `finish` then pulled the whole guest `state` tree again, including every original the host already held. In the same run the tree held 931 files and 2.0 GB, and the finish took 10 minutes.
+- `run` used to deliver its after-image before it returned. In a 155-operation run on a 3840 × 2160 macOS display, that delivery took a median of 5.5 s per operation and 860 s in total, half of the 1,713 s run.
+- With the after-image downloaded in the background, `finish` still pulls the rest of each step's evidence: its before-image, its started marker, its execution and action records, and its tool result. The verified pull (`pullVerified`) makes three guest commands and one pull for each file.
+- In a 144-operation run over the vm-service session link, `finish` took 98.4 s. It made 3,282 requests to the vm-service: 2,461 commands took 67.8 s and 815 pulls took 10.1 s. The bytes were not the cost; the round trips per file were.
 
 ### AD-1: the run result names the image without waiting for it
 
@@ -210,49 +210,98 @@ imageDelivery: {
 }
 ```
 
-### AD-2: one background download queue per enclosure
+### AD-2: one background download queue per enclosure, one download per step
 
-- Each run whose snapshot plan captured an after-image queues one download for it. The queue carries only the after-image deliveries `run` used to make. Before-images, application images, a target tool's own images and the finish's state pull keep their design.
-- A download does what a retrieval does, without the preview: it checks the action record, registers the catalogue entry, pulls and verifies the original, and writes a delivery receipt with the status `downloaded`. The preview is made only when `relay_image` asks for the image.
+- Every operation whose receipt the guest filed queues one download of that step's evidence (DC-9). A diagnostic command, a refused call and an operation without a receipt queue nothing.
+- The relay derives the step's file set on the host from the receipt it already holds, with no guest I/O. All paths are relative to the guest root:
+  - `state/receiver/started/<executionId>.json`;
+  - `state/receiver/receipts/<executionId>.json`;
+  - `state/records/execution/<executionId>.json`;
+  - `state/records/action/<actionId>.json` for each action in the receipt's `imageEvidence.snapshots`;
+  - `state/snapshots/<sessionId>/<fileName>` for each before- and after-image in `imageEvidence.snapshots`;
+  - `workspace/relay-run/<resultFile>` when the receipt's output names a `relay-run` result file.
+- A file the receipt does not name is not part of a step: the shared journal, `state/receiver/groups.json`, application images and other workspace files. The finish fetches them (AD-9).
+- The download carries the step's files in one archive (AD-8). It files the after-image original in the image catalogue as before: it checks the action record, registers the catalogue entry, and writes a delivery receipt with the status `downloaded`. The preview is made only when `relay_image` asks for the image.
 - One worker per enclosure runs the downloads in order (DC-4). It runs outside the manager's serialized section, so the next operation does not wait for it, and in the manager process, which holds the owner lock.
 - The queue is bounded at 64 downloads (DC-4). When it is over the bound, `run` waits for the oldest download to end before it returns. While the worker is paused (AD-4) the bound does not make a run wait.
 - Cancelling a `run` does not cancel its download. The download is evidence of input that was already sent.
-- Each download writes a record to `host/image-downloads/<executionId>-after.json` when it ends: its status, the image identity when known, and the times it was queued, started and ended.
+- Each download writes a record to `host/evidence-downloads/<executionId>.json` when it ends: its status, the files it holds with their hashes and sizes, the after-image identity when known, and the times it was queued, started and ended.
 
 ### AD-3: `relay_image` waits only for the image it names
 
-- When a reference or display selector names a queued download that has not started, the worker takes it next. When the download is in flight, `relay_image` waits for it. There is never a second transfer of the same original at the same time.
+- When a reference or display selector names an image of a step whose download has not started, the worker takes it next. When the download is in flight, `relay_image` waits for it. There is never a second transfer of the same original at the same time.
 - A `relay_image` call that names a queued download runs it next even while the worker is paused (AD-4), because the call itself asks for the guest. Without that, the call would wait out its deadline behind a paused worker.
-- After the wait, `relay_image` works as before: it finds the verified original on the host and makes the preview. When the download failed, `relay_image` makes its own attempt with a fresh budget, as in §8.
+- After the wait, `relay_image` works as before: it finds the verified original on the host and makes the preview. A before-image is found in the step folder (AD-7). When the download failed, `relay_image` makes its own attempt with a fresh budget, as in §8.
+- A reference names an image before any download has checked it (AD-1). When the step download failed before the image was catalogued, `relay_image` resolves the reference through the display selector the run named, which checks and catalogues the image as the download would have. The resolved identity must equal the reference.
 - The 90-second deadline of the call counts from the call, and covers the wait. When the deadline passes during the wait, the result is `transfer-failed` with the image identity, and the download goes on in the background.
 
 ### AD-4: retry stays inside one download
 
-- A download has a 90-second deadline from the moment the worker starts it, and three byte-transfer attempts.
+- A download has a 90-second deadline from the moment the worker starts it, and three transfer attempts. Each attempt is one archive pull with no retry of its own, so the waits below are the only waits.
 - It retries only eligible transient transfer failures, as in §8. Between attempts it waits 1 s, then 3 s (DC-5).
 - Lasting failures are not retried: authorization, unsafe-path, capture, unsupported-format and integrity failures.
-- A download that ends without the original is not queued again. Two later paths fetch it: `relay_image` with a fresh budget, and the finish's state pull (AD-6).
+- A file the guest does not hold is not a failure of the download. The archive leaves it out, and the record lists it as missing. The finish's pull decides whether the evidence is complete.
+- A download that ends without the step's files is not queued again. Two later paths fetch them: `relay_image` with a fresh budget for an image, and the finish (AD-9).
 - After a download fails with a transient failure, the worker pauses (DC-7). It resumes when the next relay operation reaches the guest and completes, or when a download that `relay_image` asked for succeeds. Without the pause, one network outage would spend the attempts of every queued download.
-- A download only copies the same original again. It never repeats input or takes another capture.
-- `relay_status` reports the downloads that are queued, in flight, downloaded, failed and cancelled, and whether the worker is paused. A download counts as ended only after its record is written.
+- A download only copies files again. It never repeats input or takes another capture.
+- `relay_status` reports the downloads that are queued, in flight, downloaded, failed, cancelled and coalesced, and whether the worker is paused. A download counts as ended only after its record is written.
 
 ### AD-5: the gate before lifecycle operations and before the owner lock is released
 
 - The queue has three states: open, closing and closed. A run queues a download only while the queue is open.
 - `finish`, `release` and a recording reset close the queue at the start of their serialized section, before they touch the guest state (DC-3). Each one:
   1. lifts the pause of AD-4, because the operation itself needs the guest;
-  2. waits until every queued download has ended, by success or by recorded failure;
-  3. while it waits, the first transient failure cancels the downloads that have not started (DC-7). Each cancelled download writes its record with the status `cancelled`, and so has ended. The state pull fetches those originals, so the wait does not grow with the queue while the guest is unreachable.
+  2. waits for the download in flight to end, by success or by recorded failure;
+  3. ends every download that has not started with the status `coalesced` (DC-11). Its files are fetched in the operation's own archive (AD-9), so the wait does not grow with the queue.
 - The queue opens again when the operation ends, whether it succeeded or failed. A failed finish keeps the VM, and further runs are allowed.
-- The wait is bounded: each download has its own deadline, and the queue holds at most 64 downloads. In the normal case the wait is the backlog at the end of the run.
 - `cleanup` closes the queue, aborts the download in flight, waits for it to stop, and then releases the owner lock. `pauseNow` aborts it without waiting, because the process exits right after. A closed queue writes nothing more: an aborted download does not publish, and its record is not written.
 - The queue lives in memory. Downloads lost with the process cost no evidence: the next manager's `finish` pulls what the host lacks, and `relay_image` retrieves on demand.
 
-### AD-6: the finish reuses originals the host already holds
+### AD-6: the finish reuses files the host already holds
 
-- The verified state pull (`pullVerified`) of `finish`, `release` and a recording reset takes host copies as a local source (DC-6). For each file in the guest scan it first tries a host file that should hold the same bytes:
+- The verified pull (`pullVerified`) of `finish`, `release`, a recording reset and an extraction takes host copies as a local source (DC-6). For each file in the guest scan it first tries a host file that should hold the same bytes:
   - the same relative path under the recording's host `state` directory;
+  - the same relative path in any step folder (AD-7);
+  - for a receipt, the copy in `host/receiver-receipts/` that the transport filed during the run;
   - any verified original under `host/images/` with the same hash and size. Identical screenshots therefore share one held original. A catalogue entry that does not load is skipped.
-- It copies a candidate into the attempt directory and checks its hash and size against the guest scan. It pulls from the guest only the files without a matching candidate. A candidate with a wrong hash is discarded, never used.
+- It checks a candidate's hash and size against the guest scan. A candidate with a wrong hash is discarded, never used. A file that changed after its step downloaded, such as an action record a later step rewrote, therefore comes from the guest.
 - The scans before and after the pull, the inventory comparison and package delivery are unchanged, so `deliveryVerified` and `snapshots` mean what they meant before.
 
+### AD-7: each step's evidence has a folder of its own on the host
+
+- A step's download unpacks into `host/steps/<executionId>/`, under the same relative paths the files have in the guest root (DC-10). For example, the step's execution record is at `host/steps/<executionId>/state/records/execution/<executionId>.json`.
+- The guest layout is unchanged. The guest's record and snapshot stores own it, and the package and its readers depend on it.
+- The step folders are a staging area, not part of the package. When the package is delivered, the files the finish used from them are in the package's `state` tree or extraction, and the relay removes the step folders. The package therefore holds each file once, as before.
+- When the finish fails, the step folders stay, so the next `finish` reuses them.
+
+### AD-8: one archive carries one step's files
+
+- The worker's download of a step makes four requests: one guest command that writes the archive, one path check, one pull, and one guest command that removes the archive.
+- The first command receives the relative paths as arguments. For each path it applies the checks of a verified file pull: the path stays inside the tree and the guest root, and the file is a regular file and not a link. It writes the files into one archive file in the guest root, beside the inventory frames, and prints only the archive's path and size.
+- Before it writes, the command checks that the guest has free space for the archive. It removes a partial archive on any failure.
+- The archive has the relay's own uncompressed format. Each entry is one JSON header line with the relative path and the size, then exactly that many bytes, then one JSON line with the SHA-256 hash of those bytes. The guest reads each file once to hash and write it. The format is uncompressed because PNG originals do not compress further.
+- The host knows the archive's exact size before the guest writes it, and refuses an archive of another size.
+- The host unpacks the archive into a fresh staging directory and accepts it only when every entry is valid:
+  - the entries are exactly the requested paths, in order, and no path appears twice;
+  - each path is relative and has no `..` or empty segment;
+  - each entry's size and hash match the header, the hash line, and the guest scan;
+  - the archive ends exactly after the last entry.
+- An archive that fails a check is discarded whole. Accepted files are then linked into place, and the staging directory is removed.
+- One guest command carries at most 64 KiB of paths. A longer request is split into several archives, so the number of requests grows with the bytes of the paths, not with the number of files: about one archive per 700 files of today's path lengths.
+- The same format and checks serve the finish's archive (AD-9).
+
+### AD-9: the finish coalesces what is pending into one archive
+
+- After the gate of AD-5, the verified pull of `finish`, `release` and a recording reset works in this order (DC-11):
+  1. It scans the guest `state` tree once, as now.
+  2. It takes every file that has a matching host candidate (AD-6) from the host.
+  3. It writes every other file into one archive in the guest, pulls it, and unpacks it with the checks of AD-8. These are the files of coalesced and failed downloads, and the shared files that belong to no step.
+  4. It scans again and compares, as now.
+- The declared extractions, such as `relay-run`, work the same way: one scan, host candidates from the step folders, and one archive for the rest. An extraction of a single file takes a matching host candidate instead of its pull.
+- The archive removes the per-file round trips: the finish makes a fixed number of requests, whatever the number of steps.
+
+### AD-10: the finish falls back to the per-file pull when the archive cannot be built
+
+- Before the archive is built, the relay checks the guest's free space for the archive's size, as it checks the host's free space now.
+- When the guest lacks the space, or when building, pulling or unpacking the archive fails, the finish falls back to the per-file pull for the files it still lacks. The fallback is slower but needs no extra guest space.
+- The fallback is logged with its reason, so a slow finish can be explained from the evidence.

@@ -1,5 +1,14 @@
 # Implementation verification
 
+## Background download of step evidence (2026-10-08)
+
+- Scope: [screenshot-delivery.md §10](screenshot-delivery.md#10-background-download-of-step-evidence), decisions DC-9 to DC-11, built on `f227cef` (v0.9.0) in the `evidence-download` worktree. This is a working-tree implementation, not a released revision.
+- `npm run build`, `npx tsc --noEmit` and `npm test` passed: 451 tests, 446 passed, 3 skipped for missing sibling checkouts, 2 todo, none failed. The tests use the loopback fake VM service.
+- The relay's macOS live check passed against the vm-service test instance on port 6250: `MCP_VM_RELAY_URL=http://localhost:6250 node scripts/live-check.mjs scripts/live-checks/macos.json test-evidence/<run>`. Ten step downloads of about 16 MB each took about 0.3 s each; at finish, the `relay-run` extraction took all ten result files from the host, the state pull took 60 of its 61 files from the host, no archive fell back to the per-file pull, and `deliveryVerified` was true. `relay_finish` took 4.2 s.
+- The pi-secretary MacArena Reminders case (`4ff150c8`) passed with this build: `scripts/vm-use/macarena-run.ts --open-app --permission-check=online --trace --vm-service=http://localhost:6250 --relay-server=<worktree>/dist/server.mjs`. Its 70 step downloads all ended `downloaded`, each in about 0.3 s with no queue wait. `relay_finish` took 12.7 s and made 58 vm-service requests. The same case on v0.9.0 earlier that day took 98.4 s and 3,282 requests; that run had more steps, but the finish's requests no longer depend on the number of steps: about 17 per pulled tree, plus the one step download in flight.
+- During the run, an agent request that arrived while a step download was being served waited for it: 0.11 s at the median, 6.5% of the step interval time (0.14 s and 10.5% for the per-image download of v0.9.0), from pi-secretary's `scripts/vm-use/step-interval-report.py`.
+- Not verified: a step download failing on a live link, the guest running out of space for an archive (AD-10), `relay_release` and a recording reset on a live VM, and the Linux guest.
+
 ## Lifecycle fixes (2026-09-27)
 
 - The [lifecycle fixes](lifecycle-fixes.md) R1 to R6 were each preceded by a reproducer test that failed on the 0.6.1 source for the stated reason, on branch `WeZZard/lifecycle-reproducers`.

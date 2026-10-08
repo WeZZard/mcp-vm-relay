@@ -199,14 +199,15 @@ test('pullVerified copies matching host files instead of pulling them, and never
  await writeFile(join(held, 'state', 'snapshots', 'a.png'), 'original a');
  await writeFile(join(held, 'images', 'b.png'), 'tampered b'); // same size, wrong bytes
  const pulled: string[] = [];
- const channel: VmChannel = { exec: async (_name, argv) => command(argv), push: async (_name, l, r) => copyFile(l, r), pull: async (_name, r, l) => { pulled.push(r); return copyFile(r, l); } };
+ // The files the host lacks come in one archive (AD-9): its command names them after its five fixed arguments.
+ const channel: VmChannel = { exec: async (_name, argv) => { if (argv[2]?.includes('Not a regular file')) pulled.push(...argv.slice(8).map(path => join(source, path))); return command(argv); }, push: async (_name, l, r) => copyFile(l, r), pull: async (_name, r, l) => { pulled.push(r); return copyFile(r, l); } };
  const transfer = new Transfer(channel, 'fake-vm', process.execPath);
  const reuse = { root: held, candidates: (file: { path: string }) => [join(held, 'state', file.path), ...(file.path.endsWith('b.png') ? [join(held, 'images', 'b.png')] : [])] };
  const local = join(root, 'attempt', 'state');
  await transfer.pullVerified(source, local, source, root, { reuse });
  assert.deepEqual(await inventory(local), await inventory(source));
  assert.equal((reuse as { reused?: number }).reused, 1);
- assert.deepEqual(pulled.filter(path => !path.includes('.inventory-')).sort(), [join(source, 'journal'), join(source, 'snapshots', 'b.png')]);
+ assert.deepEqual(pulled.filter(path => !/\/\.(?:inventory|archive)-/.test(path)).sort(), [join(source, 'journal'), join(source, 'snapshots', 'b.png')]);
  assert.equal(await readFile(join(held, 'images', 'b.png'), 'utf8'), 'tampered b', 'a rejected candidate is left alone');
  const outside = { root: join(held, 'images'), candidates: () => [join(held, 'state', 'snapshots', 'a.png')] };
  await transfer.pullVerified(source, join(root, 'outside', 'state'), source, root, { reuse: outside });

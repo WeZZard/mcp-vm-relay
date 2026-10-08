@@ -1,15 +1,18 @@
 import { imageFailure, type ImageDescriptor, type ImageResult } from './images.js';
+import type { ArchiveEntry } from './archive.js';
 
 /**
  * The background download queue of one enclosure (docs/screenshot-delivery.md
- * §10, AD-2 to AD-5). One worker takes the after-image downloads in order,
+ * §10, AD-2 to AD-5). One worker takes the step downloads in order,
  * outside the manager's serialized section and inside the process that holds
  * the owner lock. Lifecycle operations drain it; shutdown closes it.
  */
 export type DownloadState = 'open' | 'closing' | 'closed';
-export type DownloadEnd = 'downloaded' | 'failed' | 'cancelled';
+export type DownloadEnd = 'downloaded' | 'failed' | 'cancelled' | 'coalesced';
+/** A step download's result: its after-image delivery, and the step files it brought into the step folder (AD-7). */
+export interface StepResult extends ImageResult { files?: ArchiveEntry[]; missing?: string[] }
 export interface DownloadJob {
-  /** `<sessionId>/<executionId>/<phase>`. */
+  /** `<sessionId>/<executionId>`. */
   key: string;
   /** The identity the run result named, when the host knew it (AD-1). */
   image?: ImageDescriptor;
@@ -17,14 +20,14 @@ export interface DownloadJob {
   recordPath: string;
   queuedAt: string; startedAt?: string; endedAt?: string;
   end?: DownloadEnd;
-  result?: ImageResult;
+  result?: StepResult;
   /** Resolves once the job has ended and its record is written. */
   readonly done: Promise<void>;
 }
 interface Job extends DownloadJob {
   /** `relay_image` asked for it: it runs next, even while the worker is paused. */
   promoted?: boolean;
-  run: (signal: AbortSignal) => Promise<ImageResult>;
+  run: (signal: AbortSignal) => Promise<StepResult>;
   resolve: () => void;
   controller: AbortController;
 }
@@ -43,7 +46,7 @@ export class DownloadQueue {
   paused = false;
   private queued: Job[] = [];
   private current?: Job;
-  private ended = { downloaded: 0, failed: 0, cancelled: 0 };
+  private ended = { downloaded: 0, failed: 0, cancelled: 0, coalesced: 0 };
   constructor(readonly options: DownloadQueueOptions) {}
 
   enqueue(input: Pick<DownloadJob, 'key' | 'image' | 'recordPath'>, run: Job['run']): DownloadJob {
@@ -76,14 +79,20 @@ export class DownloadQueue {
     while (this.pending > this.options.bound && !this.paused && this.state === 'open') await (this.current ?? this.queued[0])!.done;
   }
   /**
-   * AD-5: close to new downloads, lift the pause and wait until every download
-   * has ended. While closing, the first transient failure cancels the rest.
+   * AD-5: close to new downloads, end every download that has not started as
+   * `coalesced` (DC-11), and wait for the one in flight. The lifecycle
+   * operation fetches the coalesced steps' files in its own archive (AD-9).
    * Call `reopen` when the lifecycle operation ends.
    */
   async drain() {
     if (this.state === 'closed') return;
-    this.state = 'closing'; this.paused = false; this.kick();
-    while (this.current || this.queued.length) await (this.current ?? this.queued[0])!.done;
+    this.state = 'closing'; this.paused = false;
+    for (const job of this.queued.splice(0)) {
+      job.end = 'coalesced'; job.endedAt = new Date().toISOString(); this.ended.coalesced++;
+      await this.options.record(job).catch(() => {});
+      job.resolve();
+    }
+    await this.current?.done;
   }
   reopen() { if (this.state === 'closing') { this.state = 'open'; this.kick(); } }
   /** Shutdown: nothing more starts or is written; the download in flight is aborted. `wait` waits for it to stop. */

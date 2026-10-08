@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, rm, cp, access, writeFile, statfs } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rm, cp, access, writeFile, statfs } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { relayStateRoot } from './config.js';
 import { fileURLToPath } from 'node:url';
@@ -8,7 +8,8 @@ import { VmService, VmServiceError, type VmLease, type VmBackend } from './vm-se
 import { canonicalPath, environmentVariables, matchesEnvironment, selectedEnvironment, type SelectedEnvironment } from './environment.js';
 import { homedir } from 'node:os';
 import { Registry, type RegistryRow } from './registry.js';
-import { Transfer, assertHostPath, type FileFact, type VmChannel } from './transfer.js';
+import { Transfer, assertHostPath, transientTransfer, type FileFact, type VmChannel } from './transfer.js';
+import type { ArchiveEntry, ArchiveRequest } from './archive.js';
 import { VmTransport } from './transport.js';
 import { command, hash, jsonFile, within } from './util.js';
 import { deliverPackage, type DeliveryResult } from './package.js';
@@ -18,7 +19,7 @@ import { searchCatalog, type SearchQuery } from './search.js';
 import { recordSearch } from './search-diagnostics.js';
 import { acquisitionCapabilities, consoleStatus, type ConsoleStatus } from './console.js';
 import { ImageStore, imageCapability, type ImageDescriptor, type ImageTarget, type ImageResult } from './images.js';
-import { DownloadQueue, type DownloadJob } from './downloads.js';
+import { DownloadQueue, type DownloadJob, type StepResult } from './downloads.js';
 import type { LocalSource } from './transfer.js';
 import { refreshEvidenceState } from './evidence-merge.js';
 import { DEFAULT_AFTER_INTERVAL_MS, TARGET_PACKAGES, cachedTarball, tarballName, targetLaunches, type LaunchContext, type Target, type TargetLaunch, type TargetPackages, type TarballSource } from './targets.js';
@@ -108,12 +109,14 @@ export const DEFAULT_HOLD_MS = 60000;
 const DECIDE = `const fs=require('fs'),p=require('path');const [dir,id,want]=process.argv.slice(1);fs.mkdirSync(dir,{recursive:true});const f=p.join(dir,id),t=f+'.'+process.pid+'.'+Date.now()+'.tmp';fs.writeFileSync(t,want,{mode:0o600});try{fs.linkSync(t,f)}catch(e){if(e.code!=='EEXIST')throw e}finally{fs.rmSync(t,{force:true})}console.log(fs.readFileSync(f,'utf8').trim());`;
 /** At most this many of a call's own images are delivered inline; the rest stay retrievable with relay_image. */
 export const MAX_TOOL_IMAGES = 4;
-/** Background after-image downloads a run may leave queued before it waits for the oldest (DC-4). */
+/** Background step downloads a run may leave queued before it waits for the oldest (DC-4). */
 export const DOWNLOAD_BOUND = 64;
 /** Waits before a background download's second and third attempts (DC-5). */
 export const DOWNLOAD_RETRY_DELAYS_MS = [1000, 3000] as const;
 type DisplayTarget = Extract<ImageTarget, { source: 'display' }>;
-const downloadKey = (target: DisplayTarget) => `${target.sessionId}/${target.executionId}/${target.phase}`;
+/** One step download serves both of the step's images (AD-3). */
+const downloadKey = (target: Pick<DisplayTarget, 'sessionId' | 'executionId'>) => `${target.sessionId}/${target.executionId}`;
+const stepId = (value: unknown): value is string => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.-]{0,159}$/.test(value);
 /**
  * The server's MCP `instructions`: the rules that cut across all nineteen
  * tools rather than belonging to one of them (see each tool's own
@@ -365,7 +368,7 @@ export class RelayManager {
   }
   private reason(because: string) { if (typeof because !== 'string' || !because.trim() || because.length > 4000) throw new Error('reason must be nonblank and at most 4000 characters'); }
   private current() { this.assertBinding(); if (!this.enclosure?.lease || this.enclosure.released) throw new Error('No active lease; use relay action=acquire'); return this.enclosure; }
-  private transfer() { const e = this.current(); if (!e.node) throw new Error('Stage runtime first'); return new Transfer(this.channel, e.lease!.vm, e.node, { guestRoot: e.guestRoot, hostTempRoot: join(this.root, 'transfer-tmp'), onRetry: event => this.log('transfer-retry', undefined, event) }); }
+  private transfer() { const e = this.current(); if (!e.node) throw new Error('Stage runtime first'); return new Transfer(this.channel, e.lease!.vm, e.node, { guestRoot: e.guestRoot, hostTempRoot: join(this.root, 'transfer-tmp'), onRetry: event => this.log('transfer-retry', undefined, event), onArchiveFallback: event => this.log('archive-fallback', undefined, event) }); }
   private async log(kind: string, because?: string, details: unknown = {}) {
     if (because !== undefined) this.reason(because);
     const e = this.enclosure;
@@ -497,7 +500,7 @@ export class RelayManager {
     const bundle = this.options.runtimeBundle ?? fileURLToPath(new URL('../dist/receiver.mjs', import.meta.url));
     await access(bundle);
     const node = input.nodePath ?? e.node ?? 'node';
-    const transfer = new Transfer(this.channel, e.lease!.vm, node, { guestRoot: e.guestRoot, hostTempRoot: join(this.root, 'transfer-tmp'), onRetry: event => this.log('transfer-retry', undefined, event) });
+    const transfer = new Transfer(this.channel, e.lease!.vm, node, { guestRoot: e.guestRoot, hostTempRoot: join(this.root, 'transfer-tmp'), onRetry: event => this.log('transfer-retry', undefined, event), onArchiveFallback: event => this.log('archive-fallback', undefined, event) });
     await transfer.checked([node, '--version']);
     const launchChanged = e.mcpHost && ((input.nodePath !== undefined && input.nodePath !== e.node) || (input.cuaDriver !== undefined && input.cuaDriver !== e.cuaDriver) || (input.browserExecutable !== undefined && input.browserExecutable !== e.browserExecutable));
     e.node = node;
@@ -579,11 +582,11 @@ export class RelayManager {
       await this.log('execution-failed', record.because, result);
       await this.fail(new Error(`Execution ${result.executionId}: ${JSON.stringify(outcome)}`));
     }
-    // The after-image is named, not delivered: it downloads in the background (AD-1, AD-2).
+    // The after-image is named, not delivered: the step's evidence downloads in the background (AD-1, AD-2).
     const target: DisplayTarget = { source: 'display', sessionId: e.sessionId!, executionId: result.executionId, phase: 'after' };
     const store = this.imageStore();
     const imageDelivery = await store.pending(target);
-    if (imageDelivery.status === 'pending') await this.queueDownload(store, target, imageDelivery.image);
+    await this.queueDownload(store, target, imageDelivery.status === 'pending', imageDelivery.image);
     const common = { step: record.step, snapshots: record.snapshots, timeoutMs, evidencePath: e.hostRoot, leaseReleased: !this.enclosure, owned: this.status(), imageDelivery };
     if (input.kind === 'mcp') return { ...result, ...await this.mcpResult(e, input.target!, input.tool!, outcome, signal), ...common, ...(held ? { hold: { id: hold!.id, ...held } } : {}) };
     // The guest's bounded output rides along in the receipt the transport filed.
@@ -830,24 +833,119 @@ export class RelayManager {
       try { await Promise.race([job.done, stopped]); } finally { bounded.removeEventListener('abort', stop); }
       if (bounded.aborted) return { status: 'transfer-failed', ...(job.image ? { image: job.image } : {}), diagnostic: 'Image delivery cancelled or deadline exceeded while its background download was still running.' };
     }
-    return this.imageStore().get(target, bounded, deadline);
+    const store = this.imageStore(), result = await store.get(target, bounded, deadline);
+    if (result.status !== 'unauthorized-reference' || target.source !== 'reference') return result;
+    // A run named this image, but its step download failed before the catalogue held it (AD-1, AD-4):
+    // its display selector checks and catalogues it as the download would have.
+    const named = job?.image ?? await this.namedImage(target.imageId);
+    if (named?.source !== 'display') return result;
+    const resolved = await store.get({ source: 'display', sessionId: named.sessionId!, executionId: named.executionId!, phase: named.phase! }, bounded, deadline);
+    return resolved.image && resolved.image.imageId !== target.imageId ? { status: 'integrity-failed', diagnostic: 'The display selector no longer names the referenced image.' } : resolved;
   }); }
-  private async queueDownload(store: ImageStore, target: DisplayTarget, image?: ImageDescriptor) {
-    // Only an open queue takes downloads; otherwise relay_image and the state pull fetch the original.
+  /** The image a run named with this reference, from the step download records. No guest I/O. */
+  private async namedImage(imageId: string): Promise<ImageDescriptor | undefined> {
+    const records = join(this.current().hostRoot, 'host', 'evidence-downloads');
+    for (const name of (await readdir(records).catch(() => [] as string[])).filter(n => n.endsWith('.json'))) {
+      const image = await readFile(join(records, name), 'utf8').then(text => JSON.parse(text)?.image, () => undefined);
+      if (image?.imageId === imageId) return image;
+    }
+    return undefined;
+  }
+  /** DC-9: every step whose receipt the host holds queues one download of its evidence. */
+  private async queueDownload(store: ImageStore, target: DisplayTarget, afterImage: boolean, image?: ImageDescriptor) {
+    // Only an open queue takes downloads; otherwise relay_image and the lifecycle operation's archive fetch the files.
     if (this.downloads.state !== 'open') return;
-    const retryDelaysMs = this.options.downloadRetryDelaysMs ?? DOWNLOAD_RETRY_DELAYS_MS;
-    this.downloads.enqueue({ key: downloadKey(target), ...(image ? { image } : {}), recordPath: join(this.current().hostRoot, 'host', 'image-downloads', `${target.executionId}-${target.phase}.json`) },
-      signal => store.download(target, signal, { retryDelaysMs }));
+    const e = this.current();
+    const requested = await this.stepFiles(e.hostRoot, target.executionId);
+    if (!requested) return;
+    this.downloads.enqueue({ key: downloadKey(target), ...(image ? { image } : {}), recordPath: join(e.hostRoot, 'host', 'evidence-downloads', `${target.executionId}.json`) },
+      signal => this.downloadStep(store, target, requested, afterImage, signal));
     await this.downloads.withinBound();
+  }
+  /**
+   * AD-2: the step's files, relative to the guest root, from the receipt the
+   * transport filed on the host. No guest I/O. Undefined without the receipt.
+   */
+  private async stepFiles(hostRoot: string, executionId: string): Promise<ArchiveRequest[] | undefined> {
+    if (!stepId(executionId)) return undefined;
+    let receipt: any;
+    try { receipt = JSON.parse(await readFile(join(hostRoot, 'host', 'receiver-receipts', `${executionId}.json`), 'utf8')); } catch { return undefined; }
+    if (receipt?.executionId !== executionId) return undefined;
+    const paths = new Set([`state/receiver/started/${executionId}.json`, `state/receiver/receipts/${executionId}.json`, `state/records/execution/${executionId}.json`]);
+    for (const sn of Array.isArray(receipt.imageEvidence?.snapshots) ? receipt.imageEvidence.snapshots : []) {
+      if (stepId(sn?.actionId)) paths.add(`state/records/action/${sn.actionId}.json`);
+      if (stepId(sn?.sessionId) && stepId(sn?.fileName)) paths.add(`state/snapshots/${sn.sessionId}/${sn.fileName}`);
+    }
+    let resultFile: unknown;
+    try { resultFile = JSON.parse(receipt.stdout)?.resultFile; } catch { /* not a relay_run summary */ }
+    if (typeof resultFile === 'string') { try { within('/', resultFile); paths.add(`workspace/${RELAY_RUN_OUTPUTS}/${resultFile}`); } catch { /* unsafe: the finish fetches it */ } }
+    return [...paths].map(path => ({ path }));
+  }
+  /**
+   * One step download (AD-2, AD-7, AD-8): the step's files in one archive into
+   * `host/steps/<executionId>/`, then the after-image filed from there.
+   */
+  private async downloadStep(store: ImageStore, target: DisplayTarget, requested: ArchiveRequest[], afterImage: boolean, signal: AbortSignal): Promise<StepResult> {
+    const e = this.current(), retryDelaysMs = this.options.downloadRetryDelaysMs ?? DOWNLOAD_RETRY_DELAYS_MS;
+    const bounded = AbortSignal.any([signal, AbortSignal.timeout(imageCapability.deadlineMs)]);
+    const folder = join(e.hostRoot, 'host', 'steps', target.executionId);
+    let files: ArchiveEntry[] | undefined;
+    for (let attempt = 1; !files; attempt++) {
+      try {
+        await assertHostPath(e.hostRoot, folder, true); await rm(folder, { recursive: true, force: true });
+        files = await this.transfer().pullArchive(e.guestRoot, e.guestRoot, requested, folder, e.hostRoot, { present: true, once: true, signal: bounded });
+      } catch (error) {
+        const transient = !bounded.aborted && transientTransfer(error);
+        if (attempt >= 3 || !transient) return { status: transient || bounded.aborted ? 'transfer-failed' : 'integrity-failed', diagnostic: `Step evidence download failed: ${String(error)}` };
+        const wait = retryDelaysMs[attempt - 1] ?? 0;
+        await new Promise<void>(done => { const timer = setTimeout(done, wait); bounded.addEventListener('abort', () => { clearTimeout(timer); done(); }, { once: true }); });
+      }
+    }
+    const missing = requested.map(file => file.path).filter(path => !files!.some(file => file.path === path));
+    // The after-image is filed from the step folder, so this makes no further guest request (AD-2).
+    const result = afterImage ? await store.download(target, signal, { retryDelaysMs }) : { status: 'downloaded' as const };
+    return { ...result, files, missing };
   }
   private async recordDownload(job: DownloadJob) {
     const image = job.result?.image ?? job.image;
-    await jsonFile(job.recordPath, { status: job.end, key: job.key, ...(image ? { image } : {}), ...(job.result?.diagnostic ? { diagnostic: job.result.diagnostic } : {}), ...(job.result && job.end === 'failed' ? { failure: job.result.status } : {}), queuedAt: job.queuedAt, startedAt: job.startedAt, endedAt: job.endedAt });
+    await jsonFile(job.recordPath, { status: job.end, key: job.key, ...(image ? { image } : {}), ...(job.result?.files ? { files: job.result.files } : {}), ...(job.result?.missing?.length ? { missing: job.result.missing } : {}), ...(job.result?.diagnostic ? { diagnostic: job.result.diagnostic } : {}), ...(job.result && job.end === 'failed' ? { failure: job.result.status } : {}), queuedAt: job.queuedAt, startedAt: job.startedAt, endedAt: job.endedAt });
+  }
+  /** AD-6: the files the step downloads brought into step folders, by `sha256:bytes`. No guest I/O. */
+  private async stepCopies(recording: string, prefix: string): Promise<Map<string, string[]>> {
+    const copies = new Map<string, string[]>();
+    const records = join(recording, 'host', 'evidence-downloads');
+    for (const name of (await readdir(records).catch(() => [] as string[])).filter(n => n.endsWith('.json'))) {
+      const executionId = name.slice(0, -5);
+      if (!stepId(executionId)) continue;
+      let record: any;
+      try { record = JSON.parse(await readFile(join(records, name), 'utf8')); } catch { continue; }
+      for (const file of Array.isArray(record?.files) ? record.files : []) {
+        if (typeof file?.path !== 'string' || !file.path.startsWith(prefix) || typeof file.sha256 !== 'string' || !Number.isSafeInteger(file.bytes)) continue;
+        let path: string;
+        try { path = within(join(recording, 'host', 'steps', executionId), file.path); } catch { continue; }
+        const key = `${file.sha256}:${file.bytes}`;
+        copies.set(key, [...(copies.get(key) ?? []), path]);
+      }
+    }
+    return copies;
   }
   /** AD-6: the host files that may already hold a guest state file's bytes. */
   private async localState(recording: string): Promise<LocalSource> {
-    const held = await this.imageStore().heldOriginals(recording);
-    return { root: recording, candidates: file => [join(recording, 'state', file.path), ...(held.get(`${file.sha256}:${file.bytes}`) ?? [])] };
+    const held = await this.imageStore().heldOriginals(recording), steps = await this.stepCopies(recording, 'state/');
+    return { root: recording, candidates: file => {
+      const key = `${file.sha256}:${file.bytes}`, receipt = /^receiver\/receipts\/([^/]+\.json)$/.exec(file.path)?.[1];
+      return [join(recording, 'state', file.path), ...(steps.get(key) ?? []), ...(receipt ? [join(recording, 'host', 'receiver-receipts', receipt)] : []), ...(held.get(key) ?? [])];
+    } };
+  }
+  /** AD-9: an extraction takes the files the step downloads already brought, such as `relay-run` results. */
+  private async localWorkspace(recording: string): Promise<LocalSource> {
+    const steps = await this.stepCopies(recording, 'workspace/');
+    return { root: recording, candidates: file => steps.get(`${file.sha256}:${file.bytes}`) ?? [] };
+  }
+  /** AD-7: the step folders are a staging area; once their files are in the recording's state they go. */
+  private async removeStepFolders(recording: string) {
+    const steps = join(recording, 'host', 'steps');
+    await assertHostPath(recording, steps, true); await rm(steps, { recursive: true, force: true });
   }
   /** A lifecycle operation's gate (AD-5): every download ends before the guest state is touched; the queue opens again after. */
   private async drained<T>(fn: () => Promise<T>): Promise<T> {
@@ -875,6 +973,7 @@ export class RelayManager {
     if (reuse.reused) await this.log('state-reused', undefined, { files: reuse.reused });
     await this.imageStore().materializeDisplayOriginals(reset.from);
     await refreshEvidenceState(incoming, join(reset.from, 'state'), join(attempts, 'previous'));
+    await this.removeStepFolders(reset.from);
     await this.log('recording-reset-intent', undefined, reset);
     // The operation is deliberately idempotent for this persisted reset ID. It
     // never replays input and never deletes old state or an ambiguous live lock.
@@ -891,7 +990,9 @@ export class RelayManager {
       const declaration = e.extractions.find(item => item.name === name);
       if (!declaration) throw new Error(`Undeclared extraction: ${name}`);
       const destination = join(e.hostRoot, 'extractions', name, randomUUID());
-      const facts = await transfer.pullVerified(within(join(e.guestRoot, 'workspace'), declaration.path), destination, join(e.guestRoot, 'workspace'), e.hostRoot);
+      const reuse = await this.localWorkspace(e.hostRoot);
+      const facts = await transfer.pullVerified(within(join(e.guestRoot, 'workspace'), declaration.path), destination, join(e.guestRoot, 'workspace'), e.hostRoot, { reuse });
+      if (reuse.reused) await this.log('extraction-reused', undefined, { name, files: reuse.reused });
       results.push({ ...declaration, destination, facts });
     }
     await jsonFile(join(e.hostRoot, 'host', 'extractions', `${randomUUID()}.json`), { extractions: results });
@@ -957,6 +1058,7 @@ export class RelayManager {
     if (reuse.reused) await this.log('state-reused', undefined, { files: reuse.reused });
     await this.imageStore().materializeDisplayOriginals(e.hostRoot);
     await refreshEvidenceState(incoming, join(e.hostRoot, 'state'), join(attempts, 'previous'));
+    await this.removeStepFolders(e.hostRoot);
     const result = await deliverPackage(e.hostRoot, { packageId: `pkg-${e.purpose}`, sessionId: e.sessionId, taskId: e.purpose });
     e.delivered = result; await this.save(); return result;
   }

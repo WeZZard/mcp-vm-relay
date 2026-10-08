@@ -242,10 +242,14 @@ The launch commands, pinned versions and the full outcome mapping are in
 A run tool names its saved after-image whenever the snapshot plan captures that
 phase: a standalone event or a text group's last event. The result does not
 wait for the image. Its `imageDelivery` is `pending` with the image identity
-(`imageId`, `originalPath`, hash and size), and the relay downloads the image
-in the background, one download at a time. `relay_finish` and `relay_release`
-wait until every download has ended, and the finish copies the originals the
-host already holds instead of pulling them again. A first or intermediate
+(`imageId`, `originalPath`, hash and size). In the background, one download at
+a time, the relay brings each step's evidence to the host as one archive: its
+before- and after-images, its receiver and action records, and its `relay_run`
+result file. `relay_finish` and `relay_release` wait only for the download in
+flight. They put the steps still queued, and every other file the host lacks,
+into one archive of their own, and copy the files the step downloads already
+brought instead of pulling them again. `relay_status` counts the steps whose
+download a lifecycle operation took over as `coalesced`. A first or intermediate
 group event and a diagnostic command do not invent an image. Execution and
 image delivery are independent outcomes: a pending image does not turn a
 failed command into a successful one. The delivery identity leads the result
