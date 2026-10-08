@@ -31808,7 +31808,7 @@ async function relayCall(host, raw, options2 = {}) {
 
 // src/server.ts
 var SERVER_NAME = "relay";
-var SERVER_VERSION = true ? "0.10.0" : JSON.parse(readFileSync(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8")).version;
+var SERVER_VERSION = true ? "0.11.0" : JSON.parse(readFileSync(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8")).version;
 var STATUS_TOOL = "relay_status";
 var PLUGIN_TOOL_PREFIX = "mcp__plugin_mcp-vm-relay_relay__";
 var message = (error2) => error2 instanceof Error ? error2.message : String(error2);
